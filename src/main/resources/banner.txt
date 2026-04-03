@@ -1,0 +1,11 @@
+${AnsiColor.CYAN}
+  ______ _____ _____   ____   _____ _____          ______ _______
+ |___  |_   _|  __ \ / __ \ / ____|  __ \   /\   |  ____|__   __|
+    / /  | | | |__) | |  | | |    | |__) | /  \  | |__     | |
+   / /   | | |  _  /| |  | | |    |  _  / / /\ \ |  __|    | |
+  / /__ _| |_| | \ \| |__| | |____| | \ \/ ____ \| |       | |
+ /_____|_____|_|  \_\\____/ \_____|_|  \_\_/    \_\_|       |_|
+
+ ${AnsiColor.BRIGHT_WHITE}< Z > ZIROCRAFT LOGISTICS SYSTEM v1.0
+ ${AnsiColor.CYAN}Industrial Grade Warehouse Management
+ ${AnsiStyle.ITALIC}Standard Architecture by Zirocraft Studio
