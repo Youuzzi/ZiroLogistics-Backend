@@ -12,8 +12,8 @@ public class BinEntity extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JoinColumn(name = "warehouse_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "warehouse_id", nullable = false)
     private WarehouseEntity warehouse;
 
     private String zoneName;
@@ -21,4 +21,9 @@ public class BinEntity extends BaseEntity {
 
     @Column(unique = true, nullable = false)
     private String binCode;
+
+    // Kita ganti namanya dari isDeleted menjadi deleted
+    // biar Lombok Builder mendeteksi method .deleted()
+    @Builder.Default
+    private boolean deleted = false;
 }
