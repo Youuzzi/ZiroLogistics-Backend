@@ -41,8 +41,8 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1.0/auth/**").permitAll() // Login/Register Bebas
-                        .anyRequest().authenticated() // SISANYA WAJIB TOKEN
+                        .requestMatchers("/api/v1.0/auth/**", "/error").permitAll() // Tambahkan /error di sini
+                        .anyRequest().authenticated()
                 )
                 // PENTING: Matikan Session (Stateless) karena kita pakai JWT
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

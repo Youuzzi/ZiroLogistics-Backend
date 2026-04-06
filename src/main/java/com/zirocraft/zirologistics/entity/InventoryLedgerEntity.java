@@ -21,14 +21,18 @@ public class InventoryLedgerEntity extends BaseEntity {
     @JoinColumn(name = "bin_id", nullable = false)
     private BinEntity bin;
 
-    private String transactionType; // INBOUND, OUTBOUND, TRANSFER
+    private String transactionType;
     private BigDecimal quantityChange;
     private BigDecimal balanceBefore;
     private BigDecimal balanceAfter;
 
     @Column(unique = true)
-    private String requestId; // Idempotency Key
+    private String requestId;
 
     private String referenceNo;
     private String userId;
+
+
+    private String note;
+    // ---------------------------
 }

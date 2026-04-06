@@ -25,5 +25,5 @@ public class BinEntity extends BaseEntity {
     // Kita ganti namanya dari isDeleted menjadi deleted
     // biar Lombok Builder mendeteksi method .deleted()
     @Builder.Default
-    private boolean deleted = false;
+    private boolean isDeleted = false;
 }

@@ -39,7 +39,7 @@ public class BinServiceImpl implements BinService {
                 .zoneName(request.getZoneName())
                 .rackNumber(request.getRackNumber())
                 .binCode(request.getBinCode())
-                .deleted(false)
+                .isDeleted(false)
                 .build();
 
         BinEntity savedBin = binRepository.save(bin);
