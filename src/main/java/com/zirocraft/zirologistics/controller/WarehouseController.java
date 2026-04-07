@@ -5,11 +5,11 @@ import com.zirocraft.zirologistics.io.response.WarehouseResponse;
 import com.zirocraft.zirologistics.service.WarehouseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1.0/warehouses")
@@ -20,12 +20,11 @@ public class WarehouseController {
 
     @PostMapping
     public ResponseEntity<WarehouseResponse> create(@Valid @RequestBody WarehouseRequest request) {
-        WarehouseResponse response = warehouseService.createWarehouse(request);
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
+        return new ResponseEntity<>(warehouseService.createWarehouse(request), HttpStatus.CREATED);
     }
 
     @GetMapping
-    public ResponseEntity<List<WarehouseResponse>> getAll() {
-        return ResponseEntity.ok(warehouseService.getAllWarehouses());
+    public ResponseEntity<Page<WarehouseResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(warehouseService.getAllWarehouses(pageable));
     }
 }
