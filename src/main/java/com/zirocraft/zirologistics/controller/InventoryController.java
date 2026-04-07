@@ -4,10 +4,12 @@ import com.zirocraft.zirologistics.io.response.LedgerResponse;
 import com.zirocraft.zirologistics.io.response.StockResponse;
 import com.zirocraft.zirologistics.service.impl.InventoryServiceImpl;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1.0/inventory")
@@ -17,17 +19,12 @@ public class InventoryController {
     private final InventoryServiceImpl inventoryService;
 
     @GetMapping("/stocks")
-    public ResponseEntity<List<StockResponse>> getStocks() {
-        return ResponseEntity.ok(inventoryService.getCurrentStocks());
-    }
-
-    @GetMapping("/low-stock")
-    public ResponseEntity<List<StockResponse>> getLowStock() {
-        return ResponseEntity.ok(inventoryService.getLowStockAlerts());
+    public ResponseEntity<Page<StockResponse>> getStocks(Pageable pageable) {
+        return ResponseEntity.ok(inventoryService.getCurrentStocks(pageable));
     }
 
     @GetMapping("/ledger")
-    public ResponseEntity<List<LedgerResponse>> getLedger() { // <--- Return LedgerResponse
-        return ResponseEntity.ok(inventoryService.getTransactionHistory());
+    public ResponseEntity<Page<LedgerResponse>> getLedger(Pageable pageable) {
+        return ResponseEntity.ok(inventoryService.getTransactionHistory(pageable));
     }
 }
