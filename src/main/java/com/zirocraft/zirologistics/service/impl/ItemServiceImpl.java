@@ -6,12 +6,13 @@ import com.zirocraft.zirologistics.io.response.ItemResponse;
 import com.zirocraft.zirologistics.repository.ItemRepository;
 import com.zirocraft.zirologistics.service.ItemService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ItemServiceImpl implements ItemService {
@@ -21,12 +22,12 @@ public class ItemServiceImpl implements ItemService {
     @Override
     @Transactional
     public ItemResponse createItem(ItemRequest request) {
-        // 1. Gembok SKU: Tidak boleh ada SKU kembar di gudang
+        // Gembok SKU: Tidak boleh ada SKU kembar di gudang
         if (itemRepository.findBySku(request.getSku()).isPresent()) {
+            log.warn("[ZIROCRAFT-TRACE] Attempt to register duplicate SKU: {}", request.getSku());
             throw new RuntimeException("SKU " + request.getSku() + " sudah terdaftar!");
         }
 
-        // 2. Mapping Request ke Entity
         ItemEntity item = ItemEntity.builder()
                 .sku(request.getSku())
                 .name(request.getName())
@@ -36,18 +37,19 @@ public class ItemServiceImpl implements ItemService {
                 .isDeleted(false)
                 .build();
 
-        // 3. Simpan
         ItemEntity savedItem = itemRepository.save(item);
+        log.info("[ZIROCRAFT-TRACE] New Item Registered: {} with Public ID: {}", savedItem.getSku(), savedItem.getPublicId());
 
         return mapToResponse(savedItem);
     }
 
     @Override
-    public List<ItemResponse> getAllItems() {
-        return itemRepository.findAll().stream()
-                .filter(i -> !i.isDeleted())
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
+    public Page<ItemResponse> getAllItems(Pageable pageable) {
+        log.info("[ZIROCRAFT-TRACE] Fetching paginated items. Page: {}, Size: {}", pageable.getPageNumber(), pageable.getPageSize());
+
+        // Menggunakan findAllByIsDeletedFalse yang akan kita buat di Repository
+        return itemRepository.findAllByIsDeletedFalse(pageable)
+                .map(this::mapToResponse);
     }
 
     private ItemResponse mapToResponse(ItemEntity entity) {
