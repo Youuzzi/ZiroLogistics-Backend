@@ -6,6 +6,6 @@ ${AnsiColor.CYAN}
   / /__ _| |_| | \ \| |__| | |____| | \ \/ ____ \| |       | |
  /_____|_____|_|  \_\\____/ \_____|_|  \_\_/    \_\_|       |_|
 
- ${AnsiColor.BRIGHT_WHITE}< Z > ZIROCRAFT LOGISTICS SYSTEM v1.0
- ${AnsiColor.CYAN}Industrial Grade Warehouse Management
- ${AnsiStyle.ITALIC}Standard Architecture by Zirocraft Studio
+ ${AnsiColor.BRIGHT_WHITE}< Z > ZIROCRAFT LOGISTICS ENGINE v3.1 (Industrial Standard)
+ ${AnsiColor.CYAN}Running on Spring Boot ${spring-boot.version}
+ ${AnsiStyle.ITALIC}Lead Architect: Yozi Heru Maulana
