@@ -5,11 +5,11 @@ import com.zirocraft.zirologistics.io.response.ItemResponse;
 import com.zirocraft.zirologistics.service.ItemService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1.0/items")
@@ -24,8 +24,9 @@ public class ItemController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
+    // Industrial Standard: Endpoint tunggal untuk List dengan dukungan Pagination & Sorting
     @GetMapping
-    public ResponseEntity<List<ItemResponse>> getAll() {
-        return ResponseEntity.ok(itemService.getAllItems());
+    public ResponseEntity<Page<ItemResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(itemService.getAllItems(pageable));
     }
 }
