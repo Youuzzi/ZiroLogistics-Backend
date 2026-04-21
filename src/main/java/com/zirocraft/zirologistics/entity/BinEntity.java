@@ -2,6 +2,7 @@ package com.zirocraft.zirologistics.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "bins")
@@ -22,8 +23,15 @@ public class BinEntity extends BaseEntity {
     @Column(unique = true, nullable = false)
     private String binCode;
 
-    // Kita ganti namanya dari isDeleted menjadi deleted
-    // biar Lombok Builder mendeteksi method .deleted()
+    @Column(nullable = false)
+    private BigDecimal maxWeightCapacity;
+
+    @Column(nullable = false)
+    private BigDecimal minWeightThreshold; // <--- Field yang tadi error/hilang
+
+    @Column(nullable = false)
+    private BigDecimal currentWeightOccupancy;
+
     @Builder.Default
     private boolean isDeleted = false;
 }

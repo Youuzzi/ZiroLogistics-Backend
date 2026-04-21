@@ -22,9 +22,14 @@ public class ItemEntity extends BaseEntity {
     private String description;
 
     @Column(nullable = false)
-    private String baseUom; // PCS, BOX, KG
+    private String baseUom;
 
+    @Column(nullable = false)
     private BigDecimal minStockLevel;
+
+    // --- WAJIB ADA INI AGAR BUILDER TIDAK ERROR ---
+    @Column(name = "weight_per_unit", nullable = false)
+    private BigDecimal weightPerUnit;
 
     @Builder.Default
     private boolean isDeleted = false;
