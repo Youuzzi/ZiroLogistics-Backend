@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -33,12 +34,16 @@ public class BinServiceImpl implements BinService {
             throw new RuntimeException("Kode Rak " + request.getBinCode() + " sudah dipakai!");
         }
 
-        // 3. Map & Save
+        // 3. Map & Save dengan Industrial Capacity Logic
         BinEntity bin = BinEntity.builder()
                 .warehouse(warehouse)
                 .zoneName(request.getZoneName())
                 .rackNumber(request.getRackNumber())
                 .binCode(request.getBinCode())
+                // --- LOGIC BARU: DAFTARKAN KAPASITAS ---
+                .maxWeightCapacity(request.getMaxWeightCapacity())
+                .minWeightThreshold(request.getMinWeightThreshold() != null ? request.getMinWeightThreshold() : BigDecimal.ZERO)
+                .currentWeightOccupancy(BigDecimal.ZERO) // <--- WAJIB: Mulai dari Nol, bukan NULL
                 .isDeleted(false)
                 .build();
 
@@ -48,9 +53,8 @@ public class BinServiceImpl implements BinService {
 
     @Override
     public List<BinResponse> getBinsByWarehouse(String warehousePublicId) {
-        // Logika ambil bin per gudang akan kita kembangkan di repository nanti
-        return binRepository.findAll().stream()
-                .filter(b -> b.getWarehouse().getPublicId().equals(warehousePublicId))
+        // Industrial Standard: Filter langsung di database lebih efisien daripada stream filter
+        return binRepository.findByWarehousePublicIdAndIsDeletedFalse(warehousePublicId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -62,6 +66,10 @@ public class BinServiceImpl implements BinService {
                 .zoneName(entity.getZoneName())
                 .rackNumber(entity.getRackNumber())
                 .binCode(entity.getBinCode())
+                // --- LOGIC BARU: BALIKKAN DATA KAPASITAS KE UI ---
+                .maxWeightCapacity(entity.getMaxWeightCapacity())
+                .currentWeightOccupancy(entity.getCurrentWeightOccupancy())
+                .minWeightThreshold(entity.getMinWeightThreshold())
                 .build();
     }
 }

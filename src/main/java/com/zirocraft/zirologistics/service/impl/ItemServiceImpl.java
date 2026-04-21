@@ -22,9 +22,7 @@ public class ItemServiceImpl implements ItemService {
     @Override
     @Transactional
     public ItemResponse createItem(ItemRequest request) {
-        // Gembok SKU: Tidak boleh ada SKU kembar di gudang
         if (itemRepository.findBySku(request.getSku()).isPresent()) {
-            log.warn("[ZIROCRAFT-TRACE] Attempt to register duplicate SKU: {}", request.getSku());
             throw new RuntimeException("SKU " + request.getSku() + " sudah terdaftar!");
         }
 
@@ -34,20 +32,18 @@ public class ItemServiceImpl implements ItemService {
                 .description(request.getDescription())
                 .baseUom(request.getBaseUom().toUpperCase())
                 .minStockLevel(request.getMinStockLevel())
+                .weightPerUnit(request.getWeightPerUnit()) // Industrial Mapping
                 .isDeleted(false)
                 .build();
 
         ItemEntity savedItem = itemRepository.save(item);
-        log.info("[ZIROCRAFT-TRACE] New Item Registered: {} with Public ID: {}", savedItem.getSku(), savedItem.getPublicId());
+        log.info("[ZIROCRAFT-TRACE] SKU {} registered with weight {} KG", savedItem.getSku(), savedItem.getWeightPerUnit());
 
         return mapToResponse(savedItem);
     }
 
     @Override
     public Page<ItemResponse> getAllItems(Pageable pageable) {
-        log.info("[ZIROCRAFT-TRACE] Fetching paginated items. Page: {}, Size: {}", pageable.getPageNumber(), pageable.getPageSize());
-
-        // Menggunakan findAllByIsDeletedFalse yang akan kita buat di Repository
         return itemRepository.findAllByIsDeletedFalse(pageable)
                 .map(this::mapToResponse);
     }
@@ -60,6 +56,7 @@ public class ItemServiceImpl implements ItemService {
                 .description(entity.getDescription())
                 .baseUom(entity.getBaseUom())
                 .minStockLevel(entity.getMinStockLevel())
+                .weightPerUnit(entity.getWeightPerUnit()) // Industrial Mapping
                 .build();
     }
 }

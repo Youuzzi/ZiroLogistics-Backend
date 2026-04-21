@@ -12,4 +12,5 @@ public class ItemResponse {
     private String description;
     private String baseUom;
     private BigDecimal minStockLevel;
+    private BigDecimal weightPerUnit; // Biar UI bisa nampilin beratnya
 }
