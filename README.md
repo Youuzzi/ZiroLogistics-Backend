@@ -1,11 +1,16 @@
-# ZiroLogistics – Industrial Warehouse Management System 🏭
+# ZiroLogistics – Backend API 🏭⚙️
 
-> Sistem manajemen gudang (WMS) skala industri yang dibangun dengan standar korporasi menggunakan Spring Boot dan MySQL.
+> **Repository:** [github.com/Youuzzi/ZiroLogistics-Backend](https://github.com/Youuzzi/ZiroLogistics-Backend)
+>
+> Sistem manajemen gudang (WMS) skala industri — REST API backend yang dibangun dengan standar korporasi menggunakan Java Spring Boot dan MySQL.
 
 ---
 
 ## 🔗 Related Repository
-- **Frontend:** *(In Progress)*
+
+| Repository | Link | Status |
+|---|---|---|
+| 🖥️ **Frontend** | [ZiroLogistics-Frontend](https://github.com/Youuzzi/ZiroLogistics-Frontend) | Active |
 
 ---
 
@@ -29,16 +34,25 @@
 - **JWT Authentication** — Stateless token-based authentication
 - **Role-Based Access Control (RBAC)** — Pembatasan akses endpoint berdasarkan role
 
-### 🏬 Warehouse Management
-- CRUD Warehouse — Kelola data gudang
-- CRUD Bin — Kelola lokasi penyimpanan di dalam gudang
-- CRUD Item — Kelola data barang/produk
+### 🏬 Warehouse & Bin Management
+- **CRUD Warehouse** — Kelola data gudang dengan pagination
+- **CRUD Bin** — Kelola lokasi penyimpanan (rak) di dalam gudang
+- **Bin Capacity Control** — Setiap bin memiliki `maxWeightCapacity`, `minWeightThreshold`, dan `currentWeightOccupancy`
+- **Soft Delete** — Data tidak dihapus permanen, hanya ditandai `isDeleted`
 
-### 📦 Inventory Control
-- **Inbound** — Proses penerimaan barang masuk dengan Idempotency Key
-- **Outbound** — Proses pengeluaran barang dengan validasi stok
-- **Inventory Ledger** — Pencatatan seluruh pergerakan stok secara historis
-- **Stock Monitoring** — Pantau jumlah stok real-time per item per warehouse
+### 📦 Item Management
+- **CRUD Item** — Kelola data barang/produk dengan SKU unik
+- **Pagination & Sorting** — Endpoint item mendukung pagination untuk efisiensi memori
+
+### 📥📤 Inventory Control
+- **Inbound** — Proses penerimaan barang masuk ke bin spesifik dengan Idempotency Key
+- **Outbound** — Proses pengeluaran barang dengan validasi stok real-time
+- **Transfer** — Pindah stok antar bin dalam satu warehouse
+- **Inventory Stock** — Pantau jumlah stok real-time per item per warehouse dengan pagination
+- **Inventory Ledger** — Pencatatan historis seluruh pergerakan stok (inbound, outbound, transfer) dengan pagination
+
+### 📊 Dashboard
+- **Dashboard Summary** — Ringkasan total warehouse, item, total stok, dan pergerakan terkini
 
 ### ⚡ Concurrency & Data Integrity
 - **Pessimistic Write Locking** — Mencegah race condition dan anomali data stok saat transaksi bersamaan (High Concurrency)
@@ -55,14 +69,16 @@
 ```
 src/main/java/
 ├── config/          # Security, Web, Audit config
-├── controller/      # REST Controllers (Auth, Bin, Inbound, Inventory, Item, Outbound, Warehouse)
+├── controller/      # Auth, Bin, Dashboard, Inbound, Inventory, Item, Outbound, Transfer, Warehouse
 ├── entity/          # JPA Entities + BaseEntity (Audit)
 ├── exception/       # Global Exception Handler
 ├── filter/          # JWT Request Filter
 ├── repository/      # Spring Data JPA Repositories
-├── request/         # Request DTOs
-├── response/        # Response DTOs
-├── service/         # Business Logic (Interface + Impl)
+├── io/
+│   ├── request/     # Request DTOs (Bin, Inbound, Item, Outbound, Transfer, Warehouse)
+│   └── response/    # Response DTOs (Auth, Bin, Dashboard, Item, Ledger, Stock, Warehouse)
+├── service/         # Business Logic Interface
+│   └── impl/        # Service Implementation
 └── util/            # JWT Utility
 ```
 
@@ -80,6 +96,7 @@ src/main/java/
 ```bash
 # Clone repository
 git clone https://github.com/Youuzzi/ZiroLogistics-Backend.git
+cd ZiroLogistics-Backend
 
 # Buat database MySQL
 CREATE DATABASE ziro_logistics;
@@ -88,6 +105,7 @@ CREATE DATABASE ziro_logistics;
 spring.datasource.url=jdbc:mysql://localhost:3306/ziro_logistics
 spring.datasource.username=your_username
 spring.datasource.password=your_password
+spring.jpa.hibernate.ddl-auto=update
 
 # Jalankan aplikasi
 mvn spring-boot:run
@@ -97,7 +115,7 @@ mvn spring-boot:run
 
 ## 📌 Status Project
 
-> ⚠️ **In Progress** — Sistem backend sudah berjalan. Frontend sedang dalam pengembangan.
+> ⚠️ **In Progress** — Backend sudah berjalan penuh. Frontend sedang dalam pengembangan aktif.
 
 ---
 
