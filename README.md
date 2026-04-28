@@ -10,7 +10,8 @@
 
 | Repository | Link | Status |
 |---|---|---|
-| 🖥️ **Frontend** | [ZiroLogistics-Frontend](https://github.com/Youuzzi/ZiroLogistics-Frontend) | Active |
+| 🖥️ **Frontend** | [ZiroLogistics-Frontend](https://github.com/Youuzzi/ZiroLogistics-Frontend) | In Progress |
+
 
 ---
 
