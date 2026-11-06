@@ -12,7 +12,6 @@
 |---|---|---|
 | 🖥️ **Frontend** | [ZiroLogistics-Frontend](https://github.com/Youuzzi/ZiroLogistics-Frontend) | In Progress |
 
-
 ---
 
 ## 🛠️ Tech Stack
@@ -94,22 +93,38 @@ src/main/java/
 
 ### Setup
 
-```bash
-# Clone repository
-git clone https://github.com/Youuzzi/ZiroLogistics-Backend.git
-cd ZiroLogistics-Backend
+Buat database MySQL:
 
-# Buat database MySQL
+```sql
 CREATE DATABASE ziro_logistics;
+```
 
-# Konfigurasi application.properties
-spring.datasource.url=jdbc:mysql://localhost:3306/ziro_logistics
-spring.datasource.username=your_username
-spring.datasource.password=your_password
-spring.jpa.hibernate.ddl-auto=update
+Konfigurasikan environment variables sebelum menjalankan aplikasi:
 
-# Jalankan aplikasi
-mvn spring-boot:run
+```powershell
+$env:DB_URL="jdbc:mysql://localhost:3306/ziro_logistics"
+$env:DB_USERNAME="your_username"
+$env:DB_PASSWORD="your_password"
+$env:JWT_SECRET_KEY="replace-with-a-secure-secret-at-least-32-characters"
+```
+
+Hibernate menggunakan default aman:
+- `JPA_DDL_AUTO=validate` — memvalidasi schema dan tidak mengubahnya otomatis.
+- `JPA_SHOW_SQL=false` — SQL tidak dicetak ke log aplikasi.
+
+Untuk development lokal saja, jika memang perlu Hibernate membuat atau memperbarui tabel:
+
+```powershell
+$env:JPA_DDL_AUTO="update"
+$env:JPA_SHOW_SQL="true"
+```
+
+Jangan gunakan `update` sebagai strategi deployment production. Siapkan dan kelola schema database production secara terkontrol sebelum menjalankan aplikasi dengan default `validate`.
+
+Jalankan aplikasi:
+
+```powershell
+.\mvnw.cmd spring-boot:run
 ```
 
 ---
