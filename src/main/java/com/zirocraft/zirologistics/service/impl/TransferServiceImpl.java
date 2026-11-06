@@ -27,27 +27,36 @@ public class TransferServiceImpl implements TransferService {
     @Transactional
     public void processTransfer(TransferRequest request, String executorEmail) {
 
-        // 1. IDEMPOTENCY CHECK
-        if (ledgerRepository.existsByRequestId(request.getRequestId())) {
+        // Ledger stores one request ID per movement leg, not the unsuffixed request ID.
+        if (ledgerRepository.existsByRequestId(request.getRequestId() + "_OUT")
+                || ledgerRepository.existsByRequestId(request.getRequestId() + "_IN")) {
             throw new ApiException(HttpStatus.CONFLICT, "Request ID transfer sudah pernah diproses.");
         }
 
-        // 2. PESSIMISTIC LOCKING (Gembok Item agar tidak ada perubahan stok lain)
-        ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
-
-        // 3. VALIDASI LOKASI ASAL & TUJUAN
-        BinEntity sourceBin = binRepository.findByBinCode(request.getSourceBinCode())
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Bin asal tidak ditemukan."));
-
-        BinEntity destBin = binRepository.findByBinCode(request.getDestinationBinCode())
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Bin tujuan tidak ditemukan."));
-
-        if (sourceBin.getBinCode().equals(destBin.getBinCode())) {
+        if (request.getSourceBinCode().equals(request.getDestinationBinCode())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Bin asal dan tujuan harus berbeda.");
         }
 
-        // 4. VALIDASI STOK DI RAK ASAL
+        // Keep the same item-before-bin lock order used by inbound and outbound.
+        ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
+
+        // Lock both bins in a deterministic order to avoid opposite-direction transfer deadlocks.
+        String firstBinCode = request.getSourceBinCode().compareTo(request.getDestinationBinCode()) < 0
+                ? request.getSourceBinCode() : request.getDestinationBinCode();
+        String secondBinCode = firstBinCode.equals(request.getSourceBinCode())
+                ? request.getDestinationBinCode() : request.getSourceBinCode();
+
+        BinEntity firstLockedBin = binRepository.findByBinCodeForUpdate(firstBinCode)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Bin tidak ditemukan."));
+        BinEntity secondLockedBin = binRepository.findByBinCodeForUpdate(secondBinCode)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Bin tidak ditemukan."));
+
+        BinEntity sourceBin = request.getSourceBinCode().equals(firstBinCode)
+                ? firstLockedBin : secondLockedBin;
+        BinEntity destBin = request.getDestinationBinCode().equals(firstBinCode)
+                ? firstLockedBin : secondLockedBin;
+
         InventoryStockEntity sourceStock = stockRepository
                 .findByItemSkuAndBinBinCodeAndStatus(item.getSku(), sourceBin.getBinCode(), "AVAILABLE")
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Stok tidak ditemukan pada bin asal."));
@@ -56,31 +65,33 @@ public class TransferServiceImpl implements TransferService {
             throw new ApiException(HttpStatus.CONFLICT, "Stok pada bin asal tidak mencukupi.");
         }
 
-        // 5. VALIDASI KAPASITAS DI RAK TUJUAN
         BigDecimal transferWeight = item.getWeightPerUnit().multiply(request.getQuantity());
-        BigDecimal projectedDestWeight = destBin.getCurrentWeightOccupancy().add(transferWeight);
+        BigDecimal projectedSourceWeight = sourceBin.getCurrentWeightOccupancy().subtract(transferWeight);
+        if (projectedSourceWeight.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Data kapasitas bin asal tidak konsisten dengan stok. Periksa saldo okupansi sebelum transfer.");
+        }
 
+        BigDecimal projectedDestWeight = destBin.getCurrentWeightOccupancy().add(transferWeight);
         if (projectedDestWeight.compareTo(destBin.getMaxWeightCapacity()) > 0) {
             throw new ApiException(HttpStatus.CONFLICT, "Kapasitas bin tujuan tidak mencukupi untuk transfer ini.");
         }
 
-        // --- EKSEKUSI PEMINDAHAN (ATOMIC PROCESS) ---
-
-        // A. Update Rak Asal
+        // A. Update source stock and occupancy.
         BigDecimal sourceBalanceBefore = sourceStock.getQuantity();
         BigDecimal sourceBalanceAfter = sourceBalanceBefore.subtract(request.getQuantity());
         sourceStock.setQuantity(sourceBalanceAfter);
         stockRepository.save(sourceStock);
 
-        sourceBin.setCurrentWeightOccupancy(sourceBin.getCurrentWeightOccupancy().subtract(transferWeight));
+        sourceBin.setCurrentWeightOccupancy(projectedSourceWeight);
         binRepository.save(sourceBin);
 
-        // B. Update Rak Tujuan
+        // B. Update or create destination stock and occupancy.
         InventoryStockEntity destStock = stockRepository
                 .findByItemSkuAndBinBinCodeAndStatus(item.getSku(), destBin.getBinCode(), "AVAILABLE")
                 .orElse(null);
 
-        BigDecimal destBalanceBefore = (destStock != null) ? destStock.getQuantity() : BigDecimal.ZERO;
+        BigDecimal destBalanceBefore = destStock != null ? destStock.getQuantity() : BigDecimal.ZERO;
         BigDecimal destBalanceAfter = destBalanceBefore.add(request.getQuantity());
 
         if (destStock == null) {
@@ -91,20 +102,17 @@ public class TransferServiceImpl implements TransferService {
         }
         stockRepository.save(destStock);
 
-        destBin.setCurrentWeightOccupancy(destBin.getCurrentWeightOccupancy().add(transferWeight));
+        destBin.setCurrentWeightOccupancy(projectedDestWeight);
         binRepository.save(destBin);
 
-        // --- PENCATATAN DUAL LEDGER (JOURNAL ENTRY) ---
-
-        // Ledger 1: Keluar dari Rak Asal
+        // C. Record both sides of the transfer as a balanced ledger pair.
         ledgerRepository.save(InventoryLedgerEntity.builder()
                 .item(item).bin(sourceBin).transactionType("TRANSFER_OUT")
                 .quantityChange(request.getQuantity().negate())
                 .balanceBefore(sourceBalanceBefore).balanceAfter(sourceBalanceAfter)
-                .requestId(request.getRequestId() + "_OUT") // Suffix agar unik
+                .requestId(request.getRequestId() + "_OUT")
                 .userId(executorEmail).referenceNo(request.getSku()).note("Transfer to " + destBin.getBinCode()).build());
 
-        // Ledger 2: Masuk ke Rak Tujuan
         ledgerRepository.save(InventoryLedgerEntity.builder()
                 .item(item).bin(destBin).transactionType("TRANSFER_IN")
                 .quantityChange(request.getQuantity())
