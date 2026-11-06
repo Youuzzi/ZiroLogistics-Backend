@@ -56,7 +56,7 @@ public class AuthServiceImpl {
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName().toUpperCase()) // Standar Industri: Nama disimpan dalam Uppercase
-                .role(request.getRole() != null ? request.getRole() : "ROLE_STAFF")
+                .role("ROLE_STAFF")
                 .active(true)
                 .build();
 
