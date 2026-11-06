@@ -14,9 +14,10 @@ import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
-public class OutboundServiceImpl implements OutboundService { // FIX: Nama class & Interface sudah benar
+public class OutboundServiceImpl implements OutboundService {
 
     private final ItemRepository itemRepository;
+    private final BinRepository binRepository;
     private final InventoryStockRepository stockRepository;
     private final InventoryLedgerRepository ledgerRepository;
 
@@ -29,34 +30,46 @@ public class OutboundServiceImpl implements OutboundService { // FIX: Nama class
             throw new ApiException(HttpStatus.CONFLICT, "Request ID outbound sudah pernah diproses.");
         }
 
-        // 2. PESSIMISTIC LOCKING PADA ITEM (Gembok Database)
+        // 2. LOCK ITEM, THEN BIN (same lock order as inbound)
         ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
 
-        // 3. CARI STOK DI RAK TERSEBUT (Status WAJIB AVAILABLE)
+        BinEntity bin = binRepository.findByBinCodeForUpdate(request.getBinCode())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Bin tidak ditemukan."));
+
+        // 3. FIND AVAILABLE STOCK IN THE LOCKED BIN
         InventoryStockEntity currentStock = stockRepository
-                .findByItemSkuAndBinBinCodeAndStatus(item.getSku(), request.getBinCode(), "AVAILABLE")
+                .findByItemSkuAndBinBinCodeAndStatus(item.getSku(), bin.getBinCode(), "AVAILABLE")
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Stok tidak ditemukan pada bin yang diminta."));
 
-        // 4. VALIDASI KUANTITAS (Anti-Minus)
+        // 4. VALIDATE QUANTITY AND BIN OCCUPANCY
         if (currentStock.getQuantity().compareTo(request.getQuantity()) < 0) {
             throw new ApiException(HttpStatus.CONFLICT, "Stok tersedia tidak mencukupi untuk outbound.");
         }
 
-        // 5. HITUNG BALANCES (BigDecimal Precision)
+        BigDecimal outgoingWeight = item.getWeightPerUnit().multiply(request.getQuantity());
+        BigDecimal projectedOccupancy = bin.getCurrentWeightOccupancy().subtract(outgoingWeight);
+        if (projectedOccupancy.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Data kapasitas bin tidak konsisten dengan stok. Periksa saldo okupansi bin sebelum outbound.");
+        }
+
+        // 5. UPDATE STOCK AND PHYSICAL BIN OCCUPANCY
         BigDecimal balanceBefore = currentStock.getQuantity();
         BigDecimal balanceAfter = balanceBefore.subtract(request.getQuantity());
 
-        // 6. UPDATE STOK FISIK
         currentStock.setQuantity(balanceAfter);
         stockRepository.save(currentStock);
 
-        // 7. CATAT KE LEDGER (Audit Trail / CCTV Digital)
+        bin.setCurrentWeightOccupancy(projectedOccupancy);
+        binRepository.save(bin);
+
+        // 6. RECORD THE INVENTORY LEDGER
         InventoryLedgerEntity ledger = InventoryLedgerEntity.builder()
                 .item(item)
-                .bin(currentStock.getBin())
+                .bin(bin)
                 .transactionType("OUTBOUND")
-                .quantityChange(request.getQuantity().negate()) // Disimpan sebagai angka negatif
+                .quantityChange(request.getQuantity().negate())
                 .balanceBefore(balanceBefore)
                 .balanceAfter(balanceAfter)
                 .requestId(request.getRequestId())
