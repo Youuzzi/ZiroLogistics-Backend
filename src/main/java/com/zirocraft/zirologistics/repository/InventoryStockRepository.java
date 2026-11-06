@@ -13,9 +13,8 @@ public interface InventoryStockRepository extends JpaRepository<InventoryStockEn
     Optional<InventoryStockEntity> findByItemSkuAndBinBinCodeAndStatus(String sku, String binCode, String status);
 
     /**
-     * A low-stock alert represents one SKU in one warehouse, not one stock row/bin.
-     * Only AVAILABLE quantities are counted; damaged/reserved stock is not available
-     * to satisfy the warehouse's replenishment threshold.
+     * One alert per SKU and warehouse. The result quantity is the sum of AVAILABLE
+     * stock across every active bin belonging to that warehouse.
      */
     @Query(
             value = """
@@ -32,24 +31,28 @@ public interface InventoryStockRepository extends JpaRepository<InventoryStockEn
                       AND i.isDeleted = false
                       AND b.isDeleted = false
                       AND w.isDeleted = false
-                    GROUP BY i.id, i.sku, i.name, i.minStockLevel, w.id, w.name
+                    GROUP BY i.id, i.sku, i.name, i.minStockLevel, w.id, w.name, w.code
                     HAVING SUM(s.quantity) < i.minStockLevel
                     """,
             countQuery = """
-                    SELECT COUNT(*)
-                    FROM (
-                        SELECT i.id, w.id
-                        FROM InventoryStockEntity s
-                        JOIN s.item i
-                        JOIN s.bin b
-                        JOIN b.warehouse w
-                        WHERE s.status = 'AVAILABLE'
-                          AND i.isDeleted = false
-                          AND b.isDeleted = false
-                          AND w.isDeleted = false
-                        GROUP BY i.id, w.id, i.minStockLevel
-                        HAVING SUM(s.quantity) < i.minStockLevel
-                    ) low_stock_groups
+                    SELECT COUNT(DISTINCT CONCAT(i.sku, '|', w.code))
+                    FROM InventoryStockEntity s
+                    JOIN s.item i
+                    JOIN s.bin b
+                    JOIN b.warehouse w
+                    WHERE s.status = 'AVAILABLE'
+                      AND i.isDeleted = false
+                      AND b.isDeleted = false
+                      AND w.isDeleted = false
+                      AND (
+                          SELECT COALESCE(SUM(s2.quantity), 0)
+                          FROM InventoryStockEntity s2
+                          JOIN s2.bin b2
+                          WHERE s2.item = i
+                            AND b2.warehouse = w
+                            AND s2.status = 'AVAILABLE'
+                            AND b2.isDeleted = false
+                      ) < i.minStockLevel
                     """
     )
     Page<LowStockAlertProjection> findLowStockByWarehouse(Pageable pageable);
