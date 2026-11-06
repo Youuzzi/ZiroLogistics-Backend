@@ -3,6 +3,7 @@ package com.zirocraft.zirologistics.service.impl;
 import com.zirocraft.zirologistics.entity.InventoryLedgerEntity;
 import com.zirocraft.zirologistics.entity.InventoryStockEntity;
 import com.zirocraft.zirologistics.io.response.LedgerResponse;
+import com.zirocraft.zirologistics.io.response.LowStockAlertResponse;
 import com.zirocraft.zirologistics.io.response.StockResponse;
 import com.zirocraft.zirologistics.repository.InventoryLedgerRepository;
 import com.zirocraft.zirologistics.repository.InventoryStockRepository;
@@ -20,28 +21,30 @@ public class InventoryServiceImpl {
     private final InventoryStockRepository stockRepository;
     private final InventoryLedgerRepository ledgerRepository;
 
-    // Monitoring Stok Live (Industrial Paginated)
     public Page<StockResponse> getCurrentStocks(Pageable pageable) {
-        log.info("[ZIROCRAFT-TRACE] Monitoring current warehouse stocks. Page: {}", pageable.getPageNumber());
-
+        log.info("Monitoring current warehouse stocks. Page: {}", pageable.getPageNumber());
         return stockRepository.findAll(pageable).map(this::mapToStockResponse);
     }
 
-    // Monitoring CCTV Digital / Ledger (Industrial Paginated)
     public Page<LedgerResponse> getTransactionHistory(Pageable pageable) {
-        log.info("[ZIROCRAFT-TRACE] Accessing inventory movement logs. Page: {}", pageable.getPageNumber());
-
+        log.info("Accessing inventory movement logs. Page: {}", pageable.getPageNumber());
         return ledgerRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::mapToLedgerResponse);
     }
 
-    // Alert Stok Kritis
-    public Page<StockResponse> getLowStockAlerts(Pageable pageable) {
-        // Filter before pagination so pages contain only actual low-stock rows.
-        return stockRepository.findLowStock(pageable)
-                .map(this::mapToStockResponse);
+    /**
+     * Returns one alert per SKU and warehouse. Quantities are aggregated across
+     * all active bins in that warehouse and include AVAILABLE stock only.
+     */
+    public Page<LowStockAlertResponse> getLowStockAlerts(Pageable pageable) {
+        return stockRepository.findLowStockByWarehouse(pageable)
+                .map(row -> LowStockAlertResponse.builder()
+                        .itemSku(row.getItemSku())
+                        .itemName(row.getItemName())
+                        .warehouseName(row.getWarehouseName())
+                        .availableQuantity(row.getAvailableQuantity())
+                        .minStockLevel(row.getMinStockLevel())
+                        .build());
     }
-
-    // --- PRIVATE MAPPERS (QUIET LUXURY CODE) ---
 
     private StockResponse mapToStockResponse(InventoryStockEntity s) {
         return StockResponse.builder()
