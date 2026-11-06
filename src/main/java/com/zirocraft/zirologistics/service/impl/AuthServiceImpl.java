@@ -9,7 +9,7 @@ import com.zirocraft.zirologistics.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -79,7 +79,7 @@ public class AuthServiceImpl {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
             );
-        } catch (BadCredentialsException ex) {
+        } catch (AuthenticationException ex) {
             log.warn("[ZIROCRAFT-SECURITY] Login rejected for invalid credentials.");
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Email atau password tidak valid.");
         }
