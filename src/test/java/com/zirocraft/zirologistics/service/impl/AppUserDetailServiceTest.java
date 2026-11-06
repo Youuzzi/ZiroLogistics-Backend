@@ -24,6 +24,26 @@ class AppUserDetailServiceTest {
     private AppUserDetailService appUserDetailService;
 
     @Test
+    void activeAccountMustBeReturnedAsEnabledUserDetails() {
+        UserEntity activeUser = UserEntity.builder()
+                .email("active-user@example.com")
+                .password("encoded-password")
+                .name("Active User")
+                .role("ROLE_STAFF")
+                .active(true)
+                .build();
+
+        when(userRepository.findByEmail("active-user@example.com"))
+                .thenReturn(Optional.of(activeUser));
+
+        UserDetails userDetails =
+                appUserDetailService.loadUserByUsername("active-user@example.com");
+
+        org.junit.jupiter.api.Assertions.assertTrue(userDetails.isEnabled(),
+                "An active database account must remain enabled in Spring Security");
+    }
+
+    @Test
     void inactiveAccountMustBeReturnedAsDisabledUserDetails() {
         UserEntity inactiveUser = UserEntity.builder()
                 .email("inactive-user@example.com")
