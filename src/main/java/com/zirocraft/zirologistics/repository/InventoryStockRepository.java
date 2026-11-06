@@ -35,7 +35,7 @@ public interface InventoryStockRepository extends JpaRepository<InventoryStockEn
                     HAVING SUM(s.quantity) < i.minStockLevel
                     """,
             countQuery = """
-                    SELECT COUNT(DISTINCT CONCAT(i.sku, '|', w.code))
+                    SELECT COUNT(DISTINCT CONCAT(CONCAT(i.sku, '|'), w.code))
                     FROM InventoryStockEntity s
                     JOIN s.item i
                     JOIN s.bin b
