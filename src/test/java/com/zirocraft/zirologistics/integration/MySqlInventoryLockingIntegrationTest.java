@@ -1,15 +1,23 @@
 package com.zirocraft.zirologistics.integration;
 
+import com.zirocraft.zirologistics.entity.BinEntity;
+import com.zirocraft.zirologistics.entity.InventoryStockEntity;
 import com.zirocraft.zirologistics.entity.ItemEntity;
+import com.zirocraft.zirologistics.entity.WarehouseEntity;
+import com.zirocraft.zirologistics.exception.ApiException;
+import com.zirocraft.zirologistics.io.request.OutboundRequest;
+import com.zirocraft.zirologistics.repository.BinRepository;
+import com.zirocraft.zirologistics.repository.InventoryLedgerRepository;
+import com.zirocraft.zirologistics.repository.InventoryStockRepository;
 import com.zirocraft.zirologistics.repository.ItemRepository;
+import com.zirocraft.zirologistics.repository.WarehouseRepository;
+import com.zirocraft.zirologistics.service.impl.OutboundServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -20,8 +28,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
@@ -47,77 +54,112 @@ class MySqlInventoryLockingIntegrationTest {
     }
 
     @Autowired
-    private ItemRepository itemRepository;
-
+    private WarehouseRepository warehouseRepository;
     @Autowired
-    private PlatformTransactionManager transactionManager;
+    private BinRepository binRepository;
+    @Autowired
+    private ItemRepository itemRepository;
+    @Autowired
+    private InventoryStockRepository stockRepository;
+    @Autowired
+    private InventoryLedgerRepository ledgerRepository;
+    @Autowired
+    private OutboundServiceImpl outboundService;
 
     @BeforeEach
-    void createLockTargetItem() {
+    void prepareInventory() {
+        ledgerRepository.deleteAll();
+        stockRepository.deleteAll();
+        binRepository.deleteAll();
         itemRepository.deleteAll();
-        itemRepository.save(ItemEntity.builder()
-                .sku("SKU-LOCK-TEST")
-                .name("Concurrency Lock Test Item")
+        warehouseRepository.deleteAll();
+
+        WarehouseEntity warehouse = warehouseRepository.save(WarehouseEntity.builder()
+                .code("WH-CONCURRENCY")
+                .name("Concurrency Test Warehouse")
+                .build());
+
+        BinEntity bin = binRepository.save(BinEntity.builder()
+                .warehouse(warehouse)
+                .binCode("BIN-CONCURRENCY")
+                .maxWeightCapacity(new BigDecimal("100.00"))
+                .minWeightThreshold(BigDecimal.ZERO)
+                .currentWeightOccupancy(new BigDecimal("10.00"))
+                .build());
+
+        ItemEntity item = itemRepository.save(ItemEntity.builder()
+                .sku("SKU-CONCURRENCY")
+                .name("Concurrency Test Item")
                 .baseUom("PCS")
-                .minStockLevel(new BigDecimal("10.00"))
+                .minStockLevel(new BigDecimal("2.00"))
                 .weightPerUnit(new BigDecimal("1.00"))
+                .build());
+
+        stockRepository.save(InventoryStockEntity.builder()
+                .item(item)
+                .bin(bin)
+                .quantity(new BigDecimal("10.00"))
+                .status("AVAILABLE")
                 .build());
     }
 
     @Test
-    void pessimisticWriteLockBlocksSecondTransactionUntilFirstCommits() throws Exception {
-        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-        CountDownLatch firstLockAcquired = new CountDownLatch(1);
-        CountDownLatch releaseFirstTransaction = new CountDownLatch(1);
-        CountDownLatch secondAttemptStarted = new CountDownLatch(1);
-        CountDownLatch secondLockAcquired = new CountDownLatch(1);
+    void concurrentOutboundRequestsCannotOversellStockOrCorruptBinOccupancy() throws Exception {
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
 
         try {
-            var firstTransaction = executor.submit(() -> transactionTemplate.execute(status -> {
-                ItemEntity locked = itemRepository.findBySkuForUpdate("SKU-LOCK-TEST").orElseThrow();
-                assertNotNull(locked.getId());
-                firstLockAcquired.countDown();
-                await(releaseFirstTransaction);
-                return null;
-            }));
+            var first = executor.submit(() -> processAfterBarrier(
+                    request("OUT-CONCURRENT-1"), ready, start));
+            var second = executor.submit(() -> processAfterBarrier(
+                    request("OUT-CONCURRENT-2"), ready, start));
 
-            assertTrue(firstLockAcquired.await(5, TimeUnit.SECONDS),
-                    "First transaction should acquire the row lock");
+            assertTrue(ready.await(5, TimeUnit.SECONDS), "Both requests should be ready");
+            start.countDown();
 
-            var secondTransaction = executor.submit(() -> transactionTemplate.execute(status -> {
-                secondAttemptStarted.countDown();
-                ItemEntity locked = itemRepository.findBySkuForUpdate("SKU-LOCK-TEST").orElseThrow();
-                assertNotNull(locked.getId());
-                secondLockAcquired.countDown();
-                return null;
-            }));
+            boolean firstSucceeded = first.get(15, TimeUnit.SECONDS);
+            boolean secondSucceeded = second.get(15, TimeUnit.SECONDS);
 
-            assertTrue(secondAttemptStarted.await(5, TimeUnit.SECONDS),
-                    "Second transaction should attempt to acquire the same row");
-            assertFalse(secondLockAcquired.await(300, TimeUnit.MILLISECONDS),
-                    "Second transaction must wait while the first transaction holds the lock");
+            assertEquals(1, (firstSucceeded ? 1 : 0) + (secondSucceeded ? 1 : 0),
+                    "Exactly one outbound of 7 units should succeed from an initial balance of 10");
 
-            releaseFirstTransaction.countDown();
-            firstTransaction.get(10, TimeUnit.SECONDS);
-            secondTransaction.get(10, TimeUnit.SECONDS);
+            InventoryStockEntity finalStock = stockRepository
+                    .findByItemSkuAndBinBinCodeAndStatus(
+                            "SKU-CONCURRENCY", "BIN-CONCURRENCY", "AVAILABLE")
+                    .orElseThrow();
+            BinEntity finalBin = binRepository.findByBinCode("BIN-CONCURRENCY").orElseThrow();
 
-            assertTrue(secondLockAcquired.await(1, TimeUnit.SECONDS),
-                    "Second transaction should acquire the lock after the first commits");
+            assertEquals(0, new BigDecimal("3.00").compareTo(finalStock.getQuantity()));
+            assertEquals(0, new BigDecimal("3.00").compareTo(finalBin.getCurrentWeightOccupancy()));
+            assertEquals(1, ledgerRepository.count(),
+                    "Only the successful outbound should create a ledger entry");
         } finally {
-            releaseFirstTransaction.countDown();
+            start.countDown();
             executor.shutdownNow();
         }
     }
 
-    private void await(CountDownLatch latch) {
-        try {
-            if (!latch.await(10, TimeUnit.SECONDS)) {
-                throw new IllegalStateException("Timed out waiting to release the first transaction");
-            }
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while waiting for the test latch", exception);
+    private boolean processAfterBarrier(
+            OutboundRequest request, CountDownLatch ready, CountDownLatch start) throws InterruptedException {
+        ready.countDown();
+        if (!start.await(5, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out waiting to start concurrent outbound request");
         }
+        try {
+            outboundService.processOutbound(request, "integration-test@example.com");
+            return true;
+        } catch (ApiException expectedConflict) {
+            return false;
+        }
+    }
+
+    private OutboundRequest request(String requestId) {
+        OutboundRequest request = new OutboundRequest();
+        request.setRequestId(requestId);
+        request.setSku("SKU-CONCURRENCY");
+        request.setBinCode("BIN-CONCURRENCY");
+        request.setQuantity(new BigDecimal("7.00"));
+        return request;
     }
 }
