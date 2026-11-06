@@ -51,4 +51,23 @@ class InactiveAccountJwtSecurityIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden());
     }
+
+    @Test
+    void activeAccountCanAccessProtectedEndpointWithValidJwt() throws Exception {
+        String email = "active-jwt-" + UUID.randomUUID() + "@example.com";
+        UserEntity activeUser = UserEntity.builder()
+                .email(email)
+                .password("encoded-password")
+                .name("Active JWT User")
+                .role("ROLE_STAFF")
+                .active(true)
+                .build();
+        userRepository.save(activeUser);
+
+        String token = jwtUtil.generateToken(userDetailsService.loadUserByUsername(email));
+
+        mockMvc.perform(get("/api/v1.0/warehouses")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
 }
