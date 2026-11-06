@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.controller;
 
 import com.zirocraft.zirologistics.io.response.LedgerResponse;
+import com.zirocraft.zirologistics.io.response.LowStockAlertResponse;
 import com.zirocraft.zirologistics.io.response.StockResponse;
 import com.zirocraft.zirologistics.service.impl.InventoryServiceImpl;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,11 @@ public class InventoryController {
     @GetMapping("/stocks")
     public ResponseEntity<Page<StockResponse>> getStocks(Pageable pageable) {
         return ResponseEntity.ok(inventoryService.getCurrentStocks(pageable));
+    }
+
+    @GetMapping("/low-stock-alerts")
+    public ResponseEntity<Page<LowStockAlertResponse>> getLowStockAlerts(Pageable pageable) {
+        return ResponseEntity.ok(inventoryService.getLowStockAlerts(pageable));
     }
 
     @GetMapping("/ledger")
