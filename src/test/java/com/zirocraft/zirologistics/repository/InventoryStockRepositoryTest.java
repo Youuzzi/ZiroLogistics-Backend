@@ -7,9 +7,9 @@ import com.zirocraft.zirologistics.entity.WarehouseEntity;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 
@@ -32,45 +32,65 @@ class InventoryStockRepositoryTest {
     private BinRepository binRepository;
 
     @Test
-    void findLowStockFiltersBeforeApplyingPagination() {
-        WarehouseEntity warehouse = warehouseRepository.save(WarehouseEntity.builder()
-                .code("WH-LOW")
-                .name("Low Stock Test Warehouse")
-                .build());
+    void findLowStockAggregatesAvailableQuantityPerSkuAndWarehouseBeforePagination() {
+        WarehouseEntity warehouseA = saveWarehouse("WH-A", "Warehouse A");
+        WarehouseEntity warehouseB = saveWarehouse("WH-B", "Warehouse B");
 
-        BinEntity bin = binRepository.save(BinEntity.builder()
-                .warehouse(warehouse)
-                .binCode("BIN-LOW")
-                .maxWeightCapacity(new BigDecimal("1000.00"))
-                .minWeightThreshold(new BigDecimal("0.00"))
-                .currentWeightOccupancy(new BigDecimal("0.00"))
-                .build());
+        BinEntity binA1 = saveBin(warehouseA, "A-01");
+        BinEntity binA2 = saveBin(warehouseA, "A-02");
+        BinEntity binB1 = saveBin(warehouseB, "B-01");
 
-        ItemEntity lowItem = itemRepository.save(ItemEntity.builder()
-                .sku("SKU-LOW")
-                .name("Low Item")
+        ItemEntity item = itemRepository.save(ItemEntity.builder()
+                .sku("SKU-SPLIT")
+                .name("Split Stock Item")
                 .baseUom("PCS")
                 .minStockLevel(new BigDecimal("10.00"))
                 .weightPerUnit(new BigDecimal("1.00"))
                 .build());
 
-        ItemEntity healthyItem = itemRepository.save(ItemEntity.builder()
-                .sku("SKU-HEALTHY")
-                .name("Healthy Item")
-                .baseUom("PCS")
-                .minStockLevel(new BigDecimal("5.00"))
-                .weightPerUnit(new BigDecimal("1.00"))
-                .build());
+        // Two bins in Warehouse A total 9, so this warehouse is low.
+        saveStock(item, binA1, "4.00", "AVAILABLE");
+        saveStock(item, binA2, "5.00", "AVAILABLE");
+        // Warehouse B has 20 available, so it must not receive an alert.
+        saveStock(item, binB1, "20.00", "AVAILABLE");
+        // Reserved stock is not counted toward available replenishment stock.
+        saveStock(item, binA1, "50.00", "RESERVED");
 
-        stockRepository.save(InventoryStockEntity.builder()
-                .item(lowItem).bin(bin).quantity(new BigDecimal("2.00")).status("AVAILABLE").build());
-        stockRepository.save(InventoryStockEntity.builder()
-                .item(healthyItem).bin(bin).quantity(new BigDecimal("20.00")).status("AVAILABLE").build());
-
-        Page<InventoryStockEntity> result = stockRepository.findLowStock(PageRequest.of(0, 10));
+        Page<LowStockAlertProjection> result =
+                stockRepository.findLowStockByWarehouse(PageRequest.of(0, 10));
 
         assertEquals(1, result.getTotalElements());
         assertEquals(1, result.getContent().size());
-        assertEquals("SKU-LOW", result.getContent().get(0).getItem().getSku());
+        LowStockAlertProjection alert = result.getContent().get(0);
+        assertEquals("SKU-SPLIT", alert.getItemSku());
+        assertEquals("Warehouse A", alert.getWarehouseName());
+        assertEquals(0, new BigDecimal("9.00").compareTo(alert.getAvailableQuantity()));
+        assertEquals(0, new BigDecimal("10.00").compareTo(alert.getMinStockLevel()));
+    }
+
+    private WarehouseEntity saveWarehouse(String code, String name) {
+        return warehouseRepository.save(WarehouseEntity.builder()
+                .code(code)
+                .name(name)
+                .build());
+    }
+
+    private BinEntity saveBin(WarehouseEntity warehouse, String code) {
+        return binRepository.save(BinEntity.builder()
+                .warehouse(warehouse)
+                .binCode(code)
+                .maxWeightCapacity(new BigDecimal("1000.00"))
+                .minWeightThreshold(BigDecimal.ZERO)
+                .currentWeightOccupancy(BigDecimal.ZERO)
+                .build());
+    }
+
+    private void saveStock(ItemEntity item, BinEntity bin, String quantity, String status) {
+        stockRepository.save(InventoryStockEntity.builder()
+                .item(item)
+                .bin(bin)
+                .quantity(new BigDecimal(quantity))
+                .status(status)
+                .build());
     }
 }
