@@ -111,6 +111,7 @@ mvn test
 ## Documentation
 
 - [Architecture overview](docs/architecture.md)
+- [REST API reference](docs/api-reference.md)
 - [Testing evidence and limitations](docs/testing.md)
 
 The API endpoint catalogue, entity relationship diagram, and detailed workflow documentation will be expanded after the corresponding source classes and mappings are verified.
