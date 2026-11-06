@@ -1,6 +1,8 @@
 package com.zirocraft.zirologistics.service.impl;
 
 import com.zirocraft.zirologistics.entity.*;
+import com.zirocraft.zirologistics.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import com.zirocraft.zirologistics.io.request.TransferRequest;
 import com.zirocraft.zirologistics.repository.*;
 import com.zirocraft.zirologistics.service.TransferService;
@@ -27,31 +29,31 @@ public class TransferServiceImpl implements TransferService {
 
         // 1. IDEMPOTENCY CHECK
         if (ledgerRepository.existsByRequestId(request.getRequestId())) {
-            throw new RuntimeException("Transfer Request ID sudah diproses!");
+            throw new ApiException(HttpStatus.CONFLICT, "Request ID transfer sudah pernah diproses.");
         }
 
         // 2. PESSIMISTIC LOCKING (Gembok Item agar tidak ada perubahan stok lain)
         ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
-                .orElseThrow(() -> new RuntimeException("SKU tidak ditemukan!"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
 
         // 3. VALIDASI LOKASI ASAL & TUJUAN
         BinEntity sourceBin = binRepository.findByBinCode(request.getSourceBinCode())
-                .orElseThrow(() -> new RuntimeException("Rak Asal tidak ditemukan!"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Bin asal tidak ditemukan."));
 
         BinEntity destBin = binRepository.findByBinCode(request.getDestinationBinCode())
-                .orElseThrow(() -> new RuntimeException("Rak Tujuan tidak ditemukan!"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Bin tujuan tidak ditemukan."));
 
         if (sourceBin.getBinCode().equals(destBin.getBinCode())) {
-            throw new RuntimeException("Asal dan Tujuan rak tidak boleh sama!");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Bin asal dan tujuan harus berbeda.");
         }
 
         // 4. VALIDASI STOK DI RAK ASAL
         InventoryStockEntity sourceStock = stockRepository
                 .findByItemSkuAndBinBinCodeAndStatus(item.getSku(), sourceBin.getBinCode(), "AVAILABLE")
-                .orElseThrow(() -> new RuntimeException("Stok tidak ditemukan di Rak Asal!"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Stok tidak ditemukan pada bin asal."));
 
         if (sourceStock.getQuantity().compareTo(request.getQuantity()) < 0) {
-            throw new RuntimeException("Stok di Rak Asal tidak cukup!");
+            throw new ApiException(HttpStatus.CONFLICT, "Stok pada bin asal tidak mencukupi.");
         }
 
         // 5. VALIDASI KAPASITAS DI RAK TUJUAN
@@ -59,7 +61,7 @@ public class TransferServiceImpl implements TransferService {
         BigDecimal projectedDestWeight = destBin.getCurrentWeightOccupancy().add(transferWeight);
 
         if (projectedDestWeight.compareTo(destBin.getMaxWeightCapacity()) > 0) {
-            throw new RuntimeException("TRANSFER FAILED: Rak Tujuan (" + destBin.getBinCode() + ") Overcapacity!");
+            throw new ApiException(HttpStatus.CONFLICT, "Kapasitas bin tujuan tidak mencukupi untuk transfer ini.");
         }
 
         // --- EKSEKUSI PEMINDAHAN (ATOMIC PROCESS) ---

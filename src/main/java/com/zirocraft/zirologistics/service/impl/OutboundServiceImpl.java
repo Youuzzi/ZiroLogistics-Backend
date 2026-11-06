@@ -1,6 +1,8 @@
 package com.zirocraft.zirologistics.service.impl;
 
 import com.zirocraft.zirologistics.entity.*;
+import com.zirocraft.zirologistics.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import com.zirocraft.zirologistics.io.request.OutboundRequest;
 import com.zirocraft.zirologistics.repository.*;
 import com.zirocraft.zirologistics.service.OutboundService;
@@ -24,21 +26,21 @@ public class OutboundServiceImpl implements OutboundService { // FIX: Nama class
 
         // 1. IDEMPOTENCY CHECK
         if (ledgerRepository.existsByRequestId(request.getRequestId())) {
-            throw new RuntimeException("Transaksi Outbound ini sudah pernah diproses!");
+            throw new ApiException(HttpStatus.CONFLICT, "Request ID outbound sudah pernah diproses.");
         }
 
         // 2. PESSIMISTIC LOCKING PADA ITEM (Gembok Database)
         ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
-                .orElseThrow(() -> new RuntimeException("SKU " + request.getSku() + " tidak ditemukan!"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
 
         // 3. CARI STOK DI RAK TERSEBUT (Status WAJIB AVAILABLE)
         InventoryStockEntity currentStock = stockRepository
                 .findByItemSkuAndBinBinCodeAndStatus(item.getSku(), request.getBinCode(), "AVAILABLE")
-                .orElseThrow(() -> new RuntimeException("Stok tidak ditemukan di Rak " + request.getBinCode()));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Stok tidak ditemukan pada bin yang diminta."));
 
         // 4. VALIDASI KUANTITAS (Anti-Minus)
         if (currentStock.getQuantity().compareTo(request.getQuantity()) < 0) {
-            throw new RuntimeException("Stok tidak cukup! Tersedia: " + currentStock.getQuantity());
+            throw new ApiException(HttpStatus.CONFLICT, "Stok tersedia tidak mencukupi untuk outbound.");
         }
 
         // 5. HITUNG BALANCES (BigDecimal Precision)
