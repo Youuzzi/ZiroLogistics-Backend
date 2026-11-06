@@ -36,14 +36,9 @@ public class InventoryServiceImpl {
 
     // Alert Stok Kritis
     public Page<StockResponse> getLowStockAlerts(Pageable pageable) {
-        // Kita tarik semua Pageable, lalu filter di stream
-        return stockRepository.findAll(pageable)
-                .map(s -> {
-                    if (s.getQuantity().compareTo(s.getItem().getMinStockLevel()) < 0) {
-                        return mapToStockResponse(s);
-                    }
-                    return null;
-                });
+        // Filter before pagination so pages contain only actual low-stock rows.
+        return stockRepository.findLowStock(pageable)
+                .map(this::mapToStockResponse);
     }
 
     // --- PRIVATE MAPPERS (QUIET LUXURY CODE) ---
