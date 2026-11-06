@@ -1,127 +1,124 @@
-# ZiroLogistics – Backend API 🏭⚙️
+# ZiroLogistics — Backend API
 
-> **Repository:** [github.com/Youuzzi/ZiroLogistics-Backend](https://github.com/Youuzzi/ZiroLogistics-Backend)
->
-> Sistem manajemen gudang (WMS) skala industri — REST API backend yang dibangun dengan standar korporasi menggunakan Java Spring Boot dan MySQL.
+ZiroLogistics is an independent Warehouse Management System (WMS) project. This repository contains the Java/Spring Boot REST API; the web client is maintained separately.
 
----
+## Related repository
 
-## 🔗 Related Repository
+- Frontend: [ZiroLogistics-Frontend](https://github.com/Youuzzi/ZiroLogistics-Frontend)
 
-| Repository | Link | Status |
-|---|---|---|
-| 🖥️ **Frontend** | [ZiroLogistics-Frontend](https://github.com/Youuzzi/ZiroLogistics-Frontend) | In Progress |
+## Technology
 
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Technology |
+| Area | Technology |
 |---|---|
-| Language | Java 21 (LTS) |
-| Framework | Spring Boot 3.x |
-| Security | Spring Security + JWT |
-| ORM | Spring Data JPA (Hibernate) |
-| Database | MySQL (Production), H2 (Testing) |
-| Build Tool | Maven |
-| API | RESTful API |
+| Language | Java 21 |
+| Framework | Spring Boot 3.5.13 |
+| API | Spring Web |
+| Authentication / authorization | Spring Security, JWT |
+| Persistence | Spring Data JPA / Hibernate |
+| Database | MySQL |
+| Tests | Spring Boot Test, Spring Security Test, H2 |
+| Build | Maven |
 
----
+## Functional areas
 
-## ✨ Fitur Utama
+The source is organized around these WMS capabilities:
 
-### 🔐 Authentication & Authorization
-- **JWT Authentication** — Stateless token-based authentication
-- **Role-Based Access Control (RBAC)** — Pembatasan akses endpoint berdasarkan role
+- Authentication and role-based authorization.
+- Warehouse and storage-bin management.
+- Item catalog management.
+- Inbound and outbound stock movements.
+- Stock transfer between bins.
+- Inventory stock queries and movement ledger.
+- Dashboard summary.
 
-### 🏬 Warehouse & Bin Management
-- **CRUD Warehouse** — Kelola data gudang dengan pagination
-- **CRUD Bin** — Kelola lokasi penyimpanan (rak) di dalam gudang
-- **Bin Capacity Control** — Setiap bin memiliki `maxWeightCapacity`, `minWeightThreshold`, dan `currentWeightOccupancy`
-- **Soft Delete** — Data tidak dihapus permanen, hanya ditandai `isDeleted`
+See the controllers, request/response DTOs, services, and repositories for the current API contract. The API reference is being documented from the implementation so endpoint names and payloads are not guessed.
 
-### 📦 Item Management
-- **CRUD Item** — Kelola data barang/produk dengan SKU unik
-- **Pagination & Sorting** — Endpoint item mendukung pagination untuk efisiensi memori
+## Architecture
 
-### 📥📤 Inventory Control
-- **Inbound** — Proses penerimaan barang masuk ke bin spesifik dengan Idempotency Key
-- **Outbound** — Proses pengeluaran barang dengan validasi stok real-time
-- **Transfer** — Pindah stok antar bin dalam satu warehouse
-- **Inventory Stock** — Pantau jumlah stok real-time per item per warehouse dengan pagination
-- **Inventory Ledger** — Pencatatan historis seluruh pergerakan stok (inbound, outbound, transfer) dengan pagination
-
-### 📊 Dashboard
-- **Dashboard Summary** — Ringkasan total warehouse, item, total stok, dan pergerakan terkini
-
-### ⚡ Concurrency & Data Integrity
-- **Pessimistic Write Locking** — Mencegah race condition dan anomali data stok saat transaksi bersamaan (High Concurrency)
-- **Idempotency Key** — Menjamin satu request hanya diproses satu kali, mencegah duplikasi data akibat retry atau gangguan jaringan
-
-### 🔍 Audit & Traceability
-- **Audit Trail Otomatis** — Menggunakan JPA Auditing (`@CreatedDate`, `@LastModifiedDate`, `@CreatedBy`) untuk mencatat jejak aktivitas di setiap perubahan data
-- **Global Exception Handler** — Standarisasi format error response API dalam JSON
-
----
-
-## 📁 Struktur Project
-
+```mermaid
+flowchart TB
+    Client[React Web Client] -->|HTTPS / JSON + JWT| Security[Spring Security Filter Chain]
+    Security --> Controller[REST Controllers]
+    Controller --> DTO[Request and Response DTOs]
+    Controller --> Service[Service Layer]
+    Service --> Repository[Spring Data JPA Repositories]
+    Repository --> ORM[Hibernate ORM]
+    ORM --> Database[(MySQL)]
+    Service --> Domain[WMS Domain Entities]
 ```
+
+The application follows a layered backend structure. Controllers expose HTTP endpoints, services coordinate business operations, repositories handle persistence, and JPA entities represent stored domain data.
+
+## Project structure
+
+```text
 src/main/java/
-├── config/          # Security, Web, Audit config
-├── controller/      # Auth, Bin, Dashboard, Inbound, Inventory, Item, Outbound, Transfer, Warehouse
-├── entity/          # JPA Entities + BaseEntity (Audit)
-├── exception/       # Global Exception Handler
-├── filter/          # JWT Request Filter
-├── repository/      # Spring Data JPA Repositories
+├── config/       Security, web, and auditing configuration
+├── controller/   REST controllers
+├── entity/       JPA entities and shared audited base entity
+├── exception/    Application exceptions and API error handling
+├── filter/       JWT request filter
+├── repository/   Spring Data JPA repositories
 ├── io/
-│   ├── request/     # Request DTOs (Bin, Inbound, Item, Outbound, Transfer, Warehouse)
-│   └── response/    # Response DTOs (Auth, Bin, Dashboard, Item, Ledger, Stock, Warehouse)
-├── service/         # Business Logic Interface
-│   └── impl/        # Service Implementation
-└── util/            # JWT Utility
+│   ├── request/  Request DTOs
+│   └── response/ Response DTOs
+├── service/      Business service interfaces and implementations
+└── util/         JWT utilities
 ```
 
----
+## Run locally
 
-## 🚀 Cara Menjalankan
+### Requirements
 
-### Prerequisites
 - Java 21
 - MySQL 8.x
 - Maven
 
-### Setup
+### Database
+
+Create a local database:
+
+```sql
+CREATE DATABASE ziro_logistics;
+```
+
+Configure the datasource using your local credentials. Do not commit real passwords, tokens, or other secrets.
+
+Example datasource properties:
+
+```properties
+spring.datasource.url=jdbc:mysql://localhost:3306/ziro_logistics
+spring.datasource.username=YOUR_USERNAME
+spring.datasource.password=YOUR_PASSWORD
+```
+
+Run the application:
 
 ```bash
-# Clone repository
-git clone https://github.com/Youuzzi/ZiroLogistics-Backend.git
-cd ZiroLogistics-Backend
-
-# Buat database MySQL
-CREATE DATABASE ziro_logistics;
-
-# Konfigurasi application.properties
-spring.datasource.url=jdbc:mysql://localhost:3306/ziro_logistics
-spring.datasource.username=your_username
-spring.datasource.password=your_password
-spring.jpa.hibernate.ddl-auto=update
-
-# Jalankan aplikasi
 mvn spring-boot:run
 ```
 
----
+## Testing status
 
-## 📌 Status Project
+The current test source contains a Spring application-context smoke test using the test profile and H2. This verifies application context startup only; it is not evidence of full endpoint, authorization, inventory workflow, concurrency, or idempotency coverage.
 
-> ⚠️ **In Progress** — Backend sudah berjalan penuh. Frontend sedang dalam pengembangan aktif.
+Run the test suite with:
 
----
+```bash
+mvn test
+```
 
-## 👨‍💻 Developer
+## Documentation
 
-**Yozi Heru Maulana** — [github.com/Youuzzi](https://github.com/Youuzzi)
+- [Architecture overview](docs/architecture.md)
+- [Testing evidence and limitations](docs/testing.md)
 
-*Zirocraft Studio*
+The API endpoint catalogue, entity relationship diagram, and detailed workflow documentation will be expanded after the corresponding source classes and mappings are verified.
+
+## Project status
+
+Independent project — under active development and documentation refinement.
+
+## Developer
+
+**Yozi Heru Maulana** — [GitHub](https://github.com/Youuzzi)
