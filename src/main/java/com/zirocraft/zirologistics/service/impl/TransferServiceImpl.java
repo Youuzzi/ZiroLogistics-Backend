@@ -26,10 +26,7 @@ public class TransferServiceImpl implements TransferService {
     @Override
     @Transactional
     public void processTransfer(TransferRequest request, String executorEmail) {
-
-        // Ledger stores one request ID per movement leg, not the unsuffixed request ID.
-        if (ledgerRepository.existsByRequestId(request.getRequestId() + "_OUT")
-                || ledgerRepository.existsByRequestId(request.getRequestId() + "_IN")) {
+        if (hasTransferRequest(request.getRequestId())) {
             throw new ApiException(HttpStatus.CONFLICT, "Request ID transfer sudah pernah diproses.");
         }
 
@@ -37,11 +34,15 @@ public class TransferServiceImpl implements TransferService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Bin asal dan tujuan harus berbeda.");
         }
 
-        // Keep the same item-before-bin lock order used by inbound and outbound.
         ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
 
-        // Lock both bins in a deterministic order to avoid opposite-direction transfer deadlocks.
+        // Same-SKU transfers serialize on the item lock. Recheck after waiting
+        // so a duplicate request cannot repeat both movement legs.
+        if (hasTransferRequest(request.getRequestId())) {
+            throw new ApiException(HttpStatus.CONFLICT, "Request ID transfer sudah pernah diproses.");
+        }
+
         String firstBinCode = request.getSourceBinCode().compareTo(request.getDestinationBinCode()) < 0
                 ? request.getSourceBinCode() : request.getDestinationBinCode();
         String secondBinCode = firstBinCode.equals(request.getSourceBinCode())
@@ -77,7 +78,6 @@ public class TransferServiceImpl implements TransferService {
             throw new ApiException(HttpStatus.CONFLICT, "Kapasitas bin tujuan tidak mencukupi untuk transfer ini.");
         }
 
-        // A. Update source stock and occupancy.
         BigDecimal sourceBalanceBefore = sourceStock.getQuantity();
         BigDecimal sourceBalanceAfter = sourceBalanceBefore.subtract(request.getQuantity());
         sourceStock.setQuantity(sourceBalanceAfter);
@@ -86,7 +86,6 @@ public class TransferServiceImpl implements TransferService {
         sourceBin.setCurrentWeightOccupancy(projectedSourceWeight);
         binRepository.save(sourceBin);
 
-        // B. Update or create destination stock and occupancy.
         InventoryStockEntity destStock = stockRepository
                 .findByItemSkuAndBinBinCodeAndStatus(item.getSku(), destBin.getBinCode(), "AVAILABLE")
                 .orElse(null);
@@ -105,7 +104,6 @@ public class TransferServiceImpl implements TransferService {
         destBin.setCurrentWeightOccupancy(projectedDestWeight);
         binRepository.save(destBin);
 
-        // C. Record both sides of the transfer as a balanced ledger pair.
         ledgerRepository.save(InventoryLedgerEntity.builder()
                 .item(item).bin(sourceBin).transactionType("TRANSFER_OUT")
                 .quantityChange(request.getQuantity().negate())
@@ -122,5 +120,10 @@ public class TransferServiceImpl implements TransferService {
 
         log.info("[ZIROCRAFT-TRACE] Internal Transfer Success: SKU {} from {} to {}",
                 item.getSku(), sourceBin.getBinCode(), destBin.getBinCode());
+    }
+
+    private boolean hasTransferRequest(String requestId) {
+        return ledgerRepository.existsByRequestId(requestId + "_OUT")
+                || ledgerRepository.existsByRequestId(requestId + "_IN");
     }
 }
