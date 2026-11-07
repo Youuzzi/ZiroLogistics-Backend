@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MySQLContainer;
@@ -33,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @Testcontainers(disabledWithoutDocker = true)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class MySqlInventoryLockingIntegrationTest {
 
     @Container
@@ -47,8 +49,11 @@ class MySqlInventoryLockingIntegrationTest {
         registry.add("spring.datasource.username", MYSQL::getUsername);
         registry.add("spring.datasource.password", MYSQL::getPassword);
         registry.add("spring.datasource.driver-class-name", MYSQL::getDriverClassName);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+        // The database is disposable: create the schema, then let Testcontainers
+        // remove the entire database container after the test class completes.
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create");
         registry.add("spring.jpa.show-sql", () -> "false");
+        registry.add("spring.jpa.open-in-view", () -> "false");
         registry.add("ziro.jwt.secret",
                 () -> "mysql-container-test-secret-key-at-least-32-characters");
     }
