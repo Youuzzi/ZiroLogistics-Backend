@@ -74,6 +74,8 @@ class TransferServiceImplTest {
 
     @Test
     void processTransferRejectsPreviouslyProcessedRequestIdUsingLedgerSuffix() {
+        when(itemRepository.findBySkuForUpdate("SKU-1"))
+                .thenReturn(Optional.of(ItemEntity.builder().sku("SKU-1").build()));
         when(ledgerRepository.existsByRequestId("MOVE-2_OUT")).thenReturn(true);
 
         ApiException exception = assertThrows(ApiException.class,
@@ -81,14 +83,16 @@ class TransferServiceImplTest {
                         "operator@example.com"));
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatus());
-        verifyNoInteractions(itemRepository, binRepository, stockRepository);
+        InOrder order = inOrder(itemRepository, ledgerRepository);
+        order.verify(itemRepository).findBySkuForUpdate("SKU-1");
+        order.verify(ledgerRepository).existsByRequestId("MOVE-2_OUT");
+        verifyNoInteractions(binRepository, stockRepository);
         verify(ledgerRepository, never()).save(any());
     }
 
     @Test
     void processTransferRechecksDuplicateRequestAfterWaitingForItemLock() {
-        when(ledgerRepository.existsByRequestId("MOVE-RACE_OUT")).thenReturn(false, false, true);
-        when(ledgerRepository.existsByRequestId("MOVE-RACE_IN")).thenReturn(false, false);
+        when(ledgerRepository.existsByRequestId("MOVE-RACE_OUT")).thenReturn(true);
         when(itemRepository.findBySkuForUpdate("SKU-1"))
                 .thenReturn(Optional.of(ItemEntity.builder().sku("SKU-1").build()));
 
@@ -97,7 +101,9 @@ class TransferServiceImplTest {
                         "operator@example.com"));
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatus());
-        verify(itemRepository).findBySkuForUpdate("SKU-1");
+        InOrder order = inOrder(itemRepository, ledgerRepository);
+        order.verify(itemRepository).findBySkuForUpdate("SKU-1");
+        order.verify(ledgerRepository).existsByRequestId("MOVE-RACE_OUT");
         verifyNoInteractions(binRepository, stockRepository);
         verify(ledgerRepository, never()).save(any());
     }
