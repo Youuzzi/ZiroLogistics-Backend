@@ -24,25 +24,26 @@ public class OutboundServiceImpl implements OutboundService {
     @Override
     @Transactional
     public void processOutbound(OutboundRequest request, String executorEmail) {
-
-        // 1. IDEMPOTENCY CHECK
         if (ledgerRepository.existsByRequestId(request.getRequestId())) {
             throw new ApiException(HttpStatus.CONFLICT, "Request ID outbound sudah pernah diproses.");
         }
 
-        // 2. LOCK ITEM, THEN BIN (same lock order as inbound)
         ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
+
+        // Recheck after acquiring the SKU lock: a concurrent request with the
+        // same key may have committed while this transaction was waiting.
+        if (ledgerRepository.existsByRequestId(request.getRequestId())) {
+            throw new ApiException(HttpStatus.CONFLICT, "Request ID outbound sudah pernah diproses.");
+        }
 
         BinEntity bin = binRepository.findByBinCodeForUpdate(request.getBinCode())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Bin tidak ditemukan."));
 
-        // 3. FIND AVAILABLE STOCK IN THE LOCKED BIN
         InventoryStockEntity currentStock = stockRepository
                 .findByItemSkuAndBinBinCodeAndStatus(item.getSku(), bin.getBinCode(), "AVAILABLE")
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Stok tidak ditemukan pada bin yang diminta."));
 
-        // 4. VALIDATE QUANTITY AND BIN OCCUPANCY
         if (currentStock.getQuantity().compareTo(request.getQuantity()) < 0) {
             throw new ApiException(HttpStatus.CONFLICT, "Stok tersedia tidak mencukupi untuk outbound.");
         }
@@ -54,7 +55,6 @@ public class OutboundServiceImpl implements OutboundService {
                     "Data kapasitas bin tidak konsisten dengan stok. Periksa saldo okupansi bin sebelum outbound.");
         }
 
-        // 5. UPDATE STOCK AND PHYSICAL BIN OCCUPANCY
         BigDecimal balanceBefore = currentStock.getQuantity();
         BigDecimal balanceAfter = balanceBefore.subtract(request.getQuantity());
 
@@ -64,7 +64,6 @@ public class OutboundServiceImpl implements OutboundService {
         bin.setCurrentWeightOccupancy(projectedOccupancy);
         binRepository.save(bin);
 
-        // 6. RECORD THE INVENTORY LEDGER
         InventoryLedgerEntity ledger = InventoryLedgerEntity.builder()
                 .item(item)
                 .bin(bin)
