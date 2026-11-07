@@ -24,19 +24,22 @@ public class InboundServiceImpl implements InboundService {
     @Override
     @Transactional
     public void processInbound(InboundRequest request, String executorEmail) {
-        // 1. Idempotency Check
         if (ledgerRepository.existsByRequestId(request.getRequestId())) {
             throw new ApiException(HttpStatus.CONFLICT, "Request ID inbound sudah pernah diproses.");
         }
 
-        // 2. Pessimistic Locking (Item & Bin)
         ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
+
+        // A competing request for the same SKU may have committed while this
+        // transaction waited for the item lock. Recheck before changing inventory.
+        if (ledgerRepository.existsByRequestId(request.getRequestId())) {
+            throw new ApiException(HttpStatus.CONFLICT, "Request ID inbound sudah pernah diproses.");
+        }
 
         BinEntity bin = binRepository.findByBinCodeForUpdate(request.getBinCode())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Bin tidak ditemukan."));
 
-        // 3. Weight Capacity Validation
         BigDecimal incomingWeight = item.getWeightPerUnit().multiply(request.getQuantity());
         BigDecimal projectedWeight = bin.getCurrentWeightOccupancy().add(incomingWeight);
 
@@ -44,11 +47,9 @@ public class InboundServiceImpl implements InboundService {
             throw new ApiException(HttpStatus.CONFLICT, "Kapasitas bin tidak mencukupi untuk inbound ini.");
         }
 
-        // 4. Update Bin Occupancy
         bin.setCurrentWeightOccupancy(projectedWeight.setScale(2, RoundingMode.HALF_UP));
         binRepository.save(bin);
 
-        // 5. Update/Create Stock
         InventoryStockEntity stock = stockRepository
                 .findByItemSkuAndBinBinCodeAndStatus(item.getSku(), bin.getBinCode(), "AVAILABLE")
                 .orElse(InventoryStockEntity.builder()
@@ -63,7 +64,6 @@ public class InboundServiceImpl implements InboundService {
         stock.setQuantity(balanceAfter);
         stockRepository.save(stock);
 
-        // 6. Final Ledger Entry
         ledgerRepository.save(InventoryLedgerEntity.builder()
                 .item(item).bin(bin).transactionType("INBOUND")
                 .requestId(request.getRequestId()).quantityChange(request.getQuantity())
