@@ -26,10 +26,6 @@ public class TransferServiceImpl implements TransferService {
     @Override
     @Transactional
     public void processTransfer(TransferRequest request, String executorEmail) {
-        if (hasTransferRequest(request.getRequestId())) {
-            throw new ApiException(HttpStatus.CONFLICT, "Request ID transfer sudah pernah diproses.");
-        }
-
         if (request.getSourceBinCode().equals(request.getDestinationBinCode())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Bin asal dan tujuan harus berbeda.");
         }
@@ -37,8 +33,8 @@ public class TransferServiceImpl implements TransferService {
         ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
 
-        // Same-SKU transfers serialize on the item lock. Recheck after waiting
-        // so a duplicate request cannot repeat both movement legs.
+        // Same-SKU transfers serialize on the item lock. Check idempotency only
+        // after locking so MySQL REPEATABLE READ cannot reuse an older snapshot.
         if (hasTransferRequest(request.getRequestId())) {
             throw new ApiException(HttpStatus.CONFLICT, "Request ID transfer sudah pernah diproses.");
         }
