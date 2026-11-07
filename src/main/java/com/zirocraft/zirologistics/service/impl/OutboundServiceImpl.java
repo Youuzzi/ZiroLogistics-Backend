@@ -1,6 +1,8 @@
 package com.zirocraft.zirologistics.service.impl;
 
 import com.zirocraft.zirologistics.entity.*;
+import com.zirocraft.zirologistics.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import com.zirocraft.zirologistics.io.request.OutboundRequest;
 import com.zirocraft.zirologistics.repository.*;
 import com.zirocraft.zirologistics.service.OutboundService;
@@ -12,49 +14,57 @@ import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
-public class OutboundServiceImpl implements OutboundService { // FIX: Nama class & Interface sudah benar
+public class OutboundServiceImpl implements OutboundService {
 
     private final ItemRepository itemRepository;
+    private final BinRepository binRepository;
     private final InventoryStockRepository stockRepository;
     private final InventoryLedgerRepository ledgerRepository;
 
     @Override
     @Transactional
     public void processOutbound(OutboundRequest request, String executorEmail) {
-
-        // 1. IDEMPOTENCY CHECK
-        if (ledgerRepository.existsByRequestId(request.getRequestId())) {
-            throw new RuntimeException("Transaksi Outbound ini sudah pernah diproses!");
-        }
-
-        // 2. PESSIMISTIC LOCKING PADA ITEM (Gembok Database)
         ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
-                .orElseThrow(() -> new RuntimeException("SKU " + request.getSku() + " tidak ditemukan!"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
 
-        // 3. CARI STOK DI RAK TERSEBUT (Status WAJIB AVAILABLE)
-        InventoryStockEntity currentStock = stockRepository
-                .findByItemSkuAndBinBinCodeAndStatus(item.getSku(), request.getBinCode(), "AVAILABLE")
-                .orElseThrow(() -> new RuntimeException("Stok tidak ditemukan di Rak " + request.getBinCode()));
-
-        // 4. VALIDASI KUANTITAS (Anti-Minus)
-        if (currentStock.getQuantity().compareTo(request.getQuantity()) < 0) {
-            throw new RuntimeException("Stok tidak cukup! Tersedia: " + currentStock.getQuantity());
+        // Check after acquiring the SKU lock. Performing this as the first
+        // consistent read avoids a stale snapshot under MySQL REPEATABLE READ.
+        if (ledgerRepository.existsByRequestId(request.getRequestId())) {
+            throw new ApiException(HttpStatus.CONFLICT, "Request ID outbound sudah pernah diproses.");
         }
 
-        // 5. HITUNG BALANCES (BigDecimal Precision)
+        BinEntity bin = binRepository.findByBinCodeForUpdate(request.getBinCode())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Bin tidak ditemukan."));
+
+        InventoryStockEntity currentStock = stockRepository
+                .findByItemSkuAndBinBinCodeAndStatus(item.getSku(), bin.getBinCode(), "AVAILABLE")
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Stok tidak ditemukan pada bin yang diminta."));
+
+        if (currentStock.getQuantity().compareTo(request.getQuantity()) < 0) {
+            throw new ApiException(HttpStatus.CONFLICT, "Stok tersedia tidak mencukupi untuk outbound.");
+        }
+
+        BigDecimal outgoingWeight = item.getWeightPerUnit().multiply(request.getQuantity());
+        BigDecimal projectedOccupancy = bin.getCurrentWeightOccupancy().subtract(outgoingWeight);
+        if (projectedOccupancy.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "Data kapasitas bin tidak konsisten dengan stok. Periksa saldo okupansi bin sebelum outbound.");
+        }
+
         BigDecimal balanceBefore = currentStock.getQuantity();
         BigDecimal balanceAfter = balanceBefore.subtract(request.getQuantity());
 
-        // 6. UPDATE STOK FISIK
         currentStock.setQuantity(balanceAfter);
         stockRepository.save(currentStock);
 
-        // 7. CATAT KE LEDGER (Audit Trail / CCTV Digital)
+        bin.setCurrentWeightOccupancy(projectedOccupancy);
+        binRepository.save(bin);
+
         InventoryLedgerEntity ledger = InventoryLedgerEntity.builder()
                 .item(item)
-                .bin(currentStock.getBin())
+                .bin(bin)
                 .transactionType("OUTBOUND")
-                .quantityChange(request.getQuantity().negate()) // Disimpan sebagai angka negatif
+                .quantityChange(request.getQuantity().negate())
                 .balanceBefore(balanceBefore)
                 .balanceAfter(balanceAfter)
                 .requestId(request.getRequestId())

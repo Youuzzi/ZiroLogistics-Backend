@@ -1,6 +1,8 @@
 package com.zirocraft.zirologistics.service.impl;
 
 import com.zirocraft.zirologistics.entity.BinEntity;
+import com.zirocraft.zirologistics.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import com.zirocraft.zirologistics.entity.WarehouseEntity;
 import com.zirocraft.zirologistics.io.request.BinRequest;
 import com.zirocraft.zirologistics.io.response.BinResponse;
@@ -27,11 +29,11 @@ public class BinServiceImpl implements BinService {
     public BinResponse createBin(BinRequest request) {
         // 1. Cari Warehouse induknya pakai Public ID
         WarehouseEntity warehouse = warehouseRepository.findByPublicId(request.getWarehousePublicId())
-                .orElseThrow(() -> new RuntimeException("Gudang tidak ditemukan!"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Gudang tidak ditemukan."));
 
         // 2. Validasi Kode Bin Unique
         if (binRepository.findByBinCode(request.getBinCode()).isPresent()) {
-            throw new RuntimeException("Kode Rak " + request.getBinCode() + " sudah dipakai!");
+            throw new ApiException(HttpStatus.CONFLICT, "Kode bin sudah digunakan.");
         }
 
         // 3. Map & Save dengan Industrial Capacity Logic

@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.service.impl;
 
 import com.zirocraft.zirologistics.entity.UserEntity;
+import com.zirocraft.zirologistics.exception.ApiException;
 import com.zirocraft.zirologistics.io.request.AuthRequest;
 import com.zirocraft.zirologistics.io.response.AuthResponse;
 import com.zirocraft.zirologistics.repository.UserRepository;
@@ -8,8 +9,9 @@ import com.zirocraft.zirologistics.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -43,12 +45,12 @@ public class AuthServiceImpl {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             // Obfuscation: Jangan beri tahu kalau email sudah ada jika di public,
             // tapi untuk registrasi kita perlu memberi tahu user agar tidak duplikat.
-            throw new RuntimeException("REGISTRATION_FAILED: Identitas email sudah terdaftar dalam sistem.");
+            throw new ApiException(HttpStatus.CONFLICT, "Identitas email sudah terdaftar dalam sistem.");
         }
 
         // 2. Strict Server-Side Password Validation
         if (!Pattern.matches(PASSWORD_PATTERN, request.getPassword())) {
-            throw new RuntimeException("SECURITY_VIOLATION: Password tidak memenuhi kriteria kekuatan (Min 8 Karakter, 1 Angka, 1 Huruf Besar).");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Password minimal 8 karakter serta harus memiliki 1 angka dan 1 huruf besar.");
         }
 
         // 3. Entity Construction
@@ -56,7 +58,7 @@ public class AuthServiceImpl {
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName().toUpperCase()) // Standar Industri: Nama disimpan dalam Uppercase
-                .role(request.getRole() != null ? request.getRole() : "ROLE_STAFF")
+                .role("ROLE_STAFF")
                 .active(true)
                 .build();
 
@@ -74,31 +76,21 @@ public class AuthServiceImpl {
         log.info("[ZIROCRAFT-AUTH] Identity verification attempt: {}", request.getEmail());
 
         try {
-            // 1. Spring Security Authentication
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
             );
-
-            // 2. Identity Retrieval
-            final UserDetails userDetails = appUserDetailService.loadUserByUsername(request.getEmail());
-
-            // 3. JWT Generation
-            final String token = jwtUtil.generateToken(userDetails);
-
-            UserEntity user = userRepository.findByEmail(request.getEmail())
-                    .orElseThrow(() -> new RuntimeException("CORE_ERROR: User context lost during session sync."));
-
-            log.info("[ZIROCRAFT-AUTH] Authentication Successful: {}", user.getEmail());
-            return mapToResponse(user, token);
-
-        } catch (BadCredentialsException e) {
-            log.error("[ZIROCRAFT-SECURITY] Login failed for {}: Invalid Credentials", request.getEmail());
-            // SECURITY OBFUSCATION: Pesan error dibuat generik untuk mencegah user enumeration.
-            throw new RuntimeException("AUTHENTICATION_FAILED: Email atau Password tidak valid.");
-        } catch (Exception e) {
-            log.error("[ZIROCRAFT-SECURITY] System error during login: {}", e.getMessage());
-            throw new RuntimeException("CORE_ERROR: Kegagalan otentikasi internal.");
+        } catch (AuthenticationException ex) {
+            log.warn("[ZIROCRAFT-SECURITY] Login rejected for invalid credentials.");
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Email atau password tidak valid.");
         }
+
+        final UserDetails userDetails = appUserDetailService.loadUserByUsername(request.getEmail());
+        final String token = jwtUtil.generateToken(userDetails);
+        UserEntity user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new IllegalStateException("Authenticated user context was not found."));
+
+        log.info("[ZIROCRAFT-AUTH] Authentication Successful: {}", user.getEmail());
+        return mapToResponse(user, token);
     }
 
     /**

@@ -1,6 +1,8 @@
 package com.zirocraft.zirologistics.service.impl;
 
 import com.zirocraft.zirologistics.entity.ItemEntity;
+import com.zirocraft.zirologistics.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import com.zirocraft.zirologistics.io.request.ItemRequest;
 import com.zirocraft.zirologistics.io.response.ItemResponse;
 import com.zirocraft.zirologistics.repository.ItemRepository;
@@ -23,7 +25,7 @@ public class ItemServiceImpl implements ItemService {
     @Transactional
     public ItemResponse createItem(ItemRequest request) {
         if (itemRepository.findBySku(request.getSku()).isPresent()) {
-            throw new RuntimeException("SKU " + request.getSku() + " sudah terdaftar!");
+            throw new ApiException(HttpStatus.CONFLICT, "SKU sudah terdaftar.");
         }
 
         ItemEntity item = ItemEntity.builder()

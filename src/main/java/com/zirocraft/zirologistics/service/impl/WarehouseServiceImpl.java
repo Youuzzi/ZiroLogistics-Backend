@@ -1,6 +1,8 @@
 package com.zirocraft.zirologistics.service.impl;
 
 import com.zirocraft.zirologistics.entity.WarehouseEntity;
+import com.zirocraft.zirologistics.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import com.zirocraft.zirologistics.io.request.WarehouseRequest;
 import com.zirocraft.zirologistics.io.response.WarehouseResponse;
 import com.zirocraft.zirologistics.repository.WarehouseRepository;
@@ -23,7 +25,7 @@ public class WarehouseServiceImpl implements WarehouseService {
     @Transactional
     public WarehouseResponse createWarehouse(WarehouseRequest request) {
         if (warehouseRepository.findByCode(request.getCode()).isPresent()) {
-            throw new RuntimeException("Gudang dengan kode " + request.getCode() + " sudah terdaftar!");
+            throw new ApiException(HttpStatus.CONFLICT, "Kode gudang sudah terdaftar.");
         }
 
         WarehouseEntity warehouse = WarehouseEntity.builder()

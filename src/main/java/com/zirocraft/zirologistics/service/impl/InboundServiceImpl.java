@@ -1,6 +1,8 @@
 package com.zirocraft.zirologistics.service.impl;
 
 import com.zirocraft.zirologistics.entity.*;
+import com.zirocraft.zirologistics.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import com.zirocraft.zirologistics.io.request.InboundRequest;
 import com.zirocraft.zirologistics.repository.*;
 import com.zirocraft.zirologistics.service.InboundService;
@@ -22,31 +24,28 @@ public class InboundServiceImpl implements InboundService {
     @Override
     @Transactional
     public void processInbound(InboundRequest request, String executorEmail) {
-        // 1. Idempotency Check
+        ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
+
+        // Check idempotency only after acquiring the SKU lock. This avoids a
+        // stale consistent-read snapshot under MySQL REPEATABLE READ.
         if (ledgerRepository.existsByRequestId(request.getRequestId())) {
-            throw new RuntimeException("TRANSACTION_DUPLICATE: Request ID " + request.getRequestId() + " already processed.");
+            throw new ApiException(HttpStatus.CONFLICT, "Request ID inbound sudah pernah diproses.");
         }
 
-        // 2. Pessimistic Locking (Item & Bin)
-        ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
-                .orElseThrow(() -> new RuntimeException("SKU_NOT_FOUND"));
-
         BinEntity bin = binRepository.findByBinCodeForUpdate(request.getBinCode())
-                .orElseThrow(() -> new RuntimeException("BIN_NOT_FOUND"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Bin tidak ditemukan."));
 
-        // 3. Weight Capacity Validation
         BigDecimal incomingWeight = item.getWeightPerUnit().multiply(request.getQuantity());
         BigDecimal projectedWeight = bin.getCurrentWeightOccupancy().add(incomingWeight);
 
         if (projectedWeight.compareTo(bin.getMaxWeightCapacity()) > 0) {
-            throw new RuntimeException("OVERCAPACITY: Bin " + bin.getBinCode() + " cannot hold additional " + incomingWeight + " KG.");
+            throw new ApiException(HttpStatus.CONFLICT, "Kapasitas bin tidak mencukupi untuk inbound ini.");
         }
 
-        // 4. Update Bin Occupancy
         bin.setCurrentWeightOccupancy(projectedWeight.setScale(2, RoundingMode.HALF_UP));
         binRepository.save(bin);
 
-        // 5. Update/Create Stock
         InventoryStockEntity stock = stockRepository
                 .findByItemSkuAndBinBinCodeAndStatus(item.getSku(), bin.getBinCode(), "AVAILABLE")
                 .orElse(InventoryStockEntity.builder()
@@ -61,7 +60,6 @@ public class InboundServiceImpl implements InboundService {
         stock.setQuantity(balanceAfter);
         stockRepository.save(stock);
 
-        // 6. Final Ledger Entry
         ledgerRepository.save(InventoryLedgerEntity.builder()
                 .item(item).bin(bin).transactionType("INBOUND")
                 .requestId(request.getRequestId()).quantityChange(request.getQuantity())
