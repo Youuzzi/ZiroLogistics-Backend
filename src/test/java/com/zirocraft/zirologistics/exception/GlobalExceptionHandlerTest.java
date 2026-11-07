@@ -2,6 +2,7 @@ package com.zirocraft.zirologistics.exception;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,6 +35,14 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void databaseIntegrityViolationReturnsSafeConflict() throws Exception {
+        mockMvc.perform(get("/probe/integrity-conflict"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(409))
+                .andExpect(jsonPath("$.message", not(containsString("private_db"))));
+    }
+
+    @Test
     void unexpectedExceptionReturnsGeneric500WithoutLeakingDetails() throws Exception {
         mockMvc.perform(get("/probe/unexpected"))
                 .andExpect(status().isInternalServerError())
@@ -47,6 +56,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/probe/conflict")
         void conflict() {
             throw new ApiException(HttpStatus.CONFLICT, "Request ID sudah pernah diproses.");
+        }
+
+        @GetMapping("/probe/integrity-conflict")
+        void integrityConflict() {
+            throw new DataIntegrityViolationException("Duplicate request ID in jdbc:mysql://internal-host/private_db");
         }
 
         @GetMapping("/probe/unexpected")
