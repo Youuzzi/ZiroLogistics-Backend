@@ -135,6 +135,22 @@ The application reads database and JWT configuration from environment variables.
 
 ### Database schema behavior
 
+The application uses Flyway for versioned schema creation. Flyway is deliberately disabled by default so an existing database is not adopted or modified implicitly.
+
+For a **new, empty database only**, enable the initial migration explicitly before starting the application:
+
+```powershell
+$env:FLYWAY_ENABLED="true"
+$env:JPA_DDL_AUTO="validate"
+.\mvnw.cmd spring-boot:run
+```
+
+Flyway applies versioned scripts from `src/main/resources/db/migration`. The initial `V1__initial_schema.sql` migration creates the six application tables and records its execution in `flyway_schema_history`.
+
+**Existing databases must not be pointed at this migration as-is.** In particular, do not enable Flyway against a database that already contains application tables but has no Flyway history. Existing installations require a separately reviewed baseline/adoption procedure and a schema/data compatibility check first. Back up the database before any future adoption work.
+
+Hibernate remains in `validate` mode by default. It validates the mapped schema after Flyway has run; it is not used as the schema migration mechanism. Do not use Hibernate `update` as a production migration strategy.
+
 The default Hibernate setting is `validate`. On startup, Hibernate validates the existing schema rather than creating or modifying tables automatically.
 
 For a disposable local development database only, schema update can be enabled explicitly:
