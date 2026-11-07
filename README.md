@@ -146,6 +146,26 @@ $env:JPA_SHOW_SQL="true"
 
 Do not use `update` as a production schema migration strategy. Production schema changes should be managed deliberately and reviewed before deployment.
 
+
+## Local portfolio demo account
+
+A demo account can be provisioned automatically for a local, isolated database. This avoids manual registration while keeping demo credentials out of source control.
+
+The initializer is available only when the `demo` Spring profile is active and `demo.account.enabled=true`. It creates a least-privilege `ROLE_STAFF` account, hashes the password with the application's configured BCrypt password encoder, and leaves an existing account unchanged.
+
+After completing the normal database setup above, configure a dedicated local demo account in PowerShell:
+
+```powershell
+$env:DEMO_ACCOUNT_EMAIL="demo@zirologistics.test"
+$env:DEMO_ACCOUNT_PASSWORD="ChooseYourOwnDemoPass123"
+$env:SPRING_PROFILES_ACTIVE="demo"
+.mvnw.cmd spring-boot:run
+```
+
+Use a password that meets the application's minimum rule (at least 8 characters, including one uppercase letter and one number). The example password is a placeholder: choose your own value and do not publish it in this repository. The demo profile does not create warehouses, bins, items, or stock records yet; those will be added through a separate synthetic demo-data setup.
+
+For a normal run without demo provisioning, do not activate the `demo` profile. Never point this profile at a production database.
+
 ## Tests
 
 Run the complete test suite:
