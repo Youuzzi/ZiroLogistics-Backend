@@ -76,7 +76,7 @@ Maven is provided by the repository's Maven Wrapper.
 Create a new, empty database in MySQL:
 
 ```sql
-CREATE DATABASE ziro_logistics;
+CREATE DATABASE zirologistics;
 ```
 
 ### 2. Configure environment variables
@@ -84,7 +84,7 @@ CREATE DATABASE ziro_logistics;
 PowerShell:
 
 ```powershell
-$env:DB_URL="jdbc:mysql://localhost:3306/ziro_logistics"
+$env:DB_URL="jdbc:mysql://localhost:3306/zirologistics"
 $env:DB_USERNAME="your_username"
 $env:DB_PASSWORD="your_password"
 $env:JWT_SECRET_KEY="replace-with-a-secure-secret-at-least-32-characters"
@@ -122,10 +122,19 @@ Set a local JWT secret before starting:
 
 ```powershell
 $env:JWT_SECRET_KEY="replace-with-a-secure-local-secret-at-least-32-characters"
-docker compose up --build
+docker compose up --build -d
 ```
 
-The API is exposed on port `8080`; MySQL is exposed on port `3308` to avoid the common local MySQL port `3306` conflict. The Compose database is separate from any existing local database. To stop the services without deleting database data:
+The API is exposed at `http://localhost:8081`; MySQL is exposed on host port `3308` to avoid common local MySQL port `3306` and backend port `8080` conflicts. The Compose database is separate from any existing local database. The fallback database passwords in the Compose file are for local development only; set your own `DB_PASSWORD` and `MYSQL_ROOT_PASSWORD` values for local use, and use managed secrets in hosted environments.
+
+To inspect service status and logs:
+
+```powershell
+docker compose ps
+docker compose logs --tail 100 backend
+```
+
+To stop the services without deleting database data:
 
 ```powershell
 docker compose down
@@ -138,6 +147,10 @@ docker compose down -v
 ```
 
 Do not run the volume-removal command if you need to keep the Compose database contents.
+
+### Local Docker verification
+
+The Compose stack was started locally with MySQL 8.4 and the backend container. The observed startup logs confirmed that Flyway validated and applied migration V1, Hibernate initialized successfully with schema validation enabled, and the Spring Boot application started. A host request to `http://localhost:8081/` returned HTTP 403, confirming HTTP connectivity while the root path remained protected by Spring Security; this is not an authenticated API workflow test.
 
 ## Demo profile
 
@@ -170,7 +183,13 @@ Run the MySQL inventory locking integration test only:
 
 MySQL integration tests use disposable Testcontainers databases and require Docker to be running. Some tests are configured to disable themselves when Docker is unavailable, so inspect the Surefire reports and confirm that the integration tests actually ran rather than being skipped.
 
-Test results demonstrate only the scenarios covered by the tests; they do not establish that every workflow or production environment has been verified.
+### Recorded verification evidence
+
+- Local Surefire reports: **29 tests across 15 suites; 0 failures, 0 errors, 0 skipped**.
+- GitHub Actions Backend CI: **successful** for commit `690584a54732a25ffd0125533139d8df0c06ded0` (before the later Compose host-port/documentation-only commits).
+- Local Docker Compose smoke test: MySQL container healthy; Flyway V1 applied; Hibernate schema validation and application startup succeeded; host HTTP request received a Spring Security 403 response.
+
+Test results demonstrate only the scenarios covered by the tests; they do not establish that every workflow or production environment has been verified. CI has not yet been rerun for the latest documentation and Compose adjustments.
 
 ## CI
 
