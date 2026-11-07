@@ -1,7 +1,6 @@
 package com.zirocraft.zirologistics.service.impl;
 
 import com.zirocraft.zirologistics.entity.BinEntity;
-import com.zirocraft.zirologistics.entity.InventoryLedgerEntity;
 import com.zirocraft.zirologistics.entity.InventoryStockEntity;
 import com.zirocraft.zirologistics.entity.ItemEntity;
 import com.zirocraft.zirologistics.exception.ApiException;
@@ -41,20 +40,11 @@ class OutboundServiceImplTest {
 
     @Test
     void processOutboundReducesStockAndBinOccupancyAndWritesLedger() {
-        ItemEntity item = ItemEntity.builder()
-                .sku("SKU-1")
-                .weightPerUnit(new BigDecimal("2.00"))
-                .build();
-        BinEntity bin = BinEntity.builder()
-                .binCode("BIN-A")
-                .currentWeightOccupancy(new BigDecimal("20.00"))
-                .build();
-        InventoryStockEntity stock = InventoryStockEntity.builder()
-                .item(item)
-                .bin(bin)
-                .quantity(new BigDecimal("10.00"))
-                .status("AVAILABLE")
-                .build();
+        ItemEntity item = ItemEntity.builder().sku("SKU-1").weightPerUnit(new BigDecimal("2.00")).build();
+        BinEntity bin = BinEntity.builder().binCode("BIN-A")
+                .currentWeightOccupancy(new BigDecimal("20.00")).build();
+        InventoryStockEntity stock = InventoryStockEntity.builder().item(item).bin(bin)
+                .quantity(new BigDecimal("10.00")).status("AVAILABLE").build();
 
         when(ledgerRepository.existsByRequestId("OUT-1")).thenReturn(false);
         when(itemRepository.findBySkuForUpdate("SKU-1")).thenReturn(Optional.of(item));
@@ -76,20 +66,11 @@ class OutboundServiceImplTest {
 
     @Test
     void processOutboundRejectsOccupancyThatWouldBecomeNegative() {
-        ItemEntity item = ItemEntity.builder()
-                .sku("SKU-1")
-                .weightPerUnit(new BigDecimal("2.00"))
-                .build();
-        BinEntity bin = BinEntity.builder()
-                .binCode("BIN-A")
-                .currentWeightOccupancy(new BigDecimal("1.00"))
-                .build();
-        InventoryStockEntity stock = InventoryStockEntity.builder()
-                .item(item)
-                .bin(bin)
-                .quantity(new BigDecimal("10.00"))
-                .status("AVAILABLE")
-                .build();
+        ItemEntity item = ItemEntity.builder().sku("SKU-1").weightPerUnit(new BigDecimal("2.00")).build();
+        BinEntity bin = BinEntity.builder().binCode("BIN-A")
+                .currentWeightOccupancy(new BigDecimal("1.00")).build();
+        InventoryStockEntity stock = InventoryStockEntity.builder().item(item).bin(bin)
+                .quantity(new BigDecimal("10.00")).status("AVAILABLE").build();
 
         when(ledgerRepository.existsByRequestId("OUT-2")).thenReturn(false);
         when(itemRepository.findBySkuForUpdate("SKU-1")).thenReturn(Optional.of(item));
@@ -103,6 +84,21 @@ class OutboundServiceImplTest {
         assertEquals(HttpStatus.CONFLICT, exception.getStatus());
         verify(stockRepository, never()).save(any());
         verify(binRepository, never()).save(any());
+        verify(ledgerRepository, never()).save(any());
+    }
+
+    @Test
+    void processOutboundRechecksDuplicateRequestAfterWaitingForItemLock() {
+        ItemEntity item = ItemEntity.builder().sku("SKU-1").build();
+        when(ledgerRepository.existsByRequestId("OUT-RACE")).thenReturn(false, true);
+        when(itemRepository.findBySkuForUpdate("SKU-1")).thenReturn(Optional.of(item));
+
+        ApiException exception = assertThrows(ApiException.class,
+                () -> service.processOutbound(request("OUT-RACE", "1.00"), "operator@example.com"));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatus());
+        verify(itemRepository).findBySkuForUpdate("SKU-1");
+        verifyNoInteractions(binRepository, stockRepository);
         verify(ledgerRepository, never()).save(any());
     }
 
