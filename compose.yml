@@ -1,0 +1,43 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: zirologistics-mysql
+    environment:
+      MYSQL_DATABASE: zirologistics
+      MYSQL_USER: zirologistics
+      MYSQL_PASSWORD: ${DB_PASSWORD:-local_dev_password_change_me}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local_root_password_change_me}
+    ports:
+      - "3308:3306"
+    volumes:
+      - zirologistics_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "--password=${MYSQL_ROOT_PASSWORD:-local_root_password_change_me}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zirologistics-backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/zirologistics
+      DB_USERNAME: zirologistics
+      DB_PASSWORD: ${DB_PASSWORD:-local_dev_password_change_me}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in your shell before starting Compose}
+      FLYWAY_ENABLED: "true"
+      JPA_DDL_AUTO: validate
+      JPA_SHOW_SQL: "false"
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  zirologistics_mysql_data:
