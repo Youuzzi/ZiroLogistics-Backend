@@ -140,6 +140,41 @@ class MySqlInventoryLockingIntegrationTest {
         }
     }
 
+    @Test
+    void concurrentRequestsWithSameIdempotencyKeyOnlyApplyOneOutbound() throws Exception {
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        try {
+            var first = executor.submit(() -> processAfterBarrier(
+                    request("OUT-DUPLICATE-KEY"), ready, start));
+            var second = executor.submit(() -> processAfterBarrier(
+                    request("OUT-DUPLICATE-KEY"), ready, start));
+
+            assertTrue(ready.await(5, TimeUnit.SECONDS), "Both duplicate requests should be ready");
+            start.countDown();
+
+            boolean firstSucceeded = first.get(15, TimeUnit.SECONDS);
+            boolean secondSucceeded = second.get(15, TimeUnit.SECONDS);
+
+            assertEquals(1, (firstSucceeded ? 1 : 0) + (secondSucceeded ? 1 : 0),
+                    "Only one request with the same idempotency key may be applied");
+
+            InventoryStockEntity finalStock = stockRepository
+                    .findByItemSkuAndBinBinCodeAndStatus(
+                            "SKU-CONCURRENCY", "BIN-CONCURRENCY", "AVAILABLE")
+                    .orElseThrow();
+
+            assertEquals(0, new BigDecimal("3.00").compareTo(finalStock.getQuantity()));
+            assertEquals(1, ledgerRepository.count(),
+                    "Duplicate request must not create a second ledger entry");
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
     private boolean processAfterBarrier(
             OutboundRequest request, CountDownLatch ready, CountDownLatch start) throws InterruptedException {
         ready.countDown();
