@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -17,6 +18,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<Map<String, Object>> handleApiException(ApiException ex) {
         return buildResponse(ex.getStatus(), ex.getMessage());
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        log.warn("Database integrity conflict while processing request", ex);
+        return buildResponse(
+                HttpStatus.CONFLICT,
+                "Permintaan bertabrakan dengan data yang sudah tercatat atau melanggar aturan integritas data."
+        );
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
