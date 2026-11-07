@@ -24,15 +24,11 @@ public class OutboundServiceImpl implements OutboundService {
     @Override
     @Transactional
     public void processOutbound(OutboundRequest request, String executorEmail) {
-        if (ledgerRepository.existsByRequestId(request.getRequestId())) {
-            throw new ApiException(HttpStatus.CONFLICT, "Request ID outbound sudah pernah diproses.");
-        }
-
         ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
 
-        // Recheck after acquiring the SKU lock: a concurrent request with the
-        // same key may have committed while this transaction was waiting.
+        // Check after acquiring the SKU lock. Performing this as the first
+        // consistent read avoids a stale snapshot under MySQL REPEATABLE READ.
         if (ledgerRepository.existsByRequestId(request.getRequestId())) {
             throw new ApiException(HttpStatus.CONFLICT, "Request ID outbound sudah pernah diproses.");
         }
