@@ -90,14 +90,16 @@ class OutboundServiceImplTest {
     @Test
     void processOutboundRechecksDuplicateRequestAfterWaitingForItemLock() {
         ItemEntity item = ItemEntity.builder().sku("SKU-1").build();
-        when(ledgerRepository.existsByRequestId("OUT-RACE")).thenReturn(false, true);
+        when(ledgerRepository.existsByRequestId("OUT-RACE")).thenReturn(true);
         when(itemRepository.findBySkuForUpdate("SKU-1")).thenReturn(Optional.of(item));
 
         ApiException exception = assertThrows(ApiException.class,
                 () -> service.processOutbound(request("OUT-RACE", "1.00"), "operator@example.com"));
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatus());
-        verify(itemRepository).findBySkuForUpdate("SKU-1");
+        InOrder order = inOrder(itemRepository, ledgerRepository);
+        order.verify(itemRepository).findBySkuForUpdate("SKU-1");
+        order.verify(ledgerRepository).existsByRequestId("OUT-RACE");
         verifyNoInteractions(binRepository, stockRepository);
         verify(ledgerRepository, never()).save(any());
     }
