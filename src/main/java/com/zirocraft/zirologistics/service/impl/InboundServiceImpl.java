@@ -24,15 +24,11 @@ public class InboundServiceImpl implements InboundService {
     @Override
     @Transactional
     public void processInbound(InboundRequest request, String executorEmail) {
-        if (ledgerRepository.existsByRequestId(request.getRequestId())) {
-            throw new ApiException(HttpStatus.CONFLICT, "Request ID inbound sudah pernah diproses.");
-        }
-
         ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
 
-        // A competing request for the same SKU may have committed while this
-        // transaction waited for the item lock. Recheck before changing inventory.
+        // Check idempotency only after acquiring the SKU lock. This avoids a
+        // stale consistent-read snapshot under MySQL REPEATABLE READ.
         if (ledgerRepository.existsByRequestId(request.getRequestId())) {
             throw new ApiException(HttpStatus.CONFLICT, "Request ID inbound sudah pernah diproses.");
         }
