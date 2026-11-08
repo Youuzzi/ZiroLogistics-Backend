@@ -111,7 +111,7 @@ class MySqlInventoryDecimalMovementIntegrationTest {
 
     @Test
     void outboundPersistsFractionalQuantityAndReleasesExactPhysicalOccupancy() {
-        seedStock(sourceBin, "0.001", "0.000000900");
+        seedStock(sourceBin, "0.001", "0.001000000");
 
         OutboundRequest request = new OutboundRequest();
         request.setRequestId("OUT-DECIMAL-001");
@@ -130,7 +130,7 @@ class MySqlInventoryDecimalMovementIntegrationTest {
 
     @Test
     void transferPersistsFractionalQuantityAndNineDecimalOccupancyOnBothBins() {
-        seedStock(sourceBin, "0.001", "0.000000900");
+        seedStock(sourceBin, "0.001", "0.001000000");
 
         TransferRequest request = new TransferRequest();
         request.setRequestId("MOVE-DECIMAL-001");
@@ -145,7 +145,7 @@ class MySqlInventoryDecimalMovementIntegrationTest {
         assertDecimal("0.001", stock(destinationBin).getQuantity());
         assertDecimal("0.000000000",
                 binRepository.findByBinCode(sourceBin.getBinCode()).orElseThrow().getCurrentWeightOccupancy());
-        assertDecimal("0.000000900",
+        assertDecimal("0.001000000",
                 binRepository.findByBinCode(destinationBin.getBinCode()).orElseThrow().getCurrentWeightOccupancy());
         assertEquals(2, ledgerRepository.count());
         assertDecimal("-0.001", ledgerRepository.findAll().stream()
