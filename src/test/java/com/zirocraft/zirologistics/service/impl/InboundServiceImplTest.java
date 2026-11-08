@@ -58,4 +58,23 @@ class InboundServiceImplTest {
         verifyNoInteractions(binRepository, stockRepository);
         verify(ledgerRepository, never()).save(any());
     }
+
+    @Test
+    void processInboundRejectsFractionalPieceQuantityBeforeBinOrStockMutation() {
+        ItemEntity item = ItemEntity.builder().sku("SKU-PCS").baseUom("PCS").build();
+        InboundRequest request = new InboundRequest();
+        request.setRequestId("IN-FRACTION");
+        request.setSku("SKU-PCS");
+        request.setBinCode("BIN-A");
+        request.setQuantity(new BigDecimal("1.5"));
+        when(itemRepository.findBySkuForUpdate("SKU-PCS")).thenReturn(Optional.of(item));
+
+        ApiException exception = assertThrows(ApiException.class,
+                () -> service.processInbound(request, "operator@example.com"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
+        verifyNoInteractions(binRepository, stockRepository);
+        verify(ledgerRepository, never()).save(any());
+    }
+
 }
