@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import java.math.BigDecimal;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Validates that the configured weight is expressed in KG per one Base UOM unit.
@@ -28,7 +29,7 @@ public final class ItemPhysicalWeightPolicy {
         }
 
         String normalized = baseUom == null ? "" : baseUom.trim().toUpperCase(Locale.ROOT);
-        if (!Map.of("KG", true, "GR", true, "PCS", true, "BOX", true, "ML", true).containsKey(normalized)) {
+        if (!Set.of("KG", "GR", "PCS", "BOX", "ML").contains(normalized)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Base UOM barang tidak didukung.");
         }
 
