@@ -2,7 +2,7 @@
 
 **Project:** ZiroLogistics WMS  
 **Document ID:** WMS-DOMAIN-UOM-001  
-**Version:** 0.2  
+**Version:** 0.3  
 **Status:** Draft PR — domain baseline accepted for design; implementation not approved  
 **Last updated:** 2026-11-09
 
@@ -368,3 +368,81 @@ Before production implementation, the team must still:
 6. Decide whether ML-based weight is mandatory for every item or whether items without a known weight can be excluded from weight-capacity calculations under an explicit business rule.
 
 **Implementation status remains NOT APPROVED.** A documentation PR may be reviewed and merged independently; production code and database changes require a separate explicit authorization.
+
+
+## 16. Database and weight behavior audit — 2026-11-09
+
+### 16.1 Complete decimal-field inventory from current backend entities and V1
+
+The entity scan found decimal-valued fields in ItemEntity, InventoryStockEntity, InventoryLedgerEntity, and BinEntity. The corresponding V1 migration currently defines the following decimal columns:
+
+| Table | Column | Current V1 type | Proposed target scale |
+|---|---|---|---:|
+| items | min_stock_level | DECIMAL(38,2) | 6 |
+| items | weight_per_unit | DECIMAL(38,2) | 6 |
+| inventory_stocks | quantity | DECIMAL(38,2) | 6 |
+| inventory_ledger | quantity_change | DECIMAL(38,2) | 6 |
+| inventory_ledger | balance_before | DECIMAL(38,2) | 6 |
+| inventory_ledger | balance_after | DECIMAL(38,2) | 6 |
+| bins | current_weight_occupancy | DECIMAL(38,2) | 6 |
+| bins | max_weight_capacity | DECIMAL(38,2) | 6 |
+| bins | min_weight_threshold | DECIMAL(38,2) | 6 |
+
+No other `BigDecimal` fields were found in the current entity package during this scan. This inventory is tied to the inspected main-branch source and V1 migration.
+
+### 16.2 Entity mapping gap
+
+The decimal fields above are declared as Java `BigDecimal`, but the entity fields do not specify explicit JPA `precision` and `scale` attributes in their `@Column` mappings. The migration currently defines the physical scale as 2.
+
+Before changing the schema, the implementation must explicitly align:
+- JPA column precision and scale.
+- Flyway migration definitions.
+- DTO/API serialization expectations.
+- Integration-test schema validation.
+
+The exact precision must be validated against MySQL limits and actual business maximums. `DECIMAL(38,6)` remains a candidate, not a final approved limit.
+
+### 16.3 Weight is currently mandatory
+
+The current `ItemRequest` requires `weightPerUnit` to be non-null and positive. `ItemServiceImpl` persists that value. The inbound, outbound, and transfer services always calculate bin occupancy using `item.getWeightPerUnit().multiply(quantity)`.
+
+Therefore, the current application contract does not support an item with unknown or absent weight. The proposed KG-per-Base-UOM contract can be implemented consistently with this existing mandatory-weight behavior.
+
+**Recommendation:** keep weight mandatory in the first release. Do not silently treat missing weight as zero, because that would allow stock to enter bins without consuming recorded capacity. If the business later needs unweighed items, design an explicit bin-capacity policy (for example, a separately tracked non-weight-managed category) before changing nullability or calculation behavior.
+
+### 16.4 Weight conversion examples under the accepted contract
+
+The canonical stored weight remains KG per one Base UOM:
+
+| Base UOM | Example `weightPerUnit` | Quantity | Calculated physical weight |
+|---|---:|---:|---:|
+| PCS | 0.250000 KG/PCS | 4 PCS | 1.000000 KG |
+| BOX | 2.500000 KG/BOX (gross) | 2 BOX | 5.000000 KG |
+| KG | 1.000000 KG/KG | 1.250 KG | 1.250000 KG |
+| GR | 0.001000 KG/GR | 500 GR | 0.500000 KG |
+| ML | 0.000900 KG/ML (example density only) | 500 ML | 0.450000 KG |
+
+The ML example is illustrative only. The actual weight-per-ML value must come from the product's actual density or a measured product-specific value. No universal 1:1 ML-to-GR assumption is permitted.
+
+### 16.5 Existing database compatibility boundary
+
+V1 explicitly states that it is intended for a fresh database and does not adopt or modify an existing database. Existing installations require a separately reviewed Flyway baseline/adoption procedure.
+
+The repository audit cannot inspect the user's live MySQL data or deployed database schema. Consequently:
+- Existing UOM values and decimal data are **UNVERIFIED** until inspected in the target database.
+- The presence of V1 in the repository does not prove every local or deployed database was created from V1.
+- Do not run a precision migration against an existing database until Flyway history, actual column definitions, and representative data have been inspected.
+- Do not assume altering DECIMAL scale is risk-free for existing values or downstream consumers.
+
+### 16.6 Evidence classification
+
+| Statement | Classification |
+|---|---|
+| Nine decimal columns above are DECIMAL(38,2) in repository V1 | VERIFIED — source/migration |
+| Corresponding entity fields use BigDecimal without explicit precision/scale | VERIFIED — source |
+| Item weight is mandatory and positive in ItemRequest | VERIFIED — source |
+| All three movement services use weightPerUnit × quantity | VERIFIED — source |
+| Current runtime database has exactly the V1 schema | UNVERIFIED |
+| Existing stored UOM values conform to proposed policy | UNVERIFIED |
+| DECIMAL(38,6) is sufficient for all future operational maxima | PROPOSED — requires range confirmation |
+
