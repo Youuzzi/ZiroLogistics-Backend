@@ -349,3 +349,47 @@ This section records an audit/design gap only. No entity, migration, test, or da
 This specification is documentation only. It does not authorize production source-code modifications, database schema migrations, occupancy or capacity updates, or production deployment.
 
 Implementation and data correction require separate explicit approval.
+
+## 7.5 Ledger ordering, transfer traceability, and balance-chain review
+
+### Current source findings
+
+1. `InventoryLedgerEntity` stores item, bin, transaction type, quantity change, balance before/after, unique request ID, reference number, user ID, note, and inherited created timestamp.
+2. The ledger history repository method is `findAllByOrderByCreatedAtDesc(Pageable)`. It sorts by timestamp descending but has no secondary tie-breaker such as the ledger primary key. Rows sharing the same timestamp therefore have no explicitly deterministic order in the query contract.
+3. The V1 migration defines `idx_ledger_history(item_id, bin_id, created_at)`, which supports item/bin/time history access but does not itself guarantee deterministic ordering for timestamp ties.
+4. `LedgerResponse` exposes public ID, item/bin details, transaction type, quantity/balance fields, reference number, user, note, and created timestamp. It does not expose the stored `requestId` or the numeric ledger ID.
+5. Transfer writes two ledger rows in one `@Transactional` service method: `TRANSFER_OUT` with request ID suffix `_OUT`, and `TRANSFER_IN` with suffix `_IN`. Both rows use the SKU as `referenceNo`; the notes contain the opposite bin code.
+6. The transfer unit test verifies that both save calls are made with the expected suffixes and transaction types. This is Mockito-level evidence only; it does not prove that a real MySQL transaction rolls back both rows and stock/bin writes when a failure occurs between the saves.
+7. The inspected MySQL Testcontainers integration test exercises outbound concurrency only. It contains no transfer transaction/rollback scenario.
+8. The six ledger rows supplied during the live-database review each satisfy `balanceBefore + quantityChange = balanceAfter`. Their reconstructed final balances match the two supplied current stock balances: SKU-NASI-001 = 30.00 and SKU-MU-001 = 250.00. Those six rows contain inbound/outbound movements; they do not provide a live transfer pair to verify.
+
+### Assessment
+
+- **Timestamp ordering:** the ledger endpoint's descending timestamp order is suitable for a broad recent-activity view, but not a strict chronological balance-chain guarantee when timestamps tie. A deterministic secondary order should be specified (for example, `createdAt DESC, id DESC` for display). For balance reconstruction, use a clearly defined per-item/per-bin ordering and do not treat timestamps alone as a globally reliable sequence.
+- **Transfer correlation:** the database can infer a likely pair by removing the `_OUT`/`_IN` suffix from request IDs, but the API response omits request ID and the rows have no dedicated shared transfer/group identifier. SKU in `referenceNo` identifies the item, not the transfer operation. Notes are descriptive text and should not be treated as a durable machine-readable relationship.
+- **Transfer atomicity:** the single `@Transactional` method is a positive structural foundation because both stock/bin updates and both ledger saves execute in one transaction. Actual rollback behavior remains unverified until a MySQL integration test deliberately fails after an intermediate write and asserts that source stock, destination stock, both bin occupancies, and both ledger rows are unchanged.
+- **Balance-chain reconstruction:** the six supplied rows reconcile arithmetically and to the supplied final balances. This is limited to those rows and the two supplied item/bin balances; it does not prove completeness of all historical movements, absence of deleted/missing rows, or deterministic chronology for timestamp ties.
+
+### Recommended contract and tests
+
+1. Add a deterministic tie-breaker to ledger history ordering.
+2. Preserve request/operation correlation in the ledger API or expose a dedicated immutable transfer identifier shared by both transfer rows. Do not rely on free-text notes.
+3. Keep request IDs unique and define their namespace so generated `_OUT`/`_IN` suffixes cannot collide with independently accepted request IDs.
+4. Add a MySQL Testcontainers transfer test that verifies both ledger rows, source/destination balances, and both occupancies after a successful transfer.
+5. Add a forced-failure test between the two ledger saves (or after one side has been written) and prove complete rollback of all transfer effects.
+6. Add a read-only balance-chain audit query/test that checks every row's arithmetic and compares the last reconstructed balance with current stock for each item/bin/status identity. Include tie handling and report missing/ambiguous ordering rather than silently choosing a sequence.
+
+### Evidence classification
+
+| Finding | Classification |
+|---|---|
+| Ledger history sorts by `createdAt DESC` without a secondary order | VERIFIED — repository source |
+| V1 has a history index on item, bin, and created timestamp | VERIFIED — migration source |
+| Ledger response omits request ID and numeric ledger ID | VERIFIED — response DTO source |
+| Transfer saves OUT and IN rows with suffix IDs in one `@Transactional` method | VERIFIED — service source |
+| Transfer unit test verifies both save calls | VERIFIED — test source |
+| MySQL rollback of both transfer legs and all stock/bin changes is guaranteed at runtime | UNVERIFIED — no forced-failure integration test found |
+| The six supplied ledger rows reconcile arithmetically and to the two supplied current balances | VERIFIED — user-provided database query output |
+| All historical ledger rows are complete and chronological | UNVERIFIED — full live ledger history and ordering were not independently inspected |
+
+This section records source and supplied-database evidence only. No ledger, stock, bin, schema, or application source was changed.
