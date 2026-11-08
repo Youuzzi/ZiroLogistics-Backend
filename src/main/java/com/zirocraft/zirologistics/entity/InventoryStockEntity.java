@@ -21,7 +21,7 @@ public class InventoryStockEntity extends BaseEntity {
     @JoinColumn(name = "bin_id", nullable = false)
     private BinEntity bin;
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 38, scale = 6)
     private BigDecimal quantity;
 
     @Column(nullable = false)
