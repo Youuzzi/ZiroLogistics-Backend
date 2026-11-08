@@ -296,6 +296,41 @@ The unique SKU, bin-code, and warehouse-code constraints also remain in force re
 | Current UI labels or actions fully communicate lifecycle state | UNVERIFIED — frontend lifecycle review not yet completed |
 
 This section is a domain and audit recommendation only. No endpoint, entity, repository query, migration, or database record has been changed.
+## 7.4 Stock identity, uniqueness, and bin-code scope
+
+### Current source/schema findings
+
+1. The V1 Flyway migration defines a unique constraint on `inventory_stocks(item_id, bin_id, status)` (`uq_item_bin_status`). This expresses one aggregate stock balance per item, bin, and status.
+2. `InventoryStockEntity` does not declare the equivalent JPA `@Table(uniqueConstraints=...)` metadata. The migration is therefore the only inspected declaration of this uniqueness rule.
+3. The stock repository lookup uses item SKU, bin code, and status and returns `Optional`. If duplicate rows exist, the query can fail with a non-unique-result exception rather than choosing a deterministic balance.
+4. All three movement services serialize by locking the item row before stock lookup. This is a useful application-level protection for same-SKU operations, but it does not replace a database uniqueness constraint against direct SQL or future write paths.
+5. The current MySQL concurrency integration test sets Hibernate `ddl-auto=create` and does not run Flyway V1. Since the entity does not declare the stock unique constraint, that test schema does not establish that `uq_item_bin_status` is present. The test verifies same-SKU outbound locking/idempotency behavior, not enforcement of the V1 stock unique key.
+6. V1 defines `uk_bins_bin_code` as a unique constraint on `bins.bin_code`, making bin codes globally unique across all warehouses. The Bin entity also marks `binCode` unique.
+7. The current create service checks bin code globally via `findByBinCode`, consistent with the global unique constraint.
+8. Ledger `request_id` is unique in V1 and in the entity mapping. Transfer creates two distinct IDs by appending `_OUT` and `_IN`; the transfer service checks both before applying a transfer.
+
+### Assessment and design questions
+
+- **Stock identity:** retain `(item_id, bin_id, status)` as the unique stock identity for the current aggregate model. Add matching JPA metadata or ensure every schema/test path applies the Flyway constraint. The database must remain the final guard.
+- **Existing duplicates:** before adding or enforcing the constraint on an existing installation, run a duplicate-group query and reconcile duplicates; do not blindly add the constraint to production data.
+- **Concurrency test schema:** prefer running Flyway against disposable MySQL in integration tests (with Hibernate `validate`) so tests exercise the same indexes and constraints as the intended application schema. If a test deliberately uses Hibernate-created schema, it must declare equivalent constraints and clearly state the limitation.
+- **Bin-code scope:** global uniqueness is currently implemented and verified in V1/entity/service. Whether this is the correct business rule is **UNDECIDED**. If warehouse-local uniqueness is desired, the schema and service would need a composite unique key on `(warehouse_id, bin_code)`, and every lookup/lock/API path must include warehouse identity. Do not change this without an explicit business decision.
+- **Ledger idempotency:** preserve uniqueness of request IDs. For transfer, ensure generated suffixes cannot collide with another operation's accepted request-ID namespace; a structured operation key or dedicated transfer identifier may be preferable if request IDs are not namespaced by operation.
+
+### Evidence classification
+
+| Finding | Classification |
+|---|---|
+| V1 declares unique `(item_id, bin_id, status)` | VERIFIED — migration source |
+| Stock entity does not declare matching JPA unique metadata | VERIFIED — entity source |
+| Stock repository lookup returns Optional for item/bin/status | VERIFIED — repository source |
+| Current concurrency integration test uses Hibernate `ddl-auto=create`, not Flyway | VERIFIED — test source |
+| Test therefore does not prove V1 stock unique constraint enforcement | VERIFIED — test configuration + schema declarations |
+| V1 and entity make bin code globally unique | VERIFIED — migration/entity source |
+| Global uniqueness is the correct business rule | UNDECIDED — requires business confirmation |
+| Existing live DB contains duplicate stock identities | UNVERIFIED — live DB constraint/data not rechecked in this step |
+
+This section records an audit/design gap only. No entity, migration, test, or database was changed.
 ## 8. Implementation sequence
 
 1. Complete repository-wide review of every stock quantity and status mutation path.
