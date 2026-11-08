@@ -289,3 +289,53 @@ Before implementation, confirm:
 This document is a draft specification only.
 
 No production source code, entity mapping, migration, frontend behavior, or deployed database has been changed as part of creating this document. Implementation requires explicit approval after the domain decisions above are resolved.
+
+
+## 14. Repository review — follow-up findings (2026-11-09)
+
+This section records a second source review of the backend and frontend repositories. These are source-level findings, not new runtime test results.
+
+### 14.1 Backend request validation is active, but not UOM-aware
+
+The inbound, outbound, and transfer controllers all annotate their request bodies with `@Valid`. Their request DTOs use `@NotNull` and `@Positive` for quantity. This confirms that Bean Validation is invoked for these endpoints; the gap is specifically that the current constraints do not enforce the item's Base UOM precision.
+
+The item request DTO requires a nonblank `baseUom`, non-null `minStockLevel`, and positive `weightPerUnit`. It does not currently express an allowlist of UOM codes or UOM-specific scale rules. The current entity stores `baseUom` as a String.
+
+### 14.2 Current weight precision is insufficient for some proposed UOMs
+
+The V1 migration defines `items.weight_per_unit` as `DECIMAL(38,2)`. If the proposed contract is KG per one Base UOM, a GR-based item commonly needs a value such as `0.001 KG/GR`; an ML-based item may need a small density-derived value such as `0.0009 KG/ML`.
+
+Those values cannot be represented exactly at scale 2. Therefore, the precision migration must include `weight_per_unit`, not only stock and ledger quantity columns. This is a material reason to resolve the weight contract before implementation.
+
+### 14.3 Frontend transfer behavior confirmed
+
+The current Transfer page uses `step="0.01"` and sends `parseFloat(form.quantity)`. This is another source-level confirmation that the transfer form currently assumes two decimal places and uses JavaScript Number conversion. It should be aligned with the same UOM-driven input and serialization contract as inbound and outbound.
+
+### 14.4 Additional domain guardrails recommended
+
+- Backend must reject unsupported UOM codes, even if the frontend dropdown does not offer them.
+- `minStockLevel` must be non-negative and obey the item's Base UOM precision. Zero should remain valid to support items with no minimum-stock alert threshold.
+- `weightPerUnit` must be positive and use the canonical KG-per-Base-UOM meaning once approved.
+- Once an item has stock or inventory-ledger history, changing its Base UOM should be prohibited in the initial implementation. A later controlled conversion/migration workflow can be designed separately.
+- For the first iteration, a centralized backend policy/registry for the five supported UOM codes is preferable to a new configurable UOM database table. This keeps the implementation bounded while ensuring that the frontend is not the authority. A database-backed UOM catalog can be introduced when tenant-specific/custom units are an actual requirement.
+- The proposed integer-only GR/ML policy is a simplifying first-release decision, not a universal warehouse standard. If the intended operations include fractional grams or milliliters, that decision must change before implementation.
+
+### 14.5 Recommended decision baseline for review
+
+The audit recommends the following baseline, subject to product-owner confirmation:
+
+| Decision | Recommendation | Reason |
+|---|---|---|
+| PCS | Integer quantity | Discrete count |
+| BOX | Integer quantity | Discrete package count; no automatic conversion to PCS |
+| KG | Up to 3 fractional digits | Supports gram-level quantities while retaining KG as Base UOM |
+| GR | Integer quantity | One unit represents one gram |
+| ML | Integer quantity initially | Simplifies first release; revisit if fractional dosing/dispensing is required |
+| Weight basis | KG per one Base UOM | One canonical physical-weight unit for bin capacity |
+| BOX weight | Gross weight including packaging | Bin capacity represents physical storage load |
+| Base UOM changes | Prohibit after first stock/ledger transaction | Prevents historical quantities from silently changing meaning |
+| UOM policy storage | Centralized backend policy initially | Avoids unnecessary configuration table before custom UOM support is required |
+| Decimal database scale | Candidate `DECIMAL(38,6)` for affected quantity/weight fields | Preserves proposed quantity and small per-unit weight values; must be checked against entity mappings and migration tests |
+
+The above is a recommendation, not an approval. The product owner must explicitly confirm or amend it before implementation.
+
