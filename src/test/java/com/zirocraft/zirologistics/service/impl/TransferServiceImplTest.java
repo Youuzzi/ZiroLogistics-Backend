@@ -153,4 +153,20 @@ class TransferServiceImplTest {
         request.setQuantity(new BigDecimal(quantity));
         return request;
     }
+
+    @Test
+    void processTransferRejectsFractionalBoxQuantityBeforeBinOrStockMutation() {
+        ItemEntity item = ItemEntity.builder().sku("SKU-BOX").baseUom("BOX").build();
+        TransferRequest request = request("MOVE-PRECISION", "BIN-A", "BIN-B", "2.5");
+        request.setSku("SKU-BOX");
+        when(itemRepository.findBySkuForUpdate("SKU-BOX")).thenReturn(Optional.of(item));
+
+        ApiException exception = assertThrows(ApiException.class,
+                () -> service.processTransfer(request, "operator@example.com"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
+        verifyNoInteractions(binRepository, stockRepository);
+        verify(ledgerRepository, never()).save(any());
+    }
+
 }
