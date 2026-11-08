@@ -40,5 +40,10 @@ class ItemPhysicalWeightPolicyTest {
                 () -> ItemPhysicalWeightPolicy.validate("L", new BigDecimal("1.0")));
         assertThrows(ApiException.class,
                 () -> ItemPhysicalWeightPolicy.validate("ML", new BigDecimal("0.0000001")));
+    }    @Test
+    void rejectsWeightOutsideDecimalIntegerRange() {
+        assertThrows(ApiException.class,
+                () -> ItemPhysicalWeightPolicy.validate("PCS", new BigDecimal("1E+32")));
     }
+
 }
