@@ -24,6 +24,18 @@ class FlywayInitialSchemaIntegrationTest {
             .withUsername("migration_test")
             .withPassword("migration_test");
 
+    private void assertColumnScale(Statement statement, String table, String column, int expectedScale)
+            throws Exception {
+        try (ResultSet result = statement.executeQuery(
+                "SELECT numeric_scale FROM information_schema.columns " +
+                "WHERE table_schema = DATABASE() AND table_name = '" + table +
+                "' AND column_name = '" + column + "'")) {
+            assertTrue(result.next(), "Expected column " + table + "." + column);
+            assertEquals(expectedScale, result.getInt(1),
+                    table + "." + column + " must use scale " + expectedScale);
+        }
+    }
+
     @Test
     void migratesAnEmptyMySqlDatabaseAndCreatesExpectedSchema() throws Exception {
         Flyway.configure()
@@ -51,18 +63,15 @@ class FlywayInitialSchemaIntegrationTest {
                 assertEquals(2, result.getInt(1), "Flyway V1 and V2 must be recorded as successful");
             }
 
-            try (ResultSet result = statement.executeQuery(
-                    "SELECT COUNT(*) FROM information_schema.columns " +
-                    "WHERE table_schema = DATABASE() AND numeric_scale = 6 AND (" +
-                    "(table_name = 'items' AND column_name IN ('min_stock_level', 'weight_per_unit')) OR " +
-                    "(table_name = 'bins' AND column_name IN ('current_weight_occupancy', 'max_weight_capacity', 'min_weight_threshold')) OR " +
-                    "(table_name = 'inventory_stocks' AND column_name = 'quantity') OR " +
-                    "(table_name = 'inventory_ledger' AND column_name IN ('quantity_change', 'balance_before', 'balance_after'))" +
-                    ")")) {
-                assertTrue(result.next());
-                assertEquals(9, result.getInt(1),
-                        "All nine inventory quantity and physical-weight columns must use scale 6");
-            }
+            assertColumnScale(statement, "items", "min_stock_level", 3);
+            assertColumnScale(statement, "items", "weight_per_unit", 6);
+            assertColumnScale(statement, "bins", "current_weight_occupancy", 9);
+            assertColumnScale(statement, "bins", "max_weight_capacity", 9);
+            assertColumnScale(statement, "bins", "min_weight_threshold", 9);
+            assertColumnScale(statement, "inventory_stocks", "quantity", 3);
+            assertColumnScale(statement, "inventory_ledger", "quantity_change", 3);
+            assertColumnScale(statement, "inventory_ledger", "balance_before", 3);
+            assertColumnScale(statement, "inventory_ledger", "balance_after", 3);
 
             try (ResultSet result = statement.executeQuery(
                     "SELECT IS_NULLABLE FROM information_schema.columns " +
