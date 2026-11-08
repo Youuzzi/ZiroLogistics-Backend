@@ -9,8 +9,6 @@ import com.zirocraft.zirologistics.io.response.BinResponse;
 import com.zirocraft.zirologistics.repository.BinRepository;
 import com.zirocraft.zirologistics.repository.WarehouseRepository;
 import com.zirocraft.zirologistics.service.BinService;
-import com.zirocraft.zirologistics.exception.ApiException;
-import org.springframework.http.HttpStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
