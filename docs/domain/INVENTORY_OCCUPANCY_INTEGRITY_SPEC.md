@@ -212,6 +212,37 @@ These tests provide meaningful intended evidence for same-SKU outbound serializa
 
 The inspected integration test does not cover concurrent inbound capacity contention, concurrent transfer contention, different-SKU movements targeting one bin, or forced database failure/rollback after partial writes. Those remain explicit test gaps.
 
+## 7.2 Item weight and Base UOM historical integrity
+
+The inspected ledger stores quantity changes and balances and references the current ItemEntity. It does not store a transaction-time snapshot of `weightPerUnit`, Base UOM, or calculated physical weight.
+
+Consequently, changing an item's weight or Base UOM after stock movements can change the result of a historical occupancy reconstruction even though no physical movement occurred. The current API exposes item creation and listing only; no item update endpoint was found in the inspected backend source tree. This reduces exposure through the current application API, but does not protect against direct database edits, future update endpoints, or other write paths.
+
+### Initial-release policy
+
+1. Treat `baseUom` and `weightPerUnit` as immutable once an item has any inventory stock or ledger history.
+2. Enforce the rule in the backend domain/service layer for any future update path; UI restrictions alone are insufficient.
+3. Do not silently overwrite the historical weight definition.
+4. A change to item name or description may be handled separately because it does not alter physical weight calculations.
+5. If the physical weight definition must change after movements exist, require a separately approved migration/reclassification process with backup, movement/stock reconciliation, capacity validation, and audit evidence.
+6. For the initial release, prefer creating a new SKU when the physical weight definition materially changes, rather than rewriting the meaning of historical transactions.
+
+### Future alternative: effective-dated weight definitions
+
+If the business later requires one SKU to have multiple valid weight definitions over time, the data model must preserve the applicable weight version for each stock balance and movement. A future design could introduce effective-dated item measurement versions and reference the applicable version from stock and ledger records, or store immutable transaction-time weight snapshots.
+
+That is a larger domain/schema change and is not part of the current implementation baseline. Adding only a weight snapshot to new ledger rows would not by itself solve the historical stock problem for existing aggregate stock balances.
+
+### Evidence classification
+
+| Finding | Classification |
+|---|---|
+| Ledger entity stores quantity/balance fields and references ItemEntity; no weight/UOM snapshot field exists | VERIFIED — source inspection |
+| ItemEntity holds the current Base UOM and weightPerUnit | VERIFIED — source inspection |
+| Current Item service/controller has create and list operations only | VERIFIED — source inspection |
+| Changing master weight can alter historical recalculated physical weight | INFERRED — consequence of current data model |
+| Direct SQL or an unreviewed future write path could change master weight | RISK — not observed as an application endpoint |
+
 ## 8. Implementation sequence
 
 1. Complete repository-wide review of every stock quantity and status mutation path.
