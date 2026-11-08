@@ -45,7 +45,7 @@ class InboundServiceImplTest {
         request.setQuantity(new BigDecimal("1.00"));
 
         when(itemRepository.findBySkuForUpdate("SKU-1"))
-                .thenReturn(Optional.of(ItemEntity.builder().sku("SKU-1").build()));
+                .thenReturn(Optional.of(ItemEntity.builder().sku("SKU-1").baseUom("PCS").build()));
         when(ledgerRepository.existsByRequestId("IN-RACE")).thenReturn(true);
 
         ApiException exception = assertThrows(ApiException.class,
