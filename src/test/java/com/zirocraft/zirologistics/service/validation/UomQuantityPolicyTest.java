@@ -71,5 +71,10 @@ class UomQuantityPolicyTest {
         assertThrows(ApiException.class,
                 () -> UomQuantityPolicy.validateMinimumStock("KG", null));
     }
+    @Test
+    void rejectsQuantityOutsideDecimalIntegerRange() {
+        assertThrows(ApiException.class,
+                () -> UomQuantityPolicy.validate("KG", new BigDecimal("1E+35")));
+    }
 
 }
