@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import com.zirocraft.zirologistics.io.request.InboundRequest;
 import com.zirocraft.zirologistics.repository.*;
 import com.zirocraft.zirologistics.service.InboundService;
+import com.zirocraft.zirologistics.service.validation.UomQuantityPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +27,8 @@ public class InboundServiceImpl implements InboundService {
     public void processInbound(InboundRequest request, String executorEmail) {
         ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
+
+        UomQuantityPolicy.validate(item.getBaseUom(), request.getQuantity());
 
         // Check idempotency only after acquiring the SKU lock. This avoids a
         // stale consistent-read snapshot under MySQL REPEATABLE READ.

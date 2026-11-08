@@ -41,7 +41,7 @@ class TransferServiceImplTest {
 
     @Test
     void processTransferLocksBinsInStableOrderAndUpdatesBothBalancesAndLedger() {
-        ItemEntity item = ItemEntity.builder().sku("SKU-1").weightPerUnit(new BigDecimal("2.00")).build();
+        ItemEntity item = ItemEntity.builder().sku("SKU-1").baseUom("PCS").weightPerUnit(new BigDecimal("2.00")).build();
         BinEntity source = bin("BIN-Z", "20.00", "100.00");
         BinEntity destination = bin("BIN-A", "10.00", "100.00");
         InventoryStockEntity sourceStock = stock(item, source, "10.00");
@@ -75,7 +75,7 @@ class TransferServiceImplTest {
     @Test
     void processTransferRejectsPreviouslyProcessedRequestIdUsingLedgerSuffix() {
         when(itemRepository.findBySkuForUpdate("SKU-1"))
-                .thenReturn(Optional.of(ItemEntity.builder().sku("SKU-1").build()));
+                .thenReturn(Optional.of(ItemEntity.builder().sku("SKU-1").baseUom("PCS").build()));
         when(ledgerRepository.existsByRequestId("MOVE-2_OUT")).thenReturn(true);
 
         ApiException exception = assertThrows(ApiException.class,
@@ -94,7 +94,7 @@ class TransferServiceImplTest {
     void processTransferRechecksDuplicateRequestAfterWaitingForItemLock() {
         when(ledgerRepository.existsByRequestId("MOVE-RACE_OUT")).thenReturn(true);
         when(itemRepository.findBySkuForUpdate("SKU-1"))
-                .thenReturn(Optional.of(ItemEntity.builder().sku("SKU-1").build()));
+                .thenReturn(Optional.of(ItemEntity.builder().sku("SKU-1").baseUom("PCS").build()));
 
         ApiException exception = assertThrows(ApiException.class,
                 () -> service.processTransfer(request("MOVE-RACE", "BIN-A", "BIN-B", "1.00"),
@@ -110,7 +110,7 @@ class TransferServiceImplTest {
 
     @Test
     void processTransferRejectsSourceOccupancyThatWouldBecomeNegative() {
-        ItemEntity item = ItemEntity.builder().sku("SKU-1").weightPerUnit(new BigDecimal("2.00")).build();
+        ItemEntity item = ItemEntity.builder().sku("SKU-1").baseUom("PCS").weightPerUnit(new BigDecimal("2.00")).build();
         BinEntity source = bin("BIN-A", "1.00", "100.00");
         BinEntity destination = bin("BIN-B", "10.00", "100.00");
         InventoryStockEntity sourceStock = stock(item, source, "10.00");
@@ -153,4 +153,20 @@ class TransferServiceImplTest {
         request.setQuantity(new BigDecimal(quantity));
         return request;
     }
+
+    @Test
+    void processTransferRejectsFractionalBoxQuantityBeforeBinOrStockMutation() {
+        ItemEntity item = ItemEntity.builder().sku("SKU-BOX").baseUom("BOX").build();
+        TransferRequest request = request("MOVE-PRECISION", "BIN-A", "BIN-B", "2.5");
+        request.setSku("SKU-BOX");
+        when(itemRepository.findBySkuForUpdate("SKU-BOX")).thenReturn(Optional.of(item));
+
+        ApiException exception = assertThrows(ApiException.class,
+                () -> service.processTransfer(request, "operator@example.com"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
+        verifyNoInteractions(binRepository, stockRepository);
+        verify(ledgerRepository, never()).save(any());
+    }
+
 }

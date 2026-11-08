@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import com.zirocraft.zirologistics.io.request.OutboundRequest;
 import com.zirocraft.zirologistics.repository.*;
 import com.zirocraft.zirologistics.service.OutboundService;
+import com.zirocraft.zirologistics.service.validation.UomQuantityPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +27,8 @@ public class OutboundServiceImpl implements OutboundService {
     public void processOutbound(OutboundRequest request, String executorEmail) {
         ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
+
+        UomQuantityPolicy.validate(item.getBaseUom(), request.getQuantity());
 
         // Check after acquiring the SKU lock. Performing this as the first
         // consistent read avoids a stale snapshot under MySQL REPEATABLE READ.
