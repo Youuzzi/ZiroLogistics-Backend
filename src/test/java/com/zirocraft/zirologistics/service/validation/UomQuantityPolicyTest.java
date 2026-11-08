@@ -60,4 +60,21 @@ class UomQuantityPolicyTest {
                 () -> UomQuantityPolicy.validate(uom, new BigDecimal(quantity)));
         assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
     }
+    @Test
+    void minimumStockAllowsZeroAndRespectsBaseUomScale() {
+        assertDoesNotThrow(() -> UomQuantityPolicy.validateMinimumStock("KG", new BigDecimal("0.001")));
+        assertDoesNotThrow(() -> UomQuantityPolicy.validateMinimumStock("PCS", BigDecimal.ZERO));
+        assertThrows(ApiException.class,
+                () -> UomQuantityPolicy.validateMinimumStock("PCS", new BigDecimal("1.5")));
+        assertThrows(ApiException.class,
+                () -> UomQuantityPolicy.validateMinimumStock("KG", new BigDecimal("-0.001")));
+        assertThrows(ApiException.class,
+                () -> UomQuantityPolicy.validateMinimumStock("KG", null));
+    }
+    @Test
+    void rejectsQuantityOutsideDecimalIntegerRange() {
+        assertThrows(ApiException.class,
+                () -> UomQuantityPolicy.validate("KG", new BigDecimal("1E+35")));
+    }
+
 }

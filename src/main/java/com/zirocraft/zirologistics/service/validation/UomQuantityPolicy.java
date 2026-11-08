@@ -40,6 +40,7 @@ public final class UomQuantityPolicy {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Base UOM barang tidak didukung.");
         }
 
+        DecimalPrecisionPolicy.validate(quantity, 38, 3, "Jumlah");
         int effectiveScale = Math.max(quantity.stripTrailingZeros().scale(), 0);
         if (effectiveScale > maxFractionDigits) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
@@ -47,4 +48,29 @@ public final class UomQuantityPolicy {
                             + maxFractionDigits + " angka desimal.");
         }
     }
+    /**
+     * Minimum stock is a threshold, so zero is allowed but negative values are not.
+     * It follows the same fractional scale as quantities for the selected Base UOM.
+     */
+    public static void validateMinimumStock(String baseUom, BigDecimal minimumStock) {
+        if (minimumStock == null || minimumStock.signum() < 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Minimum stock tidak boleh kosong atau bernilai negatif.");
+        }
+
+        String normalizedUom = baseUom == null ? "" : baseUom.trim().toUpperCase(Locale.ROOT);
+        Integer maxFractionDigits = MAX_FRACTION_DIGITS.get(normalizedUom);
+        if (maxFractionDigits == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Base UOM barang tidak didukung.");
+        }
+
+        DecimalPrecisionPolicy.validate(minimumStock, 38, 3, "Minimum stock");
+        int effectiveScale = Math.max(minimumStock.stripTrailingZeros().scale(), 0);
+        if (effectiveScale > maxFractionDigits) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Minimum stock untuk UOM " + normalizedUom + " maksimal memiliki "
+                            + maxFractionDigits + " angka desimal.");
+        }
+    }
+
 }
