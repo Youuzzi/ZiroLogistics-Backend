@@ -41,7 +41,7 @@ class OutboundServiceImplTest {
 
     @Test
     void processOutboundReducesStockAndBinOccupancyAndWritesLedger() {
-        ItemEntity item = ItemEntity.builder().sku("SKU-1").weightPerUnit(new BigDecimal("2.00")).build();
+        ItemEntity item = ItemEntity.builder().sku("SKU-1").baseUom("PCS").weightPerUnit(new BigDecimal("2.00")).build();
         BinEntity bin = BinEntity.builder().binCode("BIN-A")
                 .currentWeightOccupancy(new BigDecimal("20.00")).build();
         InventoryStockEntity stock = InventoryStockEntity.builder().item(item).bin(bin)
@@ -67,7 +67,7 @@ class OutboundServiceImplTest {
 
     @Test
     void processOutboundRejectsOccupancyThatWouldBecomeNegative() {
-        ItemEntity item = ItemEntity.builder().sku("SKU-1").weightPerUnit(new BigDecimal("2.00")).build();
+        ItemEntity item = ItemEntity.builder().sku("SKU-1").baseUom("PCS").weightPerUnit(new BigDecimal("2.00")).build();
         BinEntity bin = BinEntity.builder().binCode("BIN-A")
                 .currentWeightOccupancy(new BigDecimal("1.00")).build();
         InventoryStockEntity stock = InventoryStockEntity.builder().item(item).bin(bin)
@@ -90,7 +90,7 @@ class OutboundServiceImplTest {
 
     @Test
     void processOutboundRechecksDuplicateRequestAfterWaitingForItemLock() {
-        ItemEntity item = ItemEntity.builder().sku("SKU-1").build();
+        ItemEntity item = ItemEntity.builder().sku("SKU-1").baseUom("PCS").build();
         when(ledgerRepository.existsByRequestId("OUT-RACE")).thenReturn(true);
         when(itemRepository.findBySkuForUpdate("SKU-1")).thenReturn(Optional.of(item));
 
