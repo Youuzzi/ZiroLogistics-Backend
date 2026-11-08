@@ -445,3 +445,15 @@ Repository history was reviewed to establish whether the two existing bins were 
 - Current values (A-01-01 = 0.00; MP-A1-01 = 500.00) therefore have no verified provenance from the available source history. A-01-01's actual physical maximum capacity remains UNKNOWN. MP-A1-01's stored 500.00 is also not independently verified as a physical limit.
 
 **Audit conclusion:** the repository has no evidence in the reviewed commits of a formal legacy-bin capacity/occupancy backfill procedure. Treat existing capacity and occupancy values as untrusted until verified against warehouse operating specifications or a physical measurement. Do not infer a capacity from frontend form defaults, current stock, or a stored database value. No source or database changes were made during this investigation.
+
+
+## 7.8 Operational impact of the observed occupancy mismatch (2026-11-09)
+
+Based on the live database values supplied by the user and the current movement-service implementation reviewed on `main`:
+
+- Inbound calculates projected occupancy from stored occupancy plus incoming weight and rejects values above stored capacity. For A-01-01, stored occupancy and capacity are both zero, so any positive-weight inbound is expected to be rejected.
+- Outbound subtracts outgoing weight from stored occupancy and rejects a negative result. Since both bins store zero occupancy while holding positive stock, outbound from either bin is expected to be rejected for a positive-weight quantity.
+- Transfer validates non-negative source occupancy and destination capacity. A transfer from either bin is expected to fail source-occupancy validation; inbound transfer into a destination with zero stored occupancy can also undercount existing physical stock.
+- For MP-A1-01, inbound capacity checks compare new incoming weight against stored occupancy zero rather than the independently calculated existing 250 kg. This can permit a movement that would exceed actual capacity if the incoming amount plus existing physical stock exceeds the 500 kg limit.
+
+These are source-and-data-based expected consequences, classified INFERRED (not runtime verified). No live movement request was submitted. Do not test these hypotheses by mutating the user's active database; reproduce them in disposable MySQL integration tests after an approved implementation/test plan.
