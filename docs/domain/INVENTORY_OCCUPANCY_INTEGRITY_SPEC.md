@@ -167,10 +167,50 @@ Never infer physical capacity from current stock quantity, a frontend default, o
 | Movement DTOs use positive-value validation without UOM-specific scale enforcement | VERIFIED — inspected source |
 | Inbound unit tests do not cover the same normal/capacity cases covered by outbound and transfer tests | VERIFIED — inspected test files |
 | Pessimistic item/bin locks and deterministic transfer bin ordering exist in source | VERIFIED — source inspection |
-| All concurrency and rollback guarantees hold under MySQL | UNVERIFIED — integration evidence required |
-| No other stock mutation or status-transition path exists in the entire application | UNVERIFIED — requires repository-wide call-path review |
+| Concurrent same-SKU outbound and duplicate idempotency-key protection have MySQL Testcontainers test cases | VERIFIED — test source exists; execution result not rerun in this audit |
+| Inbound/transfer concurrency and forced rollback guarantees hold under MySQL | UNVERIFIED — no corresponding integration evidence confirmed |
+| No additional stock mutation or status-transition endpoint/service exists in the inspected backend source tree | VERIFIED — source-tree and controller/service inspection |
+| Direct database edits or external processes cannot mutate stock/master data | UNVERIFIED — outside repository API inspection |
 
 The two occupancy discrepancies are not authorization to update the database. No correction has been performed.
+
+## 7.1 Repository-wide mutation-path review (2026-11-09)
+
+The backend `main` source tree and its controllers/services were reviewed for inventory and master-data mutation paths.
+
+| Area | Observed API/service behavior | Audit conclusion |
+|---|---|---|
+| Inbound | `POST /api/v1.0/inbound` delegates to `InboundService` | Stock-in mutation path |
+| Outbound | `POST /api/v1.0/outbound` delegates to `OutboundService` | Stock-out mutation path |
+| Transfer | `POST /api/v1.0/transfer` delegates to `TransferService` | Inter-bin movement path |
+| Inventory | GET stocks, low-stock alerts, and ledger | Read-only; no status update or adjustment endpoint |
+| Item | Create and list only | No item update/delete endpoint; no API to change Base UOM or weightPerUnit |
+| Bin | Create and list by warehouse only | No API to change capacity/occupancy or delete a bin |
+| Stock status | Status is a String field on InventoryStockEntity | No status-transition service/controller found in inspected source tree |
+| Other adjustment service | No separate adjustment service/controller found | No fourth application-level stock movement path found |
+
+The service interfaces for Item and Bin expose only create/read methods. The Inventory controller exposes only GET routes. The three movement controllers expose the three POST movement operations above.
+
+This conclusion is scoped to the inspected backend repository source tree. It does not rule out direct SQL changes, database administration, external integrations not present in this repository, or future code added outside the reviewed branch.
+
+### Master-data immutability risk
+
+Although there is currently no Item update endpoint, ItemEntity exposes setters and its Base UOM and weightPerUnit are persisted master data. A direct database edit or future update path could change the calculated physical weight of historical stock without automatically recalculating stored bin occupancy.
+
+Likewise, bin capacity has no update endpoint in the current service interface. Existing capacity values still require operational provenance and must not be assumed correct solely because they are persisted.
+
+Any future item master-data update workflow must prevent Base UOM or weightPerUnit changes while stock or ledger history exists, or provide a separately approved historical conversion/reconciliation process. Any capacity update must validate the resulting capacity against independently calculated physical occupancy.
+
+### Existing MySQL concurrency test coverage
+
+`MySqlInventoryLockingIntegrationTest` uses a disposable MySQL 8.4 Testcontainers database and contains two outbound concurrency scenarios:
+
+1. Two concurrent outbound requests each attempt to remove 7 units from an initial balance of 10; exactly one is expected to succeed, leaving stock and bin occupancy at 3 and one ledger row.
+2. Two concurrent requests using the same idempotency key; only one movement is expected to apply.
+
+These tests provide meaningful intended evidence for same-SKU outbound serialization and duplicate-request handling. Their current execution result was not rerun as part of this source inspection.
+
+The inspected integration test does not cover concurrent inbound capacity contention, concurrent transfer contention, different-SKU movements targeting one bin, or forced database failure/rollback after partial writes. Those remain explicit test gaps.
 
 ## 8. Implementation sequence
 
