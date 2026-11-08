@@ -24,7 +24,7 @@ public class ItemEntity extends BaseEntity {
     @Column(nullable = false)
     private String baseUom;
 
-    @Column(nullable = false, precision = 38, scale = 6)
+    @Column(nullable = false, precision = 38, scale = 3)
     private BigDecimal minStockLevel;
 
     // Weight in KG for one Base UOM unit; preserve sub-gram values where applicable.
