@@ -91,7 +91,7 @@ class MySqlInventoryDecimalMovementIntegrationTest {
                 .name("Fractional KG Test Item")
                 .baseUom("KG")
                 .minStockLevel(new BigDecimal("0.001"))
-                .weightPerUnit(new BigDecimal("0.000900"))
+                .weightPerUnit(new BigDecimal("1.000000"))
                 .build());
     }
 
@@ -106,7 +106,7 @@ class MySqlInventoryDecimalMovementIntegrationTest {
         assertDecimal("0.001", stock.getQuantity());
         assertDecimal("0.001", ledger.getQuantityChange());
         assertDecimal("0.001", ledger.getBalanceAfter());
-        assertDecimal("0.000000900", persistedBin.getCurrentWeightOccupancy());
+        assertDecimal("0.001000000", persistedBin.getCurrentWeightOccupancy());
     }
 
     @Test
