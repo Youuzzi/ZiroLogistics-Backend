@@ -114,21 +114,26 @@ A future configurable UOM catalog may store allowed fractional digits and other 
 
 ## 5. Proposed database precision
 
-A candidate storage scale is six fractional digits for quantity and weight-related decimal values, subject to validation against actual domain ranges and MySQL/JPA mappings.
+The storage scale is domain-specific rather than uniform. The implementation candidate uses three fractional digits for Base-UOM quantities, six for unit weight in KG per Base UOM, and nine for physical bin weight. The nine-digit occupancy scale preserves the product of a six-digit unit weight and a three-digit quantity without premature rounding.
 
-| Field | Current V1 scale | Candidate scale |
-|---|---:|---:|
-| `inventory_stocks.quantity` | 2 | 6 |
-| `inventory_ledger.quantity_change` | 2 | 6 |
-| `inventory_ledger.balance_before` | 2 | 6 |
-| `inventory_ledger.balance_after` | 2 | 6 |
-| `items.min_stock_level` | 2 | 6 |
-| `items.weight_per_unit` | 2 | 6 |
-| `bins.current_weight_occupancy` | 2 | 6 |
-| `bins.max_weight_capacity` | 2 | 6 |
-| `bins.min_weight_threshold` | 2 | 6 |
+| Field | Current V1 scale | Proposed V2 scale | Reason |
+|---|---:|---:|---|
+| `inventory_stocks.quantity` | 2 | 3 | Supports KG quantity to 0.001 |
+| `inventory_ledger.quantity_change` | 2 | 3 | Same Base-UOM precision as stock |
+| `inventory_ledger.balance_before` | 2 | 3 | Same Base-UOM precision as stock |
+| `inventory_ledger.balance_after` | 2 | 3 | Same Base-UOM precision as stock |
+| `items.min_stock_level` | 2 | 3 | Same Base-UOM precision as stock |
+| `items.weight_per_unit` | 2 | 6 | Supports small KG-per-unit values such as GR/ML |
+| `bins.current_weight_occupancy` | 2 | 9 | Product of 6-scale unit weight and 3-scale quantity |
+| `bins.max_weight_capacity` | 2 | 9 | Same physical-weight scale as occupancy |
+| `bins.min_weight_threshold` | 2 | 9 | Same physical-weight scale as occupancy |
 
-Candidate SQL type: `DECIMAL(38,6)`.
+Proposed SQL types:
+- Quantity/minimum-stock fields: `DECIMAL(38,3)`.
+- `items.weight_per_unit`: `DECIMAL(38,6)`.
+- Bin occupancy/capacity/threshold fields: `DECIMAL(38,9)`.
+
+The total precision remains 38 digits. The operational maximum magnitude must still be validated against real warehouse limits before production rollout.
 
 Important constraints:
 
@@ -459,3 +464,24 @@ If `weightPerUnit` is changed after movements have occurred, recalculating histo
 If the business later requires a weight-definition change for an existing SKU, do not overwrite the master value in place. Design a separately approved reclassification/migration process with backup, stock and occupancy reconciliation, capacity validation, and audit evidence. If multiple weight definitions must coexist over time for one SKU, introduce effective-dated measurement versions and associate stock balances and ledger movements with the applicable version, or preserve immutable transaction-time weight snapshots. A ledger snapshot alone is insufficient to resolve the weight basis of an aggregated current stock balance.
 
 This is a design guardrail only. No item update API, database migration, or deployed data has been changed.
+
+
+## 16. Precision decision refinement — implementation candidate (2026-11-09)
+
+The first implementation candidate in Section 5 has been refined after reviewing the actual V1 migration, JPA mappings, and movement calculation path.
+
+- Quantity fields use scale 3 because KG is the only supported fractional Base UOM in the initial policy and it allows increments of 0.001 KG.
+- `weight_per_unit` uses scale 6 so small physical-weight values per GR/ML Base UOM can be represented.
+- Bin occupancy and capacity fields use scale 9 because multiplying a scale-6 unit weight by a scale-3 quantity can produce a scale-9 physical-weight result.
+- Inbound must not round projected occupancy to scale 2 before persistence. Outbound and transfer must retain the same precision contract.
+- Flyway V2 and JPA mappings are being tested against MySQL 8.4. The movement integration tests exercise fractional inbound, outbound, and transfer values.
+
+This is the proposed implementation contract represented by the current Draft PRs. CI passing is evidence that the tested source/migration path works; it is not production approval.
+
+### Remaining safeguards
+
+1. Confirm operational maximum quantity, unit weight, and bin capacity ranges; DECIMAL(38,3/6/9) retain 38 total digits but reduce integer-digit capacity as scale increases.
+2. Confirm the V2 migration is applied only to a database already at Flyway V1, or a fresh database created by V1. Existing databases without Flyway history require a separate adoption/baseline and backup plan.
+3. Verify the production database's current schema and data before any migration. Do not infer production schema from the repository's V1 migration or the local development database.
+4. Keep quantity validation authoritative in the backend. Database scale is storage capability, not permission for every UOM to use every scale.
+5. Review the Draft implementation PRs before merge; no merge or production deployment is implied by this specification update.
