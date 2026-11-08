@@ -485,3 +485,27 @@ This is the proposed implementation contract represented by the current Draft PR
 3. Verify the production database's current schema and data before any migration. Do not infer production schema from the repository's V1 migration or the local development database.
 4. Keep quantity validation authoritative in the backend. Database scale is storage capability, not permission for every UOM to use every scale.
 5. Review the Draft implementation PRs before merge; no merge or production deployment is implied by this specification update.
+
+
+## 17. Physical-weight consistency rules — implementation refinement (2026-11-09)
+
+The physical-weight contract is now explicit as **KG per one Base UOM unit**:
+
+| Base UOM | Required / allowed weightPerUnit | Reason |
+|---|---:|---|
+| KG | exactly 1.000000 KG/KG | One kilogram quantity is one kilogram of physical weight |
+| GR | exactly 0.001000 KG/GR | One gram is 0.001 kilogram |
+| PCS | product-specific positive KG/PCS | Each piece has its own physical weight |
+| BOX | product-specific positive KG/BOX | Prefer gross weight including packaging; confirm as a business rule |
+| ML | product-specific positive KG/ML | Depends on product density; do not assume 1 ML = 1 GR |
+
+weightPerUnit must be positive and have no more than six effective fractional digits. This prevents a KG or GR item from being configured with a physically contradictory conversion factor. PCS, BOX, and ML remain product-specific.
+
+Minimum stock must be nonnegative and follow the same fractional precision rule as the Base UOM. Bin maximum capacity must be positive; minimum threshold must be between zero and maximum capacity.
+
+### Important limits and open decisions
+
+- The 38-digit precision is a database representation limit, not a suitable operational business maximum. Actual maximum item quantity, unit weight, and bin capacity still need explicit business limits before production.
+- BOX gross-versus-net weight must be confirmed.
+- For ML, density must be supplied for the actual product and the value's provenance/measurement method should be considered for future auditability.
+- These rules are being added to the Draft implementation branch and require CI and review. They do not authorize changes to live data.
