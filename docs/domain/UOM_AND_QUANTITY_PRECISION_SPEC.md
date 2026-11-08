@@ -316,7 +316,7 @@ The current Transfer page uses `step="0.01"` and sends `parseFloat(form.quantity
 - Backend must reject unsupported UOM codes, even if the frontend dropdown does not offer them.
 - `minStockLevel` must be non-negative and obey the item's Base UOM precision. Zero should remain valid to support items with no minimum-stock alert threshold.
 - `weightPerUnit` must be positive and use the canonical KG-per-Base-UOM meaning once approved.
-- Once an item has stock or inventory-ledger history, changing its Base UOM should be prohibited in the initial implementation. A later controlled conversion/migration workflow can be designed separately.
+- Once an item has stock or inventory-ledger history, changing its Base UOM or `weightPerUnit` should be prohibited in the initial implementation. The ledger currently does not snapshot transaction-time weight/UOM, so changing either master value can alter historical physical-weight reconstruction. A later controlled conversion/migration or effective-dated measurement-version workflow can be designed separately.
 - For the first iteration, a centralized backend policy/registry for the five supported UOM codes is preferable to a new configurable UOM database table. This keeps the implementation bounded while ensuring that the frontend is not the authority. A database-backed UOM catalog can be introduced when tenant-specific/custom units are an actual requirement.
 - The proposed integer-only GR/ML policy is a simplifying first-release decision, not a universal warehouse standard. If the intended operations include fractional grams or milliliters, that decision must change before implementation.
 
@@ -350,7 +350,7 @@ The product owner has instructed the review to proceed using the recommended bas
 - GR and ML use whole-number quantities in the first release.
 - `weightPerUnit` represents KG per one unit of the item's Base UOM.
 - BOX weight is gross weight, including packaging.
-- Base UOM cannot be changed after the item has stock or inventory-ledger history.
+- Base UOM and `weightPerUnit` cannot be changed after the item has stock or inventory-ledger history.
 - The first release uses a centralized backend UOM policy, not a configurable UOM database table.
 - `DECIMAL(38,6)` remains the candidate precision for affected quantity and physical-weight columns, subject to entity/migration compatibility review.
 
@@ -446,3 +446,16 @@ The repository audit cannot inspect the user's live MySQL data or deployed datab
 | Existing stored UOM values conform to proposed policy | UNVERIFIED |
 | DECIMAL(38,6) is sufficient for all future operational maxima | PROPOSED — requires range confirmation |
 
+
+
+## 17. Item weight immutability and historical ledger integrity — 2026-11-09
+
+The current `InventoryLedgerEntity` stores transaction quantity and balance values and references the current `ItemEntity`. It does not preserve a transaction-time snapshot of `baseUom`, `weightPerUnit`, or calculated physical weight.
+
+If `weightPerUnit` is changed after movements have occurred, recalculating historical physical weight from the current item master can produce a different result even though no physical movement occurred. The current Item API has create/list operations only, but this is not a protection against direct database writes or a future update workflow.
+
+**Initial-release rule:** treat both `baseUom` and `weightPerUnit` as immutable once the item has any stock or inventory-ledger history. Enforce this rule in the backend domain/service layer for any future item-update path; frontend restrictions alone are insufficient.
+
+If the business later requires a weight-definition change for an existing SKU, do not overwrite the master value in place. Design a separately approved reclassification/migration process with backup, stock and occupancy reconciliation, capacity validation, and audit evidence. If multiple weight definitions must coexist over time for one SKU, introduce effective-dated measurement versions and associate stock balances and ledger movements with the applicable version, or preserve immutable transaction-time weight snapshots. A ledger snapshot alone is insufficient to resolve the weight basis of an aggregated current stock balance.
+
+This is a design guardrail only. No item update API, database migration, or deployed data has been changed.
