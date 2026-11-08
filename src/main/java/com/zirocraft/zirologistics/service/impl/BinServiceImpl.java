@@ -9,6 +9,8 @@ import com.zirocraft.zirologistics.io.response.BinResponse;
 import com.zirocraft.zirologistics.repository.BinRepository;
 import com.zirocraft.zirologistics.repository.WarehouseRepository;
 import com.zirocraft.zirologistics.service.BinService;
+import com.zirocraft.zirologistics.exception.ApiException;
+import org.springframework.http.HttpStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +38,16 @@ public class BinServiceImpl implements BinService {
             throw new ApiException(HttpStatus.CONFLICT, "Kode bin sudah digunakan.");
         }
 
+        BigDecimal minThreshold = request.getMinWeightThreshold() != null
+                ? request.getMinWeightThreshold() : BigDecimal.ZERO;
+        if (request.getMaxWeightCapacity() == null
+                || request.getMaxWeightCapacity().signum() <= 0
+                || minThreshold.signum() < 0
+                || minThreshold.compareTo(request.getMaxWeightCapacity()) > 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Kapasitas bin harus lebih dari 0 dan minimum threshold harus berada di antara 0 dan kapasitas maksimum.");
+        }
+
         // 3. Map & Save dengan Industrial Capacity Logic
         BinEntity bin = BinEntity.builder()
                 .warehouse(warehouse)
@@ -44,7 +56,7 @@ public class BinServiceImpl implements BinService {
                 .binCode(request.getBinCode())
                 // --- LOGIC BARU: DAFTARKAN KAPASITAS ---
                 .maxWeightCapacity(request.getMaxWeightCapacity())
-                .minWeightThreshold(request.getMinWeightThreshold() != null ? request.getMinWeightThreshold() : BigDecimal.ZERO)
+                .minWeightThreshold(minThreshold)
                 .currentWeightOccupancy(BigDecimal.ZERO) // <--- WAJIB: Mulai dari Nol, bukan NULL
                 .isDeleted(false)
                 .build();
