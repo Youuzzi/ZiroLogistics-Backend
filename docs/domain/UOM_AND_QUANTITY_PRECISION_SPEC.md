@@ -2,8 +2,8 @@
 
 **Project:** ZiroLogistics WMS  
 **Document ID:** WMS-DOMAIN-UOM-001  
-**Version:** 0.1  
-**Status:** Draft — Proposed, not approved for implementation  
+**Version:** 0.2  
+**Status:** Draft PR — domain baseline accepted for design; implementation not approved  
 **Last updated:** 2026-11-09
 
 > This document records the proposed domain contract and the findings that motivate it. It is not authorization to change production code, database migrations, or deployed data.
@@ -339,3 +339,32 @@ The audit recommends the following baseline, subject to product-owner confirmati
 
 The above is a recommendation, not an approval. The product owner must explicitly confirm or amend it before implementation.
 
+
+
+## 15. Review disposition — working domain baseline (2026-11-09)
+
+The product owner has instructed the review to proceed using the recommended baseline in Section 14.5. For this specification, the following are treated as the accepted working assumptions for design:
+
+- PCS and BOX use whole-number quantities.
+- KG supports up to three fractional digits.
+- GR and ML use whole-number quantities in the first release.
+- `weightPerUnit` represents KG per one unit of the item's Base UOM.
+- BOX weight is gross weight, including packaging.
+- Base UOM cannot be changed after the item has stock or inventory-ledger history.
+- The first release uses a centralized backend UOM policy, not a configurable UOM database table.
+- `DECIMAL(38,6)` remains the candidate precision for affected quantity and physical-weight columns, subject to entity/migration compatibility review.
+
+These assumptions are a design baseline for documentation and review. They do not authorize implementation or deployment.
+
+### Remaining implementation gates
+
+Before production implementation, the team must still:
+
+1. Confirm operational maximum quantity and weight ranges against MySQL `DECIMAL(38,6)`, Java `BigDecimal`, and entity column mappings.
+2. Confirm exact entity/table/column mappings and all affected migration columns.
+3. Define the API error response contract for UOM precision violations.
+4. Define how existing records and existing databases are migrated safely.
+5. Verify that all current UOM values in stored data are supported; do not assume the frontend dropdown represents every historical database value.
+6. Decide whether ML-based weight is mandatory for every item or whether items without a known weight can be excluded from weight-capacity calculations under an explicit business rule.
+
+**Implementation status remains NOT APPROVED.** A documentation PR may be reviewed and merged independently; production code and database changes require a separate explicit authorization.
