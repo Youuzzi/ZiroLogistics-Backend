@@ -509,3 +509,33 @@ Minimum stock must be nonnegative and follow the same fractional precision rule 
 - BOX gross-versus-net weight must be confirmed.
 - For ML, density must be supplied for the actual product and the value's provenance/measurement method should be considered for future auditability.
 - These rules are being added to the Draft implementation branch and require CI and review. They do not authorize changes to live data.
+
+
+## 18. DECIMAL range and Flyway activation safeguards (2026-11-09)
+
+The proposed column definitions preserve 38 total decimal digits, but each scale reduces the available integer digits:
+
+| Domain | SQL type | Maximum integer digits | Operational meaning |
+|---|---|---:|---|
+| Quantity and minimum stock | DECIMAL(38,3) | 35 | Storage envelope only; not a recommended stock limit |
+| Weight per Base UOM | DECIMAL(38,6) | 32 | Storage envelope only; not a recommended item-weight limit |
+| Bin occupancy/capacity/threshold | DECIMAL(38,9) | 29 | Storage envelope only; not a recommended bin-capacity limit |
+
+The backend implementation must reject values outside the corresponding DECIMAL envelope before persistence. This prevents database overflow but does not establish safe warehouse operating limits. Product owners must define realistic operational maxima using expected SKU volumes, item weights, bin capacities, and growth headroom before production rollout.
+
+### Flyway activation
+
+The current application configuration has Flyway disabled by default (`spring.flyway.enabled=${FLYWAY_ENABLED:false}`) and Hibernate schema handling defaults to `validate`. Therefore, deploying V1/V2 files alone does not automatically run migrations unless the deployment explicitly enables Flyway. A fresh-install deployment must intentionally enable Flyway for its isolated target database before the application validates the schema.
+
+An existing database without `flyway_schema_history` must not simply enable Flyway and run V1. It requires a separately reviewed baseline/adoption procedure, schema diff, data backup, and validation plan. The V2 migration is designed to follow V1 in a Flyway-managed database; it is not an adoption script for the current local database.
+
+### Current implementation review status
+
+The Draft implementation PRs now include:
+- UOM quantity and minimum-stock precision validation.
+- KG/GR fixed physical-weight semantics and product-specific positive weight for PCS/BOX/ML.
+- Bin capacity/threshold validation at scale 9.
+- Application-side checks for the integer and fractional envelope of the corresponding DECIMAL columns.
+- MySQL Testcontainers coverage for V1 + V2 and fractional inbound/outbound/transfer movement paths.
+
+These changes remain Draft and require CI, code review, and product-owner confirmation of operational maxima and unresolved business semantics. A passing test suite is not production deployment approval.
