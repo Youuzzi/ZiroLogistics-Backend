@@ -46,9 +46,22 @@ class FlywayInitialSchemaIntegrationTest {
 
             try (ResultSet result = statement.executeQuery(
                     "SELECT COUNT(*) FROM flyway_schema_history " +
-                    "WHERE version = '1' AND success = 1")) {
+                    "WHERE version IN ('1', '2') AND success = 1")) {
                 assertTrue(result.next());
-                assertEquals(1, result.getInt(1), "Flyway V1 must be recorded as successful");
+                assertEquals(2, result.getInt(1), "Flyway V1 and V2 must be recorded as successful");
+            }
+
+            try (ResultSet result = statement.executeQuery(
+                    "SELECT COUNT(*) FROM information_schema.columns " +
+                    "WHERE table_schema = DATABASE() AND numeric_scale = 6 AND (" +
+                    "(table_name = 'items' AND column_name IN ('min_stock_level', 'weight_per_unit')) OR " +
+                    "(table_name = 'bins' AND column_name IN ('current_weight_occupancy', 'max_weight_capacity', 'min_weight_threshold')) OR " +
+                    "(table_name = 'inventory_stocks' AND column_name = 'quantity') OR " +
+                    "(table_name = 'inventory_ledger' AND column_name IN ('quantity_change', 'balance_before', 'balance_after'))" +
+                    ")")) {
+                assertTrue(result.next());
+                assertEquals(9, result.getInt(1),
+                        "All nine inventory quantity and physical-weight columns must use scale 6");
             }
 
             try (ResultSet result = statement.executeQuery(
