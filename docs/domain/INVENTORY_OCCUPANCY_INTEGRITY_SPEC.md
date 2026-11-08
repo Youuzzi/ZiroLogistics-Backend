@@ -432,3 +432,16 @@ The read-only calculation used all stock statuses and `quantity * item.weight_pe
 ### Evidence boundary
 
 These are user-supplied live database query outputs, classified VERIFIED for the returned rows and current queried dataset. They do not establish full historical ledger completeness, transfer behavior, concurrency correctness, or the correctness of physical bin capacity values. All queries were read-only; no production source, migration, or database row was changed by this reconciliation.
+
+
+## 7.7 Capacity feature chronology and legacy-bin provenance (2026-11-09)
+
+Repository history was reviewed to establish whether the two existing bins were created with capacity tracking:
+
+- Commit `aa34dac15cf7d815313f73dfeee3156910dbf511` introduced the original bin creation service before the capacity fields were added. At that stage, the bin creation mapping did not populate `maxWeightCapacity`, `minWeightThreshold`, or `currentWeightOccupancy`.
+- Commit `a00fd8c3a11627e210c2fcca612765995c82a4b6` introduced capacity-aware bin creation and inbound capacity validation. The request now required `maxWeightCapacity` to be non-null and positive; the service copied the requested maximum capacity and initialized occupancy to zero.
+- The live database reports A-01-01 created on 2026-04-06 and MP-A1-01 created on 2026-04-20. Both creation timestamps predate the capacity feature commit in the repository history.
+- This chronology establishes that both bins predate the capacity-aware creation implementation. It does NOT establish the exact later operation that produced the current capacity values, nor prove whether a one-time reconciliation or manual backfill occurred.
+- Current values (A-01-01 = 0.00; MP-A1-01 = 500.00) therefore have no verified provenance from the available source history. A-01-01's actual physical maximum capacity remains UNKNOWN. MP-A1-01's stored 500.00 is also not independently verified as a physical limit.
+
+**Audit conclusion:** the repository has no evidence in the reviewed commits of a formal legacy-bin capacity/occupancy backfill procedure. Treat existing capacity and occupancy values as untrusted until verified against warehouse operating specifications or a physical measurement. Do not infer a capacity from frontend form defaults, current stock, or a stored database value. No source or database changes were made during this investigation.
