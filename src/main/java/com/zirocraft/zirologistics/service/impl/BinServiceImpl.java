@@ -9,6 +9,7 @@ import com.zirocraft.zirologistics.io.response.BinResponse;
 import com.zirocraft.zirologistics.repository.BinRepository;
 import com.zirocraft.zirologistics.repository.WarehouseRepository;
 import com.zirocraft.zirologistics.service.BinService;
+import com.zirocraft.zirologistics.service.validation.BinWeightCapacityPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,13 +39,7 @@ public class BinServiceImpl implements BinService {
 
         BigDecimal minThreshold = request.getMinWeightThreshold() != null
                 ? request.getMinWeightThreshold() : BigDecimal.ZERO;
-        if (request.getMaxWeightCapacity() == null
-                || request.getMaxWeightCapacity().signum() <= 0
-                || minThreshold.signum() < 0
-                || minThreshold.compareTo(request.getMaxWeightCapacity()) > 0) {
-            throw new ApiException(HttpStatus.BAD_REQUEST,
-                    "Kapasitas bin harus lebih dari 0 dan minimum threshold harus berada di antara 0 dan kapasitas maksimum.");
-        }
+        BinWeightCapacityPolicy.validate(request.getMaxWeightCapacity(), minThreshold);
 
         // 3. Map & Save dengan Industrial Capacity Logic
         BinEntity bin = BinEntity.builder()
