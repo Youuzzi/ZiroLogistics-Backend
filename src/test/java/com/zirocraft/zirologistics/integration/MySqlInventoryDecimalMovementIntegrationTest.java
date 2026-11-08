@@ -148,10 +148,12 @@ class MySqlInventoryDecimalMovementIntegrationTest {
         assertDecimal("0.000000900",
                 binRepository.findByBinCode(destinationBin.getBinCode()).orElseThrow().getCurrentWeightOccupancy());
         assertEquals(2, ledgerRepository.count());
-        assertDecimal("-0.001", ledgerRepository.findByRequestId("MOVE-DECIMAL-001_OUT")
-                .orElseThrow().getQuantityChange());
-        assertDecimal("0.001", ledgerRepository.findByRequestId("MOVE-DECIMAL-001_IN")
-                .orElseThrow().getQuantityChange());
+        assertDecimal("-0.001", ledgerRepository.findAll().stream()
+                .filter(entry -> "MOVE-DECIMAL-001_OUT".equals(entry.getRequestId()))
+                .findFirst().orElseThrow().getQuantityChange());
+        assertDecimal("0.001", ledgerRepository.findAll().stream()
+                .filter(entry -> "MOVE-DECIMAL-001_IN".equals(entry.getRequestId()))
+                .findFirst().orElseThrow().getQuantityChange());
     }
 
     private BinEntity bin(WarehouseEntity warehouse, String code) {
