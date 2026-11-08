@@ -39,6 +39,7 @@ public final class ItemPhysicalWeightPolicy {
                     "Weight per unit untuk UOM " + normalized + " harus " + fixedExpected + " KG per unit.");
         }
 
+        DecimalPrecisionPolicy.validate(weightPerUnit, 38, 6, "Berat per unit");
         if (weightPerUnit.stripTrailingZeros().scale() > 6) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
                     "Weight per unit maksimal memiliki 6 angka desimal.");
