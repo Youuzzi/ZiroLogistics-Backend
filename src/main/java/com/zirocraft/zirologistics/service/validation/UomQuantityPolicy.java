@@ -40,6 +40,7 @@ public final class UomQuantityPolicy {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Base UOM barang tidak didukung.");
         }
 
+        DecimalPrecisionPolicy.validate(quantity, 38, 3, "Jumlah");
         int effectiveScale = Math.max(quantity.stripTrailingZeros().scale(), 0);
         if (effectiveScale > maxFractionDigits) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
@@ -63,6 +64,7 @@ public final class UomQuantityPolicy {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Base UOM barang tidak didukung.");
         }
 
+        DecimalPrecisionPolicy.validate(minimumStock, 38, 3, "Minimum stock");
         int effectiveScale = Math.max(minimumStock.stripTrailingZeros().scale(), 0);
         if (effectiveScale > maxFractionDigits) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
