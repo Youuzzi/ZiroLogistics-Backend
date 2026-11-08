@@ -51,7 +51,8 @@ class MySqlInventoryQuantityPrecisionIntegrationTest {
         registry.add("spring.datasource.username", MYSQL::getUsername);
         registry.add("spring.datasource.password", MYSQL::getPassword);
         registry.add("spring.datasource.driver-class-name", () -> MYSQL.getDriverClassName());
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create");
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        registry.add("spring.flyway.enabled", () -> "true");
         registry.add("spring.jpa.show-sql", () -> "false");
         registry.add("spring.jpa.open-in-view", () -> "false");
         registry.add("ziro.jwt.secret",
