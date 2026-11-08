@@ -23,13 +23,13 @@ public class InventoryLedgerEntity extends BaseEntity {
 
     private String transactionType;
 
-    @Column(precision = 38, scale = 6)
+    @Column(precision = 38, scale = 3)
     private BigDecimal quantityChange;
 
-    @Column(precision = 38, scale = 6)
+    @Column(precision = 38, scale = 3)
     private BigDecimal balanceBefore;
 
-    @Column(precision = 38, scale = 6)
+    @Column(precision = 38, scale = 3)
     private BigDecimal balanceAfter;
 
     @Column(unique = true)
