@@ -22,8 +22,14 @@ public class InventoryLedgerEntity extends BaseEntity {
     private BinEntity bin;
 
     private String transactionType;
+
+    @Column(precision = 38, scale = 6)
     private BigDecimal quantityChange;
+
+    @Column(precision = 38, scale = 6)
     private BigDecimal balanceBefore;
+
+    @Column(precision = 38, scale = 6)
     private BigDecimal balanceAfter;
 
     @Column(unique = true)
@@ -32,7 +38,5 @@ public class InventoryLedgerEntity extends BaseEntity {
     private String referenceNo;
     private String userId;
 
-
     private String note;
-    // ---------------------------
 }
