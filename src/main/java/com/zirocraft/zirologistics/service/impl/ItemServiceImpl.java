@@ -7,6 +7,9 @@ import com.zirocraft.zirologistics.io.request.ItemRequest;
 import com.zirocraft.zirologistics.io.response.ItemResponse;
 import com.zirocraft.zirologistics.repository.ItemRepository;
 import com.zirocraft.zirologistics.service.ItemService;
+import com.zirocraft.zirologistics.service.validation.ItemPhysicalWeightPolicy;
+import com.zirocraft.zirologistics.service.validation.UomQuantityPolicy;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -28,11 +31,14 @@ public class ItemServiceImpl implements ItemService {
             throw new ApiException(HttpStatus.CONFLICT, "SKU sudah terdaftar.");
         }
 
+        UomQuantityPolicy.validateMinimumStock(request.getBaseUom(), request.getMinStockLevel());
+        ItemPhysicalWeightPolicy.validate(request.getBaseUom(), request.getWeightPerUnit());
+
         ItemEntity item = ItemEntity.builder()
                 .sku(request.getSku())
                 .name(request.getName())
                 .description(request.getDescription())
-                .baseUom(request.getBaseUom().toUpperCase())
+                .baseUom(request.getBaseUom().trim().toUpperCase(Locale.ROOT))
                 .minStockLevel(request.getMinStockLevel())
                 .weightPerUnit(request.getWeightPerUnit()) // Industrial Mapping
                 .isDeleted(false)
