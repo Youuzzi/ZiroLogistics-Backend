@@ -4,6 +4,7 @@ import com.zirocraft.zirologistics.exception.ApiException;
 import org.springframework.http.HttpStatus;
 
 import java.math.BigDecimal;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -33,7 +34,7 @@ public final class UomQuantityPolicy {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Jumlah harus lebih dari 0.");
         }
 
-        String normalizedUom = baseUom == null ? "" : baseUom.trim().toUpperCase();
+        String normalizedUom = baseUom == null ? "" : baseUom.trim().toUpperCase(Locale.ROOT);
         Integer maxFractionDigits = MAX_FRACTION_DIGITS.get(normalizedUom);
         if (maxFractionDigits == null) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Base UOM barang tidak didukung.");
