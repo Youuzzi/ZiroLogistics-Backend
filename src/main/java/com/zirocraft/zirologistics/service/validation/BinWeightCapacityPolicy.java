@@ -24,6 +24,8 @@ public final class BinWeightCapacityPolicy {
             throw new ApiException(HttpStatus.BAD_REQUEST,
                     "Minimum threshold harus berada di antara 0 dan kapasitas maksimum.");
         }
+        DecimalPrecisionPolicy.validate(maxCapacity, 38, 9, "Kapasitas maksimum bin");
+        DecimalPrecisionPolicy.validate(minThreshold, 38, 9, "Minimum threshold");
         if (effectiveScale(maxCapacity) > MAX_FRACTION_DIGITS
                 || effectiveScale(minThreshold) > MAX_FRACTION_DIGITS) {
             throw new ApiException(HttpStatus.BAD_REQUEST,
