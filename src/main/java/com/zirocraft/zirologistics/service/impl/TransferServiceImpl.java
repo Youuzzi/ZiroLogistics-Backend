@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import com.zirocraft.zirologistics.io.request.TransferRequest;
 import com.zirocraft.zirologistics.repository.*;
 import com.zirocraft.zirologistics.service.TransferService;
+import com.zirocraft.zirologistics.service.validation.UomQuantityPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,8 @@ public class TransferServiceImpl implements TransferService {
 
         ItemEntity item = itemRepository.findBySkuForUpdate(request.getSku())
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SKU tidak ditemukan."));
+
+        UomQuantityPolicy.validate(item.getBaseUom(), request.getQuantity());
 
         // Same-SKU transfers serialize on the item lock. Check idempotency only
         // after locking so MySQL REPEATABLE READ cannot reuse an older snapshot.
