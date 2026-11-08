@@ -44,5 +44,10 @@ class BinWeightCapacityPolicyTest {
                 () -> BinWeightCapacityPolicy.validate(new BigDecimal("1.0000000001"), BigDecimal.ZERO));
         assertThrows(ApiException.class,
                 () -> BinWeightCapacityPolicy.validate(new BigDecimal("1"), new BigDecimal("0.0000000001")));
+    }    @Test
+    void rejectsCapacityOutsideDecimalIntegerRange() {
+        assertThrows(ApiException.class,
+                () -> BinWeightCapacityPolicy.validate(new BigDecimal("1E+29"), BigDecimal.ZERO));
     }
+
 }
