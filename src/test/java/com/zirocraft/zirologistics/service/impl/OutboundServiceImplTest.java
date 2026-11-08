@@ -113,4 +113,20 @@ class OutboundServiceImplTest {
         request.setQuantity(new BigDecimal(quantity));
         return request;
     }
+
+    @Test
+    void processOutboundRejectsKgPrecisionBeyondThreeDigitsBeforeBinOrStockMutation() {
+        ItemEntity item = ItemEntity.builder().sku("SKU-KG").baseUom("KG").build();
+        OutboundRequest request = request("OUT-PRECISION", "1.0001");
+        request.setSku("SKU-KG");
+        when(itemRepository.findBySkuForUpdate("SKU-KG")).thenReturn(Optional.of(item));
+
+        ApiException exception = assertThrows(ApiException.class,
+                () -> service.processOutbound(request, "operator@example.com"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
+        verifyNoInteractions(binRepository, stockRepository);
+        verify(ledgerRepository, never()).save(any());
+    }
+
 }
