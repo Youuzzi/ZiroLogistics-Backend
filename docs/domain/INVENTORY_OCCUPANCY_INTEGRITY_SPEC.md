@@ -243,6 +243,59 @@ That is a larger domain/schema change and is not part of the current implementat
 | Changing master weight can alter historical recalculated physical weight | INFERRED — consequence of current data model |
 | Direct SQL or an unreviewed future write path could change master weight | RISK — not observed as an application endpoint |
 
+## 7.3 Master-data soft-delete and lifecycle review
+
+The inspected Item, Bin, and Warehouse entities each contain an `isDeleted` flag defaulting to false. Their current controllers expose create and read operations only; no application-level delete/deactivate endpoint was found in the inspected controller/service tree.
+
+### Current source findings
+
+| Area | Observed behavior | Assessment |
+|---|---|---|
+| Item list | `findAllByIsDeletedFalse` | Active items only |
+| Bin list by warehouse | `findByWarehousePublicIdAndIsDeletedFalse` | Active bins only; does not itself establish that the parent warehouse is active |
+| Warehouse list | `findAllByIsDeletedFalse` | Active warehouses only |
+| Item movement lock | `findBySkuForUpdate` filters by SKU only | Does not exclude soft-deleted items |
+| Bin movement lock | `findByBinCodeForUpdate` filters by bin code only | Does not exclude soft-deleted bins |
+| Bin creation | Resolves warehouse by public ID without an active-state predicate | A soft-deleted warehouse is not explicitly rejected by this service |
+| Current stock list | Uses `stockRepository.findAll(pageable)` | Does not filter inactive item/bin/warehouse relationships |
+| Low-stock alerts | Query filters deleted item, bin, and warehouse | Active operational alert view |
+| Ledger history | Reads ledger records and resolves current master references | Retaining access to historical master context is useful |
+| Warehouse-to-bin relation | `cascade = CascadeType.ALL` | Future parent delete operations require explicit cascade/lifecycle review |
+
+The movement lock queries' missing active-state predicates are a latent guardrail gap: although no current application endpoint deactivates master records, a soft-deleted record created through a direct database operation or a future workflow can still be resolved by the movement services if its SKU/bin code is supplied.
+
+The stock listing currently includes every stock row, including rows associated with soft-deleted master records. This can be useful for audit/reconciliation but should not silently be presented as an active operational inventory view.
+
+The unique SKU, bin-code, and warehouse-code constraints also remain in force regardless of `isDeleted`. The current create services check for existing identifiers without an active-state filter. Therefore, a soft-deleted identifier cannot simply be reused; any reuse policy would require an explicit business decision and a safe uniqueness strategy.
+
+### Recommended lifecycle contract
+
+1. Treat soft delete as deactivation, not physical deletion. Preserve item, bin, warehouse, stock, and ledger relationships needed to interpret historical transactions.
+2. Do not deactivate an item while any non-zero stock exists in any status, or while unresolved operational reservations/adjustments exist. Historical ledger alone should not necessarily prevent deactivation; it must remain readable.
+3. Do not deactivate a bin while any non-zero stock exists in any status or while its physical occupancy is non-zero. Require stock to be moved/reconciled and occupancy to be verified first.
+4. Do not deactivate a warehouse while it contains active bins, non-zero stock, or unresolved operations. Require child bins to be safely deactivated first, after stock/occupancy reconciliation.
+5. All future movement lock queries must require active item and active bin (and an active parent warehouse if warehouse deactivation is supported). Return a clear conflict/not-found response rather than moving stock against inactive master data.
+6. Bin creation must reject an inactive warehouse.
+7. Keep historical ledger queries available after master deactivation. Do not cascade-delete ledger or stock rows from a warehouse/bin/item lifecycle operation.
+8. Separate operational stock views from audit/reconciliation views: active operational views should explicitly filter active master records; audit views should retain historical rows and identify inactive master records.
+9. Do not allow identifier reuse by default. If SKU/bin/warehouse code reuse is required, define a new immutable identity/versioning policy first; do not weaken unique constraints casually.
+10. Avoid broad `CascadeType.ALL` on the Warehouse-to-Bin relationship for lifecycle deletion. Prefer explicit service orchestration and restrictive database foreign keys; any future delete operation must not physically cascade through inventory history.
+
+### Evidence classification
+
+| Finding | Classification |
+|---|---|
+| Item, Bin, and Warehouse entities have `isDeleted` flags | VERIFIED — source |
+| Current controllers/services expose create/list operations, no delete/deactivate endpoint found | VERIFIED — inspected source tree |
+| Item/bin movement lock queries omit `isDeleted=false` | VERIFIED — repository source |
+| Bin creation does not explicitly reject a deleted warehouse | VERIFIED — service/repository source |
+| Current stock listing does not filter deleted master relationships | VERIFIED — service source |
+| Low-stock alert query excludes deleted item/bin/warehouse | VERIFIED — repository source |
+| Warehouse-to-bin mapping uses `CascadeType.ALL` | VERIFIED — entity source |
+| Existing deployed data contains soft-deleted records with stock | UNVERIFIED — live database not inspected for this condition |
+| Current UI labels or actions fully communicate lifecycle state | UNVERIFIED — frontend lifecycle review not yet completed |
+
+This section is a domain and audit recommendation only. No endpoint, entity, repository query, migration, or database record has been changed.
 ## 8. Implementation sequence
 
 1. Complete repository-wide review of every stock quantity and status mutation path.
