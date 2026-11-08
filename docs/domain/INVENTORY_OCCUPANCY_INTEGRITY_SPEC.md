@@ -393,3 +393,42 @@ Implementation and data correction require separate explicit approval.
 | All historical ledger rows are complete and chronological | UNVERIFIED — full live ledger history and ordering were not independently inspected |
 
 This section records source and supplied-database evidence only. No ledger, stock, bin, schema, or application source was changed.
+
+
+## 7.6 Live database reconciliation evidence (2026-11-09)
+
+The user executed read-only reconciliation queries against the local `zirologistics_db` MySQL database and supplied the result sets in the audit conversation. These are observations of the queried current dataset, not proof about deleted rows, external writers, or unqueried historical periods.
+
+### AVAILABLE stock versus latest ledger balance
+
+- `SKU-NASI-001` / `A-01-01`: AVAILABLE stock 30.00; latest ledger balance 30.00; status MATCH.
+- `SKU-MU-001` / `MP-A1-01`: AVAILABLE stock 250.00; latest ledger balance 250.00; status MATCH.
+- Both latest ledger entries were OUTBOUND. This verifies the two returned item/bin combinations only.
+
+### Transfer ledger coverage
+
+- Ledger transaction-type counts: INBOUND = 3; OUTBOUND = 3.
+- No TRANSFER_OUT or TRANSFER_IN rows were present in the queried database, so transfer-pair integrity is NOT TESTED (no transfer sample); an empty pair-query result is not evidence that transfer pairing works.
+
+### Zero and negative stock records
+
+- Total inventory stock records = 2; zero-quantity records = 0; negative-quantity records = 0; positive-quantity records = 2.
+- No zero/negative stock record was returned by the query.
+
+### Bin occupancy reconciliation
+
+The read-only calculation used all stock statuses and `quantity * item.weight_per_unit`, under the accepted convention that `weight_per_unit` represents KG per base-UOM unit:
+
+| Bin | Stored occupancy | Calculated occupancy | Stored capacity | Stock rows | Status |
+|---|---:|---:|---:|---:|---|
+| A-01-01 | 0.00 | 30.0000 | 0.00 | 1 AVAILABLE | OCCUPANCY_MISMATCH |
+| MP-A1-01 | 0.00 | 250.0000 | 500.00 | 1 AVAILABLE | OCCUPANCY_MISMATCH |
+
+- Both bins have a verified stored-occupancy discrepancy; total calculated occupancy is 280.0000 while total stored occupancy is 0.00.
+- MP-A1-01's calculated occupancy is below its stored capacity (250.0000 <= 500.00), subject to the assumption that the stored capacity is the correct physical limit.
+- A-01-01 has stored capacity 0.00. Its actual physical capacity is UNKNOWN; do not interpret zero as a valid capacity or invent a replacement capacity.
+- No occupancy or capacity correction has been applied. Before any write, verify physical capacity for A-01-01, confirm UOM/weight semantics and current stock, take a backup, and define an approved reconciliation procedure with audit evidence.
+
+### Evidence boundary
+
+These are user-supplied live database query outputs, classified VERIFIED for the returned rows and current queried dataset. They do not establish full historical ledger completeness, transfer behavior, concurrency correctness, or the correctness of physical bin capacity values. All queries were read-only; no production source, migration, or database row was changed by this reconciliation.
