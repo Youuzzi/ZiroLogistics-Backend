@@ -23,13 +23,13 @@ public class BinEntity extends BaseEntity {
     @Column(unique = true, nullable = false)
     private String binCode;
 
-    @Column(nullable = false, precision = 38, scale = 6)
+    @Column(nullable = false, precision = 38, scale = 9)
     private BigDecimal maxWeightCapacity;
 
-    @Column(nullable = false, precision = 38, scale = 6)
+    @Column(nullable = false, precision = 38, scale = 9)
     private BigDecimal minWeightThreshold;
 
-    @Column(nullable = false, precision = 38, scale = 6)
+    @Column(nullable = false, precision = 38, scale = 9)
     private BigDecimal currentWeightOccupancy;
 
     @Builder.Default
