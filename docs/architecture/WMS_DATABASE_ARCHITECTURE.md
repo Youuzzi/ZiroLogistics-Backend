@@ -213,6 +213,7 @@ The existing `zirologistics_db` is retained as an audit/reference database durin
 The following decisions still block final ERD and schema approval:
 
 | ID | Decision | Options / question |
+|---|---|---|
 | ADR-DB-02 | Warehouse topology | Required hierarchy levels and location uniqueness scope |
 | ADR-DB-03 | Inventory dimensions | Status, lot, serial, owner, license plate, and location granularity |
 | ADR-DB-04 | Quantity model | Supported UOMs, conversion graph, precision, rounding |
