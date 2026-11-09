@@ -1,7 +1,7 @@
 # ZiroLogistics WMS Database Architecture
 
 - **Document ID:** DB-01
-- **Version:** 0.1
+- **Version:** 0.2
 - **Status:** Proposed — architecture baseline for review
 - **Scope:** New WMS database foundation
 - **Database target:** MySQL 8.4 LTS
@@ -13,9 +13,13 @@
 
 This document establishes the architectural principles and domain boundaries for the next ZiroLogistics WMS database. It is the parent reference for the domain model, ERD, schema specification, migration plan, and database validation strategy.
 
-The goal is to support practical warehouse operations for small and medium warehouses while avoiding foundational choices that would make later expansion unnecessarily difficult.
+The product roadmap is intentionally staged:
 
-The target is **design for growth, implement for current operational needs**. This is not a commitment to implement every enterprise WMS capability in the first release.
+- **Initial target:** small and medium warehouses, with reliable receiving, storage, stock control, internal movement, and dispatch workflows.
+- **Growth stage:** support more warehouses, higher transaction volumes, richer operational controls, and additional integrations when justified by actual requirements.
+- **Long-term direction:** selectively expand toward larger and enterprise warehouse operations when product maturity and customer needs warrant it.
+
+The target is **design a sound, extensible foundation; implement only what the current stage needs**. Enterprise-scale capabilities are future options, not first-release requirements or claims about current product capability.
 
 ## 2. Current-state context
 
@@ -36,7 +40,7 @@ The existing local database `zirologistics_db` is retained as a read-only audit/
 7. **Security boundaries:** organization and warehouse access must be enforceable on the backend and reflected in data ownership.
 8. **Evolution:** new tracking dimensions and operational workflows should be addable without redesigning the entire inventory core.
 9. **Reproducibility:** a fresh database must be constructible from versioned migrations and deterministic reference/seed data.
-10. **Operational simplicity:** the initial implementation should not introduce distributed services or unnecessary enterprise workflow complexity.
+10. **Operational simplicity:** the initial implementation must remain practical for small and medium warehouses and must not introduce distributed services or unnecessary enterprise workflow complexity.
 
 ## 4. Proposed bounded context / domain map
 
@@ -67,7 +71,9 @@ Business-owned records must have an explicit ownership path. The final model mus
 
 This decision affects primary/alternate keys, uniqueness scopes, foreign keys, query filters, and authorization. A generic `tenant_id` column must not be added mechanically without defining tenant lifecycle and isolation rules.
 
-**Proposed direction for review:** keep the first operational rollout simple, but settle the organization ownership model before finalizing schema keys. Multi-warehouse support is a baseline requirement. Multi-tenant isolation is an explicit architecture decision, not an assumed implemented feature.
+**Accepted initial direction:** the first product stage serves one organization/company that may operate multiple warehouses. Warehouse ownership and user-to-warehouse access must be explicit in the model.
+
+The architecture should avoid choices that make later multi-company or multi-tenant expansion prohibitively difficult. However, full multi-tenant isolation, tenant provisioning, cross-tenant administration, and SaaS billing are **not** first-release requirements and must not be represented as implemented capabilities. Any later move to multi-company or multi-tenant operation requires a separate architecture decision and security review.
 
 ### 5.2 Warehouse and location model
 
@@ -194,13 +200,19 @@ The existing `zirologistics_db` is retained as an audit/reference database durin
 - Any later data migration requires a separately reviewed mapping, cleansing, reconciliation, and rollback plan.
 - Synthetic seed data for the new database must be clearly distinguished from migrated business data.
 
-## 11. Decisions still required
+## 11. Decisions and open design questions
 
-The following decisions block final ERD and schema approval:
+### 11.1 Accepted architecture decision
+
+| ID | Decision | Accepted direction | Consequence |
+|---|---|---|---|
+| ADR-DB-01 | Initial ownership model | One organization/company operating multiple warehouses | Model company ownership and warehouse access explicitly. Do not implement full multi-tenant SaaS complexity in the first release. Preserve a reviewed expansion path for future multi-company or multi-tenant needs. |
+
+### 11.2 Decisions still required
+
+The following decisions still block final ERD and schema approval:
 
 | ID | Decision | Options / question |
-|---|---|---|
-| ADR-DB-01 | Ownership model | Single organization / multi-company / multi-tenant |
 | ADR-DB-02 | Warehouse topology | Required hierarchy levels and location uniqueness scope |
 | ADR-DB-03 | Inventory dimensions | Status, lot, serial, owner, license plate, and location granularity |
 | ADR-DB-04 | Quantity model | Supported UOMs, conversion graph, precision, rounding |
@@ -214,7 +226,7 @@ No final table schema should be generated until these decisions have been record
 ## 12. Definition of ready for SQL implementation
 
 SQL implementation may begin when:
-- the domain model and first-release capability scope are approved;
+- the small/medium warehouse first-release capability scope is approved;
 - the ownership and warehouse hierarchy decisions are resolved;
 - inventory balance, ledger, reservation, and movement invariants are explicit;
 - UOM and measurement rules are approved;
@@ -240,4 +252,4 @@ Existing UOM, occupancy, audit, and roadmap documents should be reconciled again
 
 ---
 
-**Change policy:** This document is a proposal. Changes to approved architectural decisions must be recorded with rationale, impact, and migration consequences.
+**Change policy:** This document is a public-facing architecture proposal for an actively developed project. It describes intended design direction, not a claim that all listed capabilities are implemented or production-certified. Changes to approved architectural decisions must be recorded with rationale, impact, and migration consequences.
