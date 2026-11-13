@@ -6,7 +6,7 @@
 - **Parent:** DB-01 WMS Database Architecture
 - **Depends on:** DB-02 Business Domain & Capability Model; DB-03 Logical ERD
 - **Database target:** MySQL 8.4 LTS / InnoDB
-- **Migration tool:** Flyway
+- **Migration tool:** Flyway\n> **V1 decision authority:** For the first WMS schema, DB-14 — WMS Final Database Design Baseline is authoritative. Any OPEN/PROPOSED alternatives in this reference document are superseded where DB-14 records a FROZEN V1 decision. Retain this document for rationale and detailed requirements; do not reopen a closed DB-14 decision without new evidence or an approved scope change.\n
 
 ## 1. Purpose
 
