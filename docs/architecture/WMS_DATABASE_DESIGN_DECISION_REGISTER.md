@@ -2,7 +2,7 @@
 
 - **Document ID:** DB-13
 - **Version:** 0.1
-- **Status:** Open — product-owner decisions required
+- **Status:** Closed for V1 — superseded by DB-14 Final Database Design Baseline
 - **Parent:** DB-01 WMS Database Architecture
 - **Scope:** Decisions that must be resolved or explicitly deferred before the first new database migration
 
@@ -126,3 +126,26 @@ A recommendation written in an architecture document is not the same as product-
 ---
 
 **Public documentation note:** This register records open design questions and proposed answers. It does not represent accepted product decisions or implemented database behavior.
+
+## 8. Closure and authority update
+
+The V1 SQL-blocking decisions in this register are consolidated and frozen by **DB-14 — WMS Final Database Design Baseline**.
+
+DB-14 is the authoritative implementation baseline for V1. Where this register or another DB-01..DB-13 document still labels a decision OPEN/PROPOSED or gives an alternative, DB-14 takes precedence for the V1 schema. The earlier discussion is retained as design rationale, not as a request to repeat the audit.
+
+The following formerly open areas are closed for V1 by DB-14:
+- Company/user ownership and warehouse access.
+- Generic location hierarchy and V1 location types.
+- Physical inventory status versus separate reservation.
+- Receiving, putaway, transfer, picking, and dispatch posting boundaries.
+- Immediate atomic transfer with no in-transit lifecycle in V1.
+- Reservation allocation and balance semantics.
+- One authoritative transaction/transaction-line history; no separate writable ledger.
+- UOM set, Base-UOM-only operation, quantity and weight precision.
+- Optional weight capacity and occupancy projection.
+- Identifier, timestamp, audit, deletion, and Flyway isolation policies.
+- P0 tracking exclusions.
+
+Do not reopen these decisions during SQL integration unless a concrete contradiction in the generated schema or a failing MySQL test is demonstrated. Any such exception must be recorded as a new change decision with evidence.
+
+**Audit closure rule:** after DB-14 is implemented and the DB-14 acceptance checklist passes, the design audit is CLOSED. Remaining work belongs to SQL implementation, backend integration, or new scope—not another general audit.
