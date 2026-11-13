@@ -5,7 +5,7 @@
 - **Status:** Proposed — consolidated measurement baseline
 - **Parent:** DB-01 WMS Database Architecture
 - **Related reference:** UOM & Quantity Precision Specification v0.3 (Draft PR #4)
-- **Product stage:** Initial release for small and medium warehouses
+- **Product stage:** Initial release for small and medium warehouses\n> **V1 decision authority:** For the first WMS schema, DB-14 — WMS Final Database Design Baseline is authoritative. Any OPEN/PROPOSED alternatives in this reference document are superseded where DB-14 records a FROZEN V1 decision. Retain this document for rationale and detailed requirements; do not reopen a closed DB-14 decision without new evidence or an approved scope change.\n
 
 ## 1. Purpose and relationship
 
