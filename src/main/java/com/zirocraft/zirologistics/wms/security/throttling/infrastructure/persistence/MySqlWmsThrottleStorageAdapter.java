@@ -148,6 +148,20 @@ public final class MySqlWmsThrottleStorageAdapter implements WmsThrottleStorageP
     }
 
     @Override
+    public int resetAccountFailures(WmsThrottleBucketKey accountKey) {
+        requireKeyType(accountKey, WmsThrottleBucketType.ACCOUNT, "accountKey");
+
+        return Objects.requireNonNull(transactionTemplate.execute(status ->
+                jdbcTemplate.update("""
+                        DELETE FROM wms_login_throttle_buckets
+                        WHERE bucket_type = 'ACCOUNT'
+                          AND key_version = ?
+                          AND bucket_key_hash = ?
+                        """, accountKey.keyVersion(), digestBytes(accountKey))),
+                "Throttle account reset transaction returned no result");
+    }
+
+    @Override
     public int deleteExpiredBuckets(
             Instant retentionCutoff,
             Instant decisionTime,
