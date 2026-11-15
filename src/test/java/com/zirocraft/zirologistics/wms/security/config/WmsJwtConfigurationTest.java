@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.wms.security.config;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
@@ -21,6 +22,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class WmsJwtConfigurationTest {
+
+    @Test
+    void jwtConfigurationIsNotLoadedOutsideWmsProfile() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.register(WmsJwtConfiguration.class);
+            context.refresh();
+
+            assertThat(context.getBeansOfType(JwtEncoder.class)).isEmpty();
+            assertThat(context.getBeansOfType(JwtDecoder.class)).isEmpty();
+        }
+    }
 
     @Test
     void acceptsOnlyTheMatchingTokenProfileAndAudience() throws Exception {
