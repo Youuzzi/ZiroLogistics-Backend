@@ -134,7 +134,7 @@ If a source is ambiguous, version-specific, unavailable, or conflicts with the f
 
 ### 3.10 Security and privacy
 
-- Use OWASP ASVS as a verification checklist and select a documented target level based on deployment risk; do not claim ASVS compliance from a partial checklist.
+- Use OWASP ASVS as a verification checklist and select a documented target level based on deployment risk; use OWASP API Security Top 10 to structure API threat reviews and the OWASP Logging Cheat Sheet to shape safe application/security logging. Do not claim ASVS compliance from a partial checklist.
 - Validate input at boundaries, enforce object-level authorization, protect secrets, configure CORS narrowly, and apply rate limits to sensitive/authentication endpoints.
 - Use secure password hashing and a reviewed token/session lifecycle. Define refresh/revocation and membership disablement semantics.
 - Protect logs, exports, attachments, and integration credentials as data stores with access controls.
