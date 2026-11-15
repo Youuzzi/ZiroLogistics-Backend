@@ -1,5 +1,7 @@
 package com.zirocraft.zirologistics.service.impl;
 
+import com.zirocraft.zirologistics.config.LegacyRuntime;
+
 import com.zirocraft.zirologistics.entity.InventoryLedgerEntity;
 import com.zirocraft.zirologistics.entity.InventoryStockEntity;
 import com.zirocraft.zirologistics.io.response.LedgerResponse;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@LegacyRuntime
 public class InventoryServiceImpl {
 
     private final InventoryStockRepository stockRepository;
