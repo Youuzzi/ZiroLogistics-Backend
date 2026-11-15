@@ -16,6 +16,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import javax.sql.DataSource;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -117,7 +119,7 @@ class MySqlWmsThrottleStorageAdapterIntegrationTest {
                   AND key_version = 1
                   AND bucket_key_hash = ?
                   AND window_started_at = ?
-                """, Integer.class, digest("3"), java.sql.Timestamp.from(WINDOW));
+                """, Integer.class, digest("3"), LocalDateTime.ofInstant(WINDOW, ZoneOffset.UTC));
         assertEquals(threshold, count);
 
         Instant persistedCooldown = jdbcTemplate.queryForObject("""
@@ -126,7 +128,7 @@ class MySqlWmsThrottleStorageAdapterIntegrationTest {
                   AND key_version = 1
                   AND bucket_key_hash = ?
                   AND window_started_at = ?
-                """, (resultSet, rowNumber) -> resultSet.getTimestamp(1).toInstant(),
+                """, (resultSet, rowNumber) -> resultSet.getObject(1, LocalDateTime.class).toInstant(ZoneOffset.UTC),
                 digest("3"), java.sql.Timestamp.from(WINDOW));
         assertEquals(cooldown, persistedCooldown);
     }
@@ -136,12 +138,14 @@ class MySqlWmsThrottleStorageAdapterIntegrationTest {
         WmsThrottleBucketKey expired = key(WmsThrottleBucketType.ACCOUNT, "4");
         WmsThrottleBucketKey active = key(WmsThrottleBucketType.ACCOUNT, "5");
         WmsThrottleBucketKey source = key(WmsThrottleBucketType.SOURCE, "6");
-        Instant oldWindow = WINDOW.minusSeconds(86_400);
+        Instant oldWindow = WINDOW.minusSeconds(259_200);
+        Instant sourceWindow = oldWindow.plusSeconds(3_600);
+        Instant activeWindow = oldWindow.plusSeconds(7_200);
         Instant activeCooldown = WINDOW.plusSeconds(300);
 
         adapter.recordFailedAccountAttempt(expired, oldWindow, 1, WINDOW.minusSeconds(1));
-        adapter.recordFailedAccountAttempt(active, oldWindow, 1, activeCooldown);
-        adapter.recordSourceAttemptAndCheckAccountCooldown(source, expired, oldWindow, WINDOW);
+        adapter.recordFailedAccountAttempt(active, activeWindow, 1, activeCooldown);
+        adapter.recordSourceAttemptAndCheckAccountCooldown(source, expired, sourceWindow, WINDOW);
 
         int deleted = adapter.deleteExpiredBuckets(WINDOW.minusSeconds(1), WINDOW, 1);
         assertEquals(1, deleted);
