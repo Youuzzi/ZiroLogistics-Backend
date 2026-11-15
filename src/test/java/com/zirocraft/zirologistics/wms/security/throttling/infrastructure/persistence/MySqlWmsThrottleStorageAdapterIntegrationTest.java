@@ -129,7 +129,7 @@ class MySqlWmsThrottleStorageAdapterIntegrationTest {
                   AND bucket_key_hash = ?
                   AND window_started_at = ?
                 """, (resultSet, rowNumber) -> resultSet.getObject(1, LocalDateTime.class).toInstant(ZoneOffset.UTC),
-                digest("3"), java.sql.Timestamp.from(WINDOW));
+                digest("3"), LocalDateTime.ofInstant(WINDOW, ZoneOffset.UTC));
         assertEquals(cooldown, persistedCooldown);
     }
 
