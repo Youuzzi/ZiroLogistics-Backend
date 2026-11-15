@@ -28,7 +28,6 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
-@LegacyRuntime
 public class SecurityConfig {
 
     private final AppUserDetailService appUserDetailService;
