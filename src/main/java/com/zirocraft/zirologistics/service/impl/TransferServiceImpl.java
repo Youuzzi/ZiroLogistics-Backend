@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.service.impl;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import com.zirocraft.zirologistics.entity.*;
 import com.zirocraft.zirologistics.exception.ApiException;
@@ -18,7 +17,6 @@ import java.math.BigDecimal;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@LegacyRuntime
 public class TransferServiceImpl implements TransferService {
 
     private final ItemRepository itemRepository;
