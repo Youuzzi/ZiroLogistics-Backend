@@ -1,5 +1,7 @@
 package com.zirocraft.zirologistics.service.impl;
 
+import com.zirocraft.zirologistics.config.LegacyRuntime;
+
 import com.zirocraft.zirologistics.entity.*;
 import com.zirocraft.zirologistics.exception.ApiException;
 import org.springframework.http.HttpStatus;
@@ -14,6 +16,7 @@ import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
+@LegacyRuntime
 public class OutboundServiceImpl implements OutboundService {
 
     private final ItemRepository itemRepository;
