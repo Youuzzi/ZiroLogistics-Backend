@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.wms.security.application;
 
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.security.config.WmsJwtProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
@@ -34,10 +35,15 @@ public class WmsJwtTokenService {
 
     private final JwtEncoder jwtEncoder;
     private final WmsJwtProperties properties;
+    private final WmsMembershipAccessService membershipAccessService;
 
-    public WmsJwtTokenService(JwtEncoder jwtEncoder, WmsJwtProperties properties) {
+    public WmsJwtTokenService(
+            JwtEncoder jwtEncoder,
+            WmsJwtProperties properties,
+            WmsMembershipAccessService membershipAccessService) {
         this.jwtEncoder = jwtEncoder;
         this.properties = properties;
+        this.membershipAccessService = membershipAccessService;
     }
 
     /**
@@ -65,12 +71,12 @@ public class WmsJwtTokenService {
      * Issues a tenant-bound access token from a membership already resolved against current DB state.
      * Permissions are deliberately not copied into the token; they are resolved from the database.
      */
-    public String issueAccessToken(WmsMembershipAccess access) {
-        if (access == null) {
-            throw new IllegalArgumentException("Resolved membership access is required");
-        }
-        requireIdentifier(access.userPublicId(), "resolved user");
-        requireIdentifier(access.membershipPublicId(), "resolved membership");
+    public String issueAccessToken(String authenticatedUserPublicId, String selectedMembershipPublicId) {
+        requireIdentifier(authenticatedUserPublicId, "authenticated user");
+        requireIdentifier(selectedMembershipPublicId, "selected membership");
+
+        WmsMembershipAccess access = membershipAccessService.resolve(
+                authenticatedUserPublicId, selectedMembershipPublicId);
 
         Instant issuedAt = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
