@@ -1,5 +1,7 @@
 package com.zirocraft.zirologistics.controller;
 
+import com.zirocraft.zirologistics.config.LegacyRuntime;
+
 import com.zirocraft.zirologistics.io.response.LedgerResponse;
 import com.zirocraft.zirologistics.io.response.LowStockAlertResponse;
 import com.zirocraft.zirologistics.io.response.StockResponse;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1.0/inventory")
 @RequiredArgsConstructor
+@LegacyRuntime
 public class InventoryController {
 
     private final InventoryServiceImpl inventoryService;
