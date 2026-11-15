@@ -164,6 +164,67 @@ class MySqlWmsThrottleStorageAdapterIntegrationTest {
         assertEquals(firstCooldown, fifth.blockedUntil());
     }
 
+
+    @Test
+    void successfulAccountResetDeletesOnlyThatAccountsWindowsAndPreservesSourceHistory() {
+        WmsThrottleBucketKey account = key(WmsThrottleBucketType.ACCOUNT, "reset-target");
+        WmsThrottleBucketKey otherAccount = key(WmsThrottleBucketType.ACCOUNT, "reset-other");
+        WmsThrottleBucketKey source = key(WmsThrottleBucketType.SOURCE, "reset-source");
+        Instant olderWindow = WINDOW.minusSeconds(3_600);
+        Instant activeCooldown = WINDOW.plusSeconds(900);
+
+        adapter.recordFailedAccountAttempt(account, olderWindow, 1, WINDOW.plusSeconds(600));
+        adapter.recordFailedAccountAttempt(account, WINDOW, 1, activeCooldown);
+        adapter.recordFailedAccountAttempt(otherAccount, WINDOW, 1, activeCooldown);
+        WmsThrottlePreVerificationResult beforeReset =
+                adapter.recordSourceAttemptAndCheckAccountCooldown(source, account, WINDOW, WINDOW);
+        assertTrue(beforeReset.accountCooldownActiveAt(WINDOW));
+        assertEquals(1, beforeReset.sourceAttemptCount());
+
+        int deleted = adapter.resetAccountFailures(account);
+        assertEquals(2, deleted);
+
+        Integer accountRows = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM wms_login_throttle_buckets
+                WHERE bucket_type = 'ACCOUNT'
+                  AND key_version = ?
+                  AND bucket_key_hash = ?
+                """, Integer.class, account.keyVersion(), digest("reset-target"));
+        assertEquals(0, accountRows);
+
+        Integer otherAccountRows = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM wms_login_throttle_buckets
+                WHERE bucket_type = 'ACCOUNT'
+                  AND key_version = ?
+                  AND bucket_key_hash = ?
+                """, Integer.class, otherAccount.keyVersion(), digest("reset-other"));
+        assertEquals(1, otherAccountRows);
+
+        Integer sourceRows = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM wms_login_throttle_buckets
+                WHERE bucket_type = 'SOURCE'
+                  AND key_version = ?
+                  AND bucket_key_hash = ?
+                """, Integer.class, source.keyVersion(), digest("reset-source"));
+        assertEquals(1, sourceRows);
+
+        WmsThrottlePreVerificationResult afterReset =
+                adapter.recordSourceAttemptAndCheckAccountCooldown(source, account, WINDOW, WINDOW);
+        assertEquals(2, afterReset.sourceAttemptCount());
+        assertNull(afterReset.accountBlockedUntil());
+
+        WmsThrottleAccountFailureResult nextFailure =
+                adapter.recordFailedAccountAttempt(account, WINDOW, 3, activeCooldown);
+        assertEquals(1, nextFailure.failureCount());
+        assertNull(nextFailure.blockedUntil());
+    }
+
+    @Test
+    void resetRejectsSourceBucketBeforeDatabaseMutation() {
+        WmsThrottleBucketKey source = key(WmsThrottleBucketType.SOURCE, "reset-invalid");
+        assertThrows(IllegalArgumentException.class, () -> adapter.resetAccountFailures(source));
+    }
+
     @Test
     void cleanupIsBoundedAndRetainsActiveCooldowns() {
         WmsThrottleBucketKey expired = key(WmsThrottleBucketType.ACCOUNT, "4");
