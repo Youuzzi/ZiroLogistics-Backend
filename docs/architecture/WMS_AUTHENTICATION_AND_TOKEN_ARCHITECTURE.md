@@ -155,7 +155,8 @@ No production login endpoint should be enabled until the full HTTP security and 
 The following foundation slices have been merged:
 - WMS-only Argon2id `PasswordEncoder` configuration with a 19 MiB / 2-iteration / parallelism-1 baseline and focused matching/profile-isolation tests.
 - WMS email lookup normalization using trim and `Locale.ROOT` lowercase, centralized through `WmsUserLookupService`. Existing database values are not rewritten.
-- WMS JWT key configuration is being implemented separately from the HTTP security chain. It uses Spring OAuth2 Resource Server/Nimbus, RS256, an RSA key pair supplied by deployment environment, separate tenant-selection and access decoders, and validation for issuer, timestamp, audience, token-use, key ID, and membership-claim profile.
+- WMS JWT key configuration uses Spring OAuth2 Resource Server/Nimbus, RS256, an RSA key pair supplied by deployment environment, separate tenant-selection and access decoders, and validation for issuer, timestamp, audience, token-use, key ID, and membership-claim profile.
+- WMS token issuance is implemented as an internal service only. Tenant-selection tokens use a 5-minute lifetime; tenant-bound access tokens use a 10-minute lifetime. Both include issuer, subject, audience, issued-at, not-before, expiry, JWT ID, token-use, and configured key ID. Only access tokens include the database-resolved membership public ID (`mid`). Permission and role claims are deliberately omitted; authorization remains database-backed.
 
 The WMS JWT configuration is disabled by default, including when the WMS profile starts. A deployment must explicitly set `WMS_JWT_ENABLED=true` before the JWT beans are created. Only then are these deployment variables required:
 - `WMS_JWT_ISSUER`
