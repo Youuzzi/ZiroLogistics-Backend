@@ -148,7 +148,7 @@ class WmsTenantIdentityPersistenceIntegrationTest {
         user.setStatus(UserStatus.SUSPENDED);
         userRepository.saveAndFlush(user);
         assertThrows(WmsMembershipAccessDeniedException.class, () ->
-                membershipAccessService.resolve(user.getPublicId(), membershipA.getPublicId()));
+                membershipAccessService.resolve(userPublicId, membershipAPublicId));
         user.setStatus(UserStatus.ACTIVE);
         userRepository.saveAndFlush(user);
 
