@@ -4,7 +4,6 @@ import com.zirocraft.zirologistics.wms.security.throttling.domain.WmsThrottleBuc
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
 /**
@@ -51,7 +50,6 @@ public final class WmsLoginThrottleService {
         WmsThrottleBucketKey sourceKey = keyHasher.hashSourceAddress(clientAddress);
         Instant now = clock.instant();
         Instant sourceWindow = fixedWindowStart(now, policy.sourceWindow());
-        Instant accountWindow = fixedWindowStart(now, policy.accountFailureWindow());
 
         final WmsThrottlePreVerificationResult state;
         try {
@@ -71,7 +69,7 @@ public final class WmsLoginThrottleService {
         }
 
         Attempt attempt = reason == WmsLoginThrottleDecision.Reason.ALLOWED
-                ? new Attempt(attemptOwner, accountKey, accountWindow)
+                ? new Attempt(attemptOwner, accountKey)
                 : null;
         return new WmsLoginThrottleDecision(
                 reason, state.sourceAttemptCount(), state.accountBlockedUntil(), attempt);
@@ -80,14 +78,18 @@ public final class WmsLoginThrottleService {
     /**
      * Call only after a credential outcome has failed (including unknown-user
      * outcomes after equivalent password-work policy has been applied).
+     *
+     * The account failure is assigned to the fixed window containing the
+     * failure event, not the earlier request-arrival time.
      */
     public WmsThrottleAccountFailureResult recordFailedCredential(Attempt attempt) {
         requireOwnedAttempt(attempt);
         Instant now = clock.instant();
+        Instant accountWindow = fixedWindowStart(now, policy.accountFailureWindow());
         try {
             return storage.recordFailedAccountAttempt(
                     attempt.accountKey,
-                    attempt.accountWindowStartedAt,
+                    accountWindow,
                     policy.accountFailureThreshold(),
                     now.plus(policy.accountCooldown()));
         } catch (RuntimeException exception) {
@@ -100,6 +102,7 @@ public final class WmsLoginThrottleService {
      * confirmed ACTIVE, immediately before tenant-selection token issuance.
      *
      * This resets ACCOUNT history only. SOURCE request history is preserved.
+     * If commit outcome is unknown, the caller must fail closed and issue no token.
      */
     public int recordSuccessfulActiveUserAuthentication(Attempt attempt) {
         requireOwnedAttempt(attempt);
@@ -124,18 +127,15 @@ public final class WmsLoginThrottleService {
     }
 
     /**
-     * Opaque continuation token; account digest and window identity are not
-     * exposed to the caller or suitable for logging.
+     * Opaque continuation token; account digest is not exposed to callers.
      */
     public static final class Attempt {
         private final Object owner;
         private final WmsThrottleBucketKey accountKey;
-        private final Instant accountWindowStartedAt;
 
-        private Attempt(Object owner, WmsThrottleBucketKey accountKey, Instant accountWindowStartedAt) {
+        private Attempt(Object owner, WmsThrottleBucketKey accountKey) {
             this.owner = owner;
             this.accountKey = accountKey;
-            this.accountWindowStartedAt = accountWindowStartedAt;
         }
     }
 }
