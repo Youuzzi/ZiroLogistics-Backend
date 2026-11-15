@@ -38,8 +38,7 @@ public final class MySqlWmsThrottleStorageAdapter implements WmsThrottleStorageP
                 CASE WHEN ? <= 1 THEN ? ELSE NULL END)
             ON DUPLICATE KEY UPDATE
                 blocked_until = CASE
-                    WHEN attempt_count + 1 >= ?
-                    THEN GREATEST(COALESCE(blocked_until, ?), ?)
+                    WHEN attempt_count + 1 = ? THEN ?
                     ELSE blocked_until
                 END,
                 attempt_count = attempt_count + 1
@@ -129,7 +128,6 @@ public final class MySqlWmsThrottleStorageAdapter implements WmsThrottleStorageP
                     failureThreshold,
                     cooldownTimestamp,
                     failureThreshold,
-                    cooldownTimestamp,
                     cooldownTimestamp);
 
             return jdbcTemplate.queryForObject("""
