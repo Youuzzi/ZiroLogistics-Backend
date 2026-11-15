@@ -39,7 +39,12 @@ record WmsRsaKeyMaterial(RSAPublicKey publicKey, RSAPrivateKey privateKey) {
         }
         String begin = "-----BEGIN " + label + "-----";
         String end = "-----END " + label + "-----";
-        String body = pem.replace(begin, "").replace(end, "").replaceAll("\\s", "");
+        String normalized = pem.strip();
+        if (!normalized.startsWith(begin) || !normalized.endsWith(end)) {
+            throw new IllegalArgumentException("WMS JWT key must use PEM " + label + " format");
+        }
+        String body = normalized.substring(begin.length(), normalized.length() - end.length())
+                .replaceAll("\\s", "");
         if (body.isBlank()) {
             throw new IllegalArgumentException("WMS JWT " + label + " is empty");
         }
