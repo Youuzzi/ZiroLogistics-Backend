@@ -5,6 +5,7 @@ import com.zirocraft.zirologistics.wms.security.throttling.domain.WmsThrottleBuc
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Application orchestration for shared WMS login throttling.
@@ -53,8 +54,8 @@ public final class WmsLoginThrottleService {
 
         final WmsThrottlePreVerificationResult state;
         try {
-            state = storage.recordSourceAttemptAndCheckAccountCooldown(
-                    sourceKey, accountKey, sourceWindow, now);
+            state = Objects.requireNonNull(storage.recordSourceAttemptAndCheckAccountCooldown(
+                    sourceKey, accountKey, sourceWindow, now), "Throttle storage returned no decision");
         } catch (RuntimeException exception) {
             throw new WmsThrottleUnavailableException(exception);
         }
@@ -83,7 +84,7 @@ public final class WmsLoginThrottleService {
      * failure event, not the earlier request-arrival time.
      */
     public WmsThrottleAccountFailureResult recordFailedCredential(Attempt attempt) {
-        requireOwnedAttempt(attempt);
+        consumeOwnedAttempt(attempt);
         Instant now = clock.instant();
         Instant accountWindow = fixedWindowStart(now, policy.accountFailureWindow());
         try {
@@ -105,7 +106,7 @@ public final class WmsLoginThrottleService {
      * If commit outcome is unknown, the caller must fail closed and issue no token.
      */
     public int recordSuccessfulActiveUserAuthentication(Attempt attempt) {
-        requireOwnedAttempt(attempt);
+        consumeOwnedAttempt(attempt);
         try {
             return storage.resetAccountFailures(attempt.accountKey);
         } catch (RuntimeException exception) {
@@ -113,10 +114,13 @@ public final class WmsLoginThrottleService {
         }
     }
 
-    private void requireOwnedAttempt(Attempt attempt) {
+    private void consumeOwnedAttempt(Attempt attempt) {
         Objects.requireNonNull(attempt, "attempt must not be null");
         if (attempt.owner != attemptOwner) {
             throw new IllegalArgumentException("Attempt was not issued by this throttle service");
+        }
+        if (!attempt.completed.compareAndSet(false, true)) {
+            throw new IllegalStateException("Throttle attempt has already been completed");
         }
     }
 
@@ -132,6 +136,7 @@ public final class WmsLoginThrottleService {
     public static final class Attempt {
         private final Object owner;
         private final WmsThrottleBucketKey accountKey;
+        private final AtomicBoolean completed = new AtomicBoolean();
 
         private Attempt(Object owner, WmsThrottleBucketKey accountKey) {
             this.owner = owner;
