@@ -169,6 +169,7 @@ class MySqlWmsThrottleStorageAdapterIntegrationTest {
     void successfulAccountResetDeletesOnlyThatAccountsWindowsAndPreservesSourceHistory() {
         WmsThrottleBucketKey account = key(WmsThrottleBucketType.ACCOUNT, "reset-target");
         WmsThrottleBucketKey otherAccount = key(WmsThrottleBucketType.ACCOUNT, "reset-other");
+        WmsThrottleBucketKey previousKeyVersion = key(WmsThrottleBucketType.ACCOUNT, 2, "reset-target");
         WmsThrottleBucketKey source = key(WmsThrottleBucketType.SOURCE, "reset-source");
         Instant olderWindow = WINDOW.minusSeconds(3_600);
         Instant activeCooldown = WINDOW.plusSeconds(900);
@@ -176,6 +177,7 @@ class MySqlWmsThrottleStorageAdapterIntegrationTest {
         adapter.recordFailedAccountAttempt(account, olderWindow, 1, WINDOW.plusSeconds(600));
         adapter.recordFailedAccountAttempt(account, WINDOW, 1, activeCooldown);
         adapter.recordFailedAccountAttempt(otherAccount, WINDOW, 1, activeCooldown);
+        adapter.recordFailedAccountAttempt(previousKeyVersion, WINDOW, 1, activeCooldown);
         WmsThrottlePreVerificationResult beforeReset =
                 adapter.recordSourceAttemptAndCheckAccountCooldown(source, account, WINDOW, WINDOW);
         assertTrue(beforeReset.accountCooldownActiveAt(WINDOW));
@@ -200,6 +202,14 @@ class MySqlWmsThrottleStorageAdapterIntegrationTest {
                 """, Integer.class, otherAccount.keyVersion(), digest("reset-other"));
         assertEquals(1, otherAccountRows);
 
+        Integer previousKeyVersionRows = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM wms_login_throttle_buckets
+                WHERE bucket_type = 'ACCOUNT'
+                  AND key_version = ?
+                  AND bucket_key_hash = ?
+                """, Integer.class, previousKeyVersion.keyVersion(), digest("reset-target"));
+        assertEquals(1, previousKeyVersionRows);
+
         Integer sourceRows = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*) FROM wms_login_throttle_buckets
                 WHERE bucket_type = 'SOURCE'
@@ -211,6 +221,7 @@ class MySqlWmsThrottleStorageAdapterIntegrationTest {
         WmsThrottlePreVerificationResult afterReset =
                 adapter.recordSourceAttemptAndCheckAccountCooldown(source, account, WINDOW, WINDOW);
         assertEquals(2, afterReset.sourceAttemptCount());
+        assertEquals(0, adapter.resetAccountFailures(account), "reset must be idempotent when no rows remain");
         assertNull(afterReset.accountBlockedUntil());
 
         WmsThrottleAccountFailureResult nextFailure =
@@ -270,7 +281,11 @@ class MySqlWmsThrottleStorageAdapterIntegrationTest {
     }
 
     private static WmsThrottleBucketKey key(WmsThrottleBucketType type, String suffix) {
-        return new WmsThrottleBucketKey(type, 1, digestHex(suffix));
+        return key(type, 1, suffix);
+    }
+
+    private static WmsThrottleBucketKey key(WmsThrottleBucketType type, int keyVersion, String suffix) {
+        return new WmsThrottleBucketKey(type, keyVersion, digestHex(suffix));
     }
 
     private static String digestHex(String suffix) {
