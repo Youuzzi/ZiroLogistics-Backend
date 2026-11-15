@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.service.impl;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import com.zirocraft.zirologistics.entity.WarehouseEntity;
 import com.zirocraft.zirologistics.exception.ApiException;
@@ -19,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@LegacyRuntime
 public class WarehouseServiceImpl implements WarehouseService {
 
     private final WarehouseRepository warehouseRepository;
