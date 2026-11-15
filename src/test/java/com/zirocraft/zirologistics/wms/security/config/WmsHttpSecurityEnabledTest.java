@@ -1,7 +1,5 @@
 package com.zirocraft.zirologistics.wms.security.config;
 
-import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
-import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtAuthenticationConverter;
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtAuthenticationToken;
@@ -30,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = WmsHttpSecurityEnabledTest.ProbeController.class)
-@ContextConfiguration(classes = WmsRuntimeApplication.class)
+@ContextConfiguration(classes = WmsHttpSecurityTestApplication.class)
 @Import(WmsSecurityConfiguration.class)
 @ActiveProfiles("wms")
 @TestPropertySource(properties = "wms.security.jwt.enabled=true")
@@ -44,9 +42,6 @@ class WmsHttpSecurityEnabledTest {
 
     @MockBean
     private WmsJwtAuthenticationConverter authenticationConverter;
-
-    @MockBean
-    private WmsMembershipAccessService membershipAccessService;
 
     @Test
     void rejectsRequestsWithoutBearerToken() throws Exception {
