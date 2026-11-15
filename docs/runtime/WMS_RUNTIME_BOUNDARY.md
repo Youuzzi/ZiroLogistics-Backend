@@ -6,7 +6,7 @@ The repository currently contains a legacy warehouse application and the frozen 
 
 ## Independent entry point
 
-WMS has a dedicated Spring Boot entry point:
+WMS has a dedicated Spring Boot entry point. The bootstrap is guarded by the `wms` profile and activates that profile when launched through its `main` method. This prevents the legacy application's broad root-package component scan from discovering WMS bootstrap configuration:
 
 - Main class: `com.zirocraft.zirologistics.wms.WmsRuntimeApplication`
 - Component scan: `com.zirocraft.zirologistics.wms`
@@ -15,7 +15,7 @@ WMS has a dedicated Spring Boot entry point:
 
 Only WMS modules placed under this namespace are discovered by the WMS runtime. Legacy controllers, services, configuration, repositories, and entities remain under the legacy namespace and are not imported.
 
-The existing `ZirologisticsApplication` remains the legacy entry point during the migration. Legacy Spring components marked with `@LegacyRuntime` are excluded when the `wms` Spring profile is active, providing an additional guard if scan boundaries are intentionally changed later.
+The existing `ZirologisticsApplication` remains the legacy entry point during the migration. Its default profile does not activate the WMS bootstrap. Legacy Spring components marked with `@LegacyRuntime` are excluded when the `wms` Spring profile is active, providing an additional guard if scan boundaries are intentionally changed later.
 
 ## Database safety
 
