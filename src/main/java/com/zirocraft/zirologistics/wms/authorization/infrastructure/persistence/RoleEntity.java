@@ -13,14 +13,14 @@ import java.util.UUID;
 
 @Getter
 @Setter
-@NoArgsConstructor(access = lombok.AccessLevel.PROTECTED)
+@NoArgsConstructor
 @Entity
 @Table(name = "roles")
 public class RoleEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "public_id", nullable = false, length = 36, updatable = false)
+    @Column(name = "public_id", nullable = false, length = 36, columnDefinition = "char(36)", updatable = false)
     private String publicId;
 
     @Column(name = "tenant_id", nullable = false)
