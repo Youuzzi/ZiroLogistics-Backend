@@ -37,7 +37,8 @@ class WmsV1SchemaMigrationIntegrationTest {
              Statement statement = connection.createStatement()) {
             assertCount(statement,
                     "SELECT COUNT(*) FROM information_schema.tables " +
-                    "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'",
+                    "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' " +
+                    "AND table_name <> 'flyway_schema_history'",
                     63, "WMS V1 must create exactly 63 tables");
             assertCount(statement,
                     "SELECT COUNT(*) FROM information_schema.referential_constraints " +
@@ -50,11 +51,13 @@ class WmsV1SchemaMigrationIntegrationTest {
             assertCount(statement,
                     "SELECT COUNT(*) FROM information_schema.tables " +
                     "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' " +
+                    "AND table_name <> 'flyway_schema_history' " +
                     "AND (table_collation IS NULL OR table_collation <> 'utf8mb4_0900_ai_ci')",
                     0, "Every WMS table must use the frozen collation");
             assertCount(statement,
                     "SELECT COUNT(*) FROM information_schema.tables " +
                     "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' " +
+                    "AND table_name <> 'flyway_schema_history' " +
                     "AND engine <> 'InnoDB'",
                     0, "Every WMS table must use InnoDB");
             assertCount(statement,
