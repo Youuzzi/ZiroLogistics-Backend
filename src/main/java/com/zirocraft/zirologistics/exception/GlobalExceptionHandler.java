@@ -1,5 +1,7 @@
 package com.zirocraft.zirologistics.exception;
 
+import com.zirocraft.zirologistics.config.LegacyRuntime;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -13,6 +15,7 @@ import java.util.Map;
 
 @Slf4j
 @RestControllerAdvice
+@LegacyRuntime
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
