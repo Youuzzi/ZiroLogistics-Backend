@@ -2,12 +2,6 @@ package com.zirocraft.zirologistics.wms.identity.application;
 
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.UserRepository;
 import org.junit.jupiter.api.Test;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Profile;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.util.Optional;
 
