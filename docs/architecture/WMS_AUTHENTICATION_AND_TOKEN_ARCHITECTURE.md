@@ -157,7 +157,7 @@ The following foundation slices have been merged:
 - WMS email lookup normalization using trim and `Locale.ROOT` lowercase, centralized through `WmsUserLookupService`. Existing database values are not rewritten.
 - WMS JWT key configuration is being implemented separately from the HTTP security chain. It uses Spring OAuth2 Resource Server/Nimbus, RS256, an RSA key pair supplied by deployment environment, separate tenant-selection and access decoders, and validation for issuer, timestamp, audience, token-use, key ID, and membership-claim profile.
 
-The WMS JWT configuration requires these deployment variables when the WMS profile starts:
+The WMS JWT configuration is disabled by default, including when the WMS profile starts. A deployment must explicitly set `WMS_JWT_ENABLED=true` before the JWT beans are created. Only then are these deployment variables required:
 - `WMS_JWT_ISSUER`
 - `WMS_JWT_SELECTION_AUDIENCE`
 - `WMS_JWT_ACCESS_AUDIENCE`
