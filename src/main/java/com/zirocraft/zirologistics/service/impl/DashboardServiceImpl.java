@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.service.impl;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import com.zirocraft.zirologistics.io.response.DashboardSummaryResponse;
 import com.zirocraft.zirologistics.repository.BinRepository;
@@ -11,7 +10,6 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-@LegacyRuntime
 public class DashboardServiceImpl {
     private final WarehouseRepository warehouseRepository;
     private final BinRepository binRepository;
