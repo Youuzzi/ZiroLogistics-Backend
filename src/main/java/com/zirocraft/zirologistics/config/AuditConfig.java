@@ -11,7 +11,6 @@ import java.util.Optional;
 
 @Configuration
 @EnableJpaAuditing
-@LegacyRuntime
 public class AuditConfig {
 
     @Bean
