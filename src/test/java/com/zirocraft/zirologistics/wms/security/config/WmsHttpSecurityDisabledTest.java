@@ -1,11 +1,8 @@
 package com.zirocraft.zirologistics.wms.security.config;
 
-import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
-import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -19,7 +16,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = WmsHttpSecurityDisabledTest.ProbeController.class)
-@ContextConfiguration(classes = WmsRuntimeApplication.class)
+@ContextConfiguration(classes = WmsHttpSecurityTestApplication.class)
 @Import(WmsSecurityConfiguration.class)
 @ActiveProfiles("wms")
 @TestPropertySource(properties = "wms.security.jwt.enabled=false")
@@ -27,9 +24,6 @@ class WmsHttpSecurityDisabledTest {
 
     @Autowired
     private MockMvc mockMvc;
-
-    @MockBean
-    private WmsMembershipAccessService membershipAccessService;
 
     @Test
     void deniesEveryRequestWhenWmsJwtIsDisabled() throws Exception {
