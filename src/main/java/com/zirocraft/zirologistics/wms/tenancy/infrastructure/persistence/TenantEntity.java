@@ -13,14 +13,14 @@ import java.util.UUID;
 
 @Getter
 @Setter
-@NoArgsConstructor(access = lombok.AccessLevel.PROTECTED)
+@NoArgsConstructor
 @Entity
 @Table(name = "tenants")
 public class TenantEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "public_id", nullable = false, length = 36, updatable = false)
+    @Column(name = "public_id", nullable = false, length = 36, columnDefinition = "char(36)", updatable = false)
     private String publicId;
 
     @Column(name = "tenant_code", nullable = false, length = 64)
@@ -39,7 +39,7 @@ public class TenantEntity {
     @Column(nullable = false, length = 60)
     private String timezone = "Asia/Jakarta";
 
-    @Column(name = "default_currency", nullable = false, length = 3)
+    @Column(name = "default_currency", nullable = false, length = 3, columnDefinition = "char(3)")
     private String defaultCurrency = "IDR";
 
     @CreationTimestamp
