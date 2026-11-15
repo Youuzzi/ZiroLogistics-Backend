@@ -132,30 +132,30 @@ class WmsTenantIdentityPersistenceIntegrationTest {
         assertEquals(0, accessB.permissionCodes().size());
 
         role.setStatus(RoleStatus.INACTIVE);
-        roleRepository.saveAndFlush(role);
+        role = roleRepository.saveAndFlush(role);
         assertFalse(membershipAccessService.resolve(
                 userPublicId, membershipAPublicId)
                 .hasPermission("inventory.balance.read"));
 
         role.setStatus(RoleStatus.ACTIVE);
-        roleRepository.saveAndFlush(role);
+        role = roleRepository.saveAndFlush(role);
 
         membershipA.setStatus(MembershipStatus.SUSPENDED);
-        membershipRepository.saveAndFlush(membershipA);
+        membershipA = membershipRepository.saveAndFlush(membershipA);
         assertThrows(WmsMembershipAccessDeniedException.class, () ->
                 membershipAccessService.resolve(userPublicId, membershipAPublicId));
         membershipA.setStatus(MembershipStatus.ACTIVE);
-        membershipRepository.saveAndFlush(membershipA);
+        membershipA = membershipRepository.saveAndFlush(membershipA);
 
         user.setStatus(UserStatus.SUSPENDED);
-        userRepository.saveAndFlush(user);
+        user = userRepository.saveAndFlush(user);
         assertThrows(WmsMembershipAccessDeniedException.class, () ->
                 membershipAccessService.resolve(userPublicId, membershipAPublicId));
         user.setStatus(UserStatus.ACTIVE);
-        userRepository.saveAndFlush(user);
+        user = userRepository.saveAndFlush(user);
 
         tenantA.setStatus(TenantStatus.SUSPENDED);
-        tenantRepository.saveAndFlush(tenantA);
+        tenantA = tenantRepository.saveAndFlush(tenantA);
         assertThrows(WmsMembershipAccessDeniedException.class, () ->
                 membershipAccessService.resolve(userPublicId, membershipAPublicId));
     }
