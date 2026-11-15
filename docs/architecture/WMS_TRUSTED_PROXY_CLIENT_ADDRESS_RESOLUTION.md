@@ -1,0 +1,35 @@
+# WMS Trusted Proxy Client Address Resolution
+
+**Status:** Implemented resolver foundation; not wired into an HTTP login endpoint.  
+**Scope:** Resolve a numeric source address safely before HMAC bucket hashing.  
+**Schema:** No database migration. Frozen WMS V1 remains unchanged.
+
+## Trust model
+
+- The TCP socket peer is the starting point and is always parsed as a numeric IPv4 or IPv6 literal.
+- Forwarding metadata is ignored unless the socket peer belongs to an explicitly configured trusted proxy CIDR.
+- When the peer is trusted, the resolver parses the comma-separated `X-Forwarded-For` chain and walks it from right to left.
+- The walk stops at the first untrusted hop. This prevents an arbitrary leftmost value supplied by a client from overriding the address observed by a trusted proxy.
+- Invalid, empty, oversized, or overlong forwarding chains fall back to the socket peer address.
+- Trusted proxy CIDRs must be numeric CIDR literals. Hostnames and implicit trust-all defaults are rejected.
+
+## Operational requirements
+
+- Configure only reverse proxies controlled by the deployment. Do not trust broad private ranges merely because they are private.
+- The edge proxy must overwrite or safely append forwarding metadata according to a documented deployment policy.
+- The resolver accepts the raw header only as input; callers must pass the resolved numeric address to `WmsThrottleKeyHasher.hashSourceAddress`.
+- The resolver is not yet connected to a servlet filter/controller or login flow.
+- Proxy CIDRs, header policy, and maximum hop count must be reviewed against the actual ingress topology before production enablement.
+
+## Defensive bounds
+
+- Maximum header length: 2,048 characters.
+- Maximum forwarded hops: 16.
+- Invalid forwarding metadata falls back to the socket peer, rather than trusting malformed client-supplied values.
+- Both IPv4 and IPv6 CIDR matching are supported.
+
+## Verification scope
+
+Unit tests cover untrusted direct peers, trusted proxy resolution, right-to-left chain traversal, spoofed values beyond an untrusted hop, malformed and oversized chains, IPv6 CIDRs, invalid configuration, and invalid socket peers.
+
+No servlet integration, database persistence, rate thresholds, login endpoint, or V2 migration is included.
