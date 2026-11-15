@@ -98,10 +98,10 @@ Proposed request flow:
 5. Check the account cooldown (when the email is normalizable). If throttled, return the same generic authentication failure envelope.
 6. Perform user lookup, active-status check, and password verification only when permitted.
 7. For a wrong password or unknown account, atomically increment the account failure bucket. Ensure both outcomes follow indistinguishable external response paths.
-8. On successful authentication, clear or decay only the account failure state according to the approved policy; do not erase source-abuse history merely because one credential was valid.
+8. On successful authentication, atomically reset only the account failure state under the active HMAC key version before issuing a tenant-selection token; never erase source-abuse history.
 9. Emit safe metrics/audit events without credentials or raw identifiers.
 
-The source bucket counts every login request, including successful attempts. The account bucket counts failed credential outcomes (including unknown-account attempts) and is cleared/decayed after a successful authentication according to policy. The implementation must ensure the account cooldown check and failure increment use the same logical key/window rules.
+The source bucket counts every login request, including successful attempts. The account bucket counts failed credential outcomes (including unknown-account attempts). A successful authentication resets only ACCOUNT bucket history for the active HMAC key version; it never resets SOURCE history. The implementation must ensure the account cooldown check, failure increment, and success reset use the same normalized account identity and key version.
 
 ## 7. Threshold and cooldown policy
 
@@ -131,7 +131,26 @@ This prevents repeated requests from extending a victim's cooldown indefinitely.
 
 The MySQL adapter must use the pre-increment counter value in its atomic upsert condition so exactly one concurrent request performs the threshold-crossing transition. Do not use a rolling `GREATEST(existingBlockedUntil, now + cooldown)` update for every post-threshold failure.
 
-This policy does not yet approve numeric thresholds, window lengths, or cooldown durations. Successful-login reset/decay semantics remain a separate decision and must not erase source history.
+This policy does not yet approve numeric thresholds, window lengths, or cooldown durations. Successful-login reset semantics are defined in section 7.2 and must not erase source history.
+
+
+## 7.2 Successful-login account reset
+
+**Selected implementation policy for the next stage:** after the submitted credentials have been verified successfully and the global user is confirmed active, reset the account's failure history before issuing a tenant-selection token. The reset is an atomic delete of all ACCOUNT bucket rows matching the normalized account's active HMAC key version and digest, across fixed windows. It must not delete or modify any SOURCE bucket.
+
+Rationale:
+- A valid credential is stronger evidence than prior failed attempts; a legitimate user who proves possession of the correct password must not remain blocked by stale account failures.
+- Removing all account windows prevents an older still-active blocked_until row from unexpectedly re-blocking the account after a successful login.
+- Source history remains intact, so a successful login does not erase source-level password-spray/request pressure.
+
+Concurrency semantics are defined by database commit order:
+- A failed-attempt transaction committed before the successful-reset transaction is cleared by that reset.
+- A failed-attempt transaction committed after the reset creates/increments failure state after the successful authentication event.
+- A request that passed its pre-verification cooldown check before another request crossed the threshold may still finish password verification. If it proves the correct password, its successful reset may clear that concurrent account cooldown. This is intentional: valid credentials win over account-lockout state, while the source bucket continues to constrain request volume.
+- Do not claim that in-flight requests are cancelled when a cooldown is created.
+
+This reset operation is not implemented by the current storage port yet. Add an application-owned semantic port method and Testcontainers coverage before login integration. During key rotation, the reset must cover every active/overlap key version used by account cooldown checks; until multi-version rotation is implemented, the current single-active-key configuration is the only supported case.
+
 
 ## 8. Outage behavior
 
@@ -147,6 +166,40 @@ The service must:
 - document how operators restore service and inspect failures without accessing raw credentials.
 
 This outage choice should be confirmed against the production availability objective before release.
+
+
+## 8.1 Transaction boundaries and timeouts
+
+Keep each storage operation in its own short transaction:
+- pre-verification: source increment plus account cooldown lookup in one transaction; commit before user lookup and Argon2id verification;
+- failed credential outcome: one atomic account failure increment/cooldown transition transaction after password verification;
+- successful authentication: one atomic account reset transaction after password verification and active-user validation, before token issuance;
+- cleanup: independent bounded batch transaction, never on the login request path.
+
+Never hold a database transaction or row lock while performing Argon2id hashing/verification, calling external services, or signing/returning tokens. This avoids holding locks across intentionally expensive CPU work.
+
+Configure bounded transaction and JDBC statement timeouts. The transaction timeout, statement timeout, and MySQL lock-wait ceiling must be aligned so a request cannot wait indefinitely and the application does not retry in a tight loop. Numeric timeout values remain deployment/SLO decisions and must be load-tested; do not invent production values from the local laptop benchmark.
+
+## 8.2 Ambiguous commit and retry policy
+
+A connection failure during commit can leave the caller unable to know whether the mutation committed. The current storage contract has no per-operation idempotency identifier, so blindly retrying an increment can double-count a source request or failed credential outcome. A retry of a success-reset delete can also erase a later failed attempt.
+
+Therefore:
+- do not automatically retry any throttle state mutation after an exception where commit outcome may be unknown;
+- treat an unknown pre-verification commit outcome as a throttle-store failure: do not perform user lookup/password verification and return a generic temporary 503;
+- treat an unknown failed-account-write outcome as a throttle-store failure: do not issue the normal credential-failure response or token; return generic temporary 503;
+- treat an unknown successful-account-reset outcome as incomplete login: do not issue a tenant-selection token; return generic temporary 503;
+- a later client request is a new login attempt and is counted independently; do not replay the prior mutation internally;
+- distinguish known transaction rollback from unknown commit outcome in internal metrics/logs, without logging account/source identifiers or secrets.
+
+If future requirements demand safe automatic retries, add a separately designed operation-id/idempotency contract and additive V2 persistence with concurrency tests. Do not retrofit blind retries into the existing adapter.
+
+## 8.3 Source threshold boundary
+
+The source counter increments before password verification and returns the committed post-increment count. Interpret the configured source limit as the maximum number of requests permitted in one source fixed window: counts less than or equal to the limit may proceed; the first request whose post-increment count is greater than the limit is denied before user lookup/password verification. Thus the request that consumes the final permitted slot is allowed, and the next request is denied. The numeric limit and window duration remain unapproved.
+
+The account failure threshold has different semantics: the failed credential outcome that makes the post-increment account failure count equal to the configured threshold creates the bounded cooldown. That credential request has already been verified as failed and receives the generic authentication-failure envelope; subsequent requests observe the cooldown before password verification. Numeric threshold/window/cooldown values remain unapproved.
+
 
 ## 9. Retention and observability
 
@@ -185,7 +238,10 @@ Minimum test matrix:
 - trusted proxy and untrusted forwarded-header cases;
 - threshold boundary and cooldown expiry;
 - cooldown is bounded and cannot be extended indefinitely by attacker traffic;
-- successful authentication does not erase source-abuse history;
+- successful authentication atomically resets account failure rows but does not erase source-abuse history;
+- success-reset and concurrent failed-attempt commit ordering is deterministic and tested;
+- ambiguous commit outcomes never trigger blind mutation retries or token issuance;
+- source threshold allows the configured maximum and denies the next request;
 - concurrent updates do not lose increments;
 - concurrent requests cannot bypass the threshold;
 - account and source updates roll back or fail consistently;
@@ -199,7 +255,7 @@ Minimum test matrix:
 1. Confirm deployment has no supported managed Redis dependency, or complete the Redis-vs-MySQL decision record.
 2. Approve the threshold/cooldown and outage policy after workload and abuse-case review.
 3. Finalize additive V2 DDL and migration naming. Do not modify V1.
-4. Implement a WMS-profile-only throttle repository/service with atomic MySQL operations.
+4. Implement a WMS-profile-only throttle repository/service with atomic MySQL operations, including successful-account reset.
 5. Add Testcontainers integration and concurrency tests.
 6. Add safe metrics, cleanup, and operational documentation.
 7. Benchmark Argon2id and the combined login path.
