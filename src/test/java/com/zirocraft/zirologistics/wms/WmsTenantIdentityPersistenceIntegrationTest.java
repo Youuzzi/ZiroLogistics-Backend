@@ -1,8 +1,14 @@
 package com.zirocraft.zirologistics.wms;
 
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessDeniedException;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
+import com.zirocraft.zirologistics.wms.authorization.domain.RoleStatus;
 import com.zirocraft.zirologistics.wms.authorization.infrastructure.persistence.*;
 import com.zirocraft.zirologistics.wms.identity.domain.MembershipStatus;
+import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.*;
+import com.zirocraft.zirologistics.wms.tenancy.domain.TenantStatus;
 import com.zirocraft.zirologistics.wms.tenancy.infrastructure.persistence.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,9 +55,10 @@ class WmsTenantIdentityPersistenceIntegrationTest {
     @Autowired private PermissionRepository permissionRepository;
     @Autowired private MembershipRoleRepository membershipRoleRepository;
     @Autowired private RolePermissionRepository rolePermissionRepository;
+    @Autowired private WmsMembershipAccessService membershipAccessService;
 
     @Test
-    void mapsGlobalIdentityTenantMembershipAndTenantScopedAuthorizationAssignments() {
+    void resolvesOnlyActiveTenantMembershipAndItsCurrentPermissions() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
 
         TenantEntity tenantA = tenant("TENANT-A-" + suffix);
@@ -106,6 +113,51 @@ class WmsTenantIdentityPersistenceIntegrationTest {
         assertNotEquals(tenantA.getId(), tenantB.getId());
         assertNotNull(user.getPublicId());
         assertNotNull(membershipA.getPublicId());
+
+        String userPublicId = user.getPublicId();
+        String membershipAPublicId = membershipA.getPublicId();
+        String membershipBPublicId = membershipB.getPublicId();
+
+        WmsMembershipAccess accessA = membershipAccessService.resolve(
+                userPublicId, membershipAPublicId);
+        assertThrows(WmsMembershipAccessDeniedException.class, () ->
+                membershipAccessService.resolve("not-the-authenticated-user", membershipAPublicId));
+        WmsMembershipAccess accessB = membershipAccessService.resolve(
+                userPublicId, membershipBPublicId);
+
+        assertEquals(tenantA.getId(), accessA.tenantId());
+        assertEquals(membershipA.getId(), accessA.membershipId());
+        assertTrue(accessA.hasPermission("inventory.balance.read"));
+        assertFalse(accessB.hasPermission("inventory.balance.read"));
+        assertEquals(0, accessB.permissionCodes().size());
+
+        role.setStatus(RoleStatus.INACTIVE);
+        role = roleRepository.saveAndFlush(role);
+        assertFalse(membershipAccessService.resolve(
+                userPublicId, membershipAPublicId)
+                .hasPermission("inventory.balance.read"));
+
+        role.setStatus(RoleStatus.ACTIVE);
+        role = roleRepository.saveAndFlush(role);
+
+        membershipA.setStatus(MembershipStatus.SUSPENDED);
+        membershipA = membershipRepository.saveAndFlush(membershipA);
+        assertThrows(WmsMembershipAccessDeniedException.class, () ->
+                membershipAccessService.resolve(userPublicId, membershipAPublicId));
+        membershipA.setStatus(MembershipStatus.ACTIVE);
+        membershipA = membershipRepository.saveAndFlush(membershipA);
+
+        user.setStatus(UserStatus.SUSPENDED);
+        user = userRepository.saveAndFlush(user);
+        assertThrows(WmsMembershipAccessDeniedException.class, () ->
+                membershipAccessService.resolve(userPublicId, membershipAPublicId));
+        user.setStatus(UserStatus.ACTIVE);
+        user = userRepository.saveAndFlush(user);
+
+        tenantA.setStatus(TenantStatus.SUSPENDED);
+        tenantA = tenantRepository.saveAndFlush(tenantA);
+        assertThrows(WmsMembershipAccessDeniedException.class, () ->
+                membershipAccessService.resolve(userPublicId, membershipAPublicId));
     }
 
     private static TenantEntity tenant(String code) {
