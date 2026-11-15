@@ -64,7 +64,10 @@ class WmsLoginThrottleServiceTest {
         service.recordFailedCredential(decision.attempt());
         assertEquals(1, storage.accountFailures.size());
 
-        assertEquals(1, service.recordSuccessfulActiveUserAuthentication(decision.attempt()));
+        WmsLoginThrottleDecision successfulAttempt =
+                service.beginAttempt("user@example.com", "198.51.100.14", null);
+        assertTrue(successfulAttempt.allowed());
+        assertEquals(1, service.recordSuccessfulActiveUserAuthentication(successfulAttempt.attempt()));
         assertTrue(storage.accountFailures.isEmpty());
         assertEquals(1, storage.sourceCounts.size());
     }
@@ -89,6 +92,19 @@ class WmsLoginThrottleServiceTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> second.recordSuccessfulActiveUserAuthentication(attempt));
+    }
+
+    @Test
+    void eachAllowedAttemptCanHaveOnlyOneTerminalOutcome() {
+        FakeStorage storage = new FakeStorage();
+        WmsLoginThrottleService service = service(storage, 10, 5);
+        WmsLoginThrottleService.Attempt attempt =
+                service.beginAttempt("user@example.com", "198.51.100.17", null).attempt();
+
+        service.recordFailedCredential(attempt);
+
+        assertThrows(IllegalStateException.class,
+                () -> service.recordSuccessfulActiveUserAuthentication(attempt));
     }
 
     @Test
