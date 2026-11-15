@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.service.impl;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import com.zirocraft.zirologistics.entity.UserEntity;
 import com.zirocraft.zirologistics.exception.ApiException;
@@ -24,7 +23,6 @@ import java.util.regex.Pattern;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@LegacyRuntime
 public class AuthServiceImpl {
 
     private final UserRepository userRepository;
