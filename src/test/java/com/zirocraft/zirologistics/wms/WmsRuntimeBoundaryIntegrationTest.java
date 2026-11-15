@@ -13,7 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
-@SpringBootTest(classes = WmsRuntimeApplication.class)
+@SpringBootTest(classes = WmsRuntimeApplication.class, properties = {"spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration"})
 @ActiveProfiles({"wms", "test"})
 class WmsRuntimeBoundaryIntegrationTest {
 
