@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.service.impl;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import com.zirocraft.zirologistics.entity.BinEntity;
 import com.zirocraft.zirologistics.exception.ApiException;
@@ -21,7 +20,6 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-@LegacyRuntime
 public class BinServiceImpl implements BinService {
 
     private final BinRepository binRepository;
