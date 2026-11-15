@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.controller;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import com.zirocraft.zirologistics.io.request.InboundRequest;
 import com.zirocraft.zirologistics.service.InboundService;
@@ -13,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1.0/inbound")
 @RequiredArgsConstructor
-@LegacyRuntime
 public class InboundController {
 
     private final InboundService inboundService;
