@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.controller;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import com.zirocraft.zirologistics.io.request.TransferRequest;
 import com.zirocraft.zirologistics.service.TransferService;
@@ -13,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1.0/transfer")
 @RequiredArgsConstructor
-@LegacyRuntime
 public class TransferController {
 
     private final TransferService transferService;
