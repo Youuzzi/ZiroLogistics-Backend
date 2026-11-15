@@ -1,5 +1,7 @@
 package com.zirocraft.zirologistics.controller;
 
+import com.zirocraft.zirologistics.config.LegacyRuntime;
+
 import com.zirocraft.zirologistics.io.request.ItemRequest;
 import com.zirocraft.zirologistics.io.response.ItemResponse;
 import com.zirocraft.zirologistics.service.ItemService;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1.0/items")
 @RequiredArgsConstructor
+@LegacyRuntime
 public class ItemController {
 
     private final ItemService itemService;
