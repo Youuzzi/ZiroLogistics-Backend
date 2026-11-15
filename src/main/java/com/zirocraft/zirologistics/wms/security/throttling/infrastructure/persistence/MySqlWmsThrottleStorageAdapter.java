@@ -11,6 +11,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.Objects;
@@ -70,7 +72,7 @@ public final class MySqlWmsThrottleStorageAdapter implements WmsThrottleStorageP
             jdbcTemplate.update(UPSERT_SOURCE,
                     sourceKey.keyVersion(),
                     digestBytes(sourceKey),
-                    timestamp(sourceWindowStartedAt));
+                    utcDateTime(sourceWindowStartedAt));
 
             Long sourceCount = jdbcTemplate.queryForObject("""
                     SELECT attempt_count
@@ -85,7 +87,7 @@ public final class MySqlWmsThrottleStorageAdapter implements WmsThrottleStorageP
                     digestBytes(sourceKey),
                     timestamp(sourceWindowStartedAt));
 
-            Timestamp blockedUntil = jdbcTemplate.queryForObject("""
+            LocalDateTime blockedUntil = jdbcTemplate.queryForObject("""
                     SELECT MAX(blocked_until)
                     FROM wms_login_throttle_buckets
                     WHERE bucket_type = 'ACCOUNT'
@@ -95,11 +97,11 @@ public final class MySqlWmsThrottleStorageAdapter implements WmsThrottleStorageP
                     """, Timestamp.class,
                     accountKey.keyVersion(),
                     digestBytes(accountKey),
-                    timestamp(decisionTime));
+                    utcDateTime(decisionTime));
 
             return new WmsThrottlePreVerificationResult(
                     Objects.requireNonNull(sourceCount, "source bucket count was not returned"),
-                    blockedUntil == null ? null : blockedUntil.toInstant());
+                    blockedUntil == null ? null : blockedUntil.toInstant(ZoneOffset.UTC));
         }), "Throttle pre-verification transaction returned no result");
     }
 
@@ -118,8 +120,8 @@ public final class MySqlWmsThrottleStorageAdapter implements WmsThrottleStorageP
 
         return Objects.requireNonNull(transactionTemplate.execute(status -> {
             byte[] digest = digestBytes(accountKey);
-            Timestamp windowTimestamp = timestamp(windowStartedAt);
-            Timestamp cooldownTimestamp = timestamp(cooldownUntil);
+            LocalDateTime windowTimestamp = utcDateTime(windowStartedAt);
+            LocalDateTime cooldownTimestamp = utcDateTime(cooldownUntil);
 
             jdbcTemplate.update(UPSERT_ACCOUNT_FAILURE,
                     accountKey.keyVersion(),
@@ -140,10 +142,10 @@ public final class MySqlWmsThrottleStorageAdapter implements WmsThrottleStorageP
                       AND window_started_at = ?
                     FOR UPDATE
                     """, (resultSet, rowNumber) -> {
-                Timestamp blockedUntil = resultSet.getTimestamp("blocked_until");
+                LocalDateTime blockedUntil = resultSet.getObject("blocked_until", LocalDateTime.class);
                 return new WmsThrottleAccountFailureResult(
                         resultSet.getLong("attempt_count"),
-                        blockedUntil == null ? null : blockedUntil.toInstant());
+                        blockedUntil == null ? null : blockedUntil.toInstant(ZoneOffset.UTC));
             }, accountKey.keyVersion(), digest, windowTimestamp);
         }), "Throttle account failure transaction returned no result");
     }
@@ -166,7 +168,7 @@ public final class MySqlWmsThrottleStorageAdapter implements WmsThrottleStorageP
                           AND (blocked_until IS NULL OR blocked_until <= ?)
                         ORDER BY window_started_at
                         LIMIT ?
-                        """, timestamp(retentionCutoff), timestamp(decisionTime), batchSize)),
+                        """, utcDateTime(retentionCutoff), utcDateTime(decisionTime), batchSize)),
                 "Throttle cleanup transaction returned no result");
     }
 
@@ -184,7 +186,7 @@ public final class MySqlWmsThrottleStorageAdapter implements WmsThrottleStorageP
         return HexFormat.of().parseHex(key.digestHex());
     }
 
-    private static Timestamp timestamp(Instant instant) {
-        return Timestamp.from(instant.truncatedTo(ChronoUnit.MICROS));
+    private static LocalDateTime utcDateTime(Instant instant) {
+        return LocalDateTime.ofInstant(instant.truncatedTo(ChronoUnit.MICROS), ZoneOffset.UTC);
     }
 }
