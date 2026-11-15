@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.service.impl;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import com.zirocraft.zirologistics.entity.*;
 import com.zirocraft.zirologistics.exception.ApiException;
@@ -16,7 +15,6 @@ import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
-@LegacyRuntime
 public class OutboundServiceImpl implements OutboundService {
 
     private final ItemRepository itemRepository;
