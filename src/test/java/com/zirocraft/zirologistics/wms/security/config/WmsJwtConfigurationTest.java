@@ -98,8 +98,8 @@ class WmsJwtConfigurationTest {
     }
 
     private static String pem(String label, byte[] encoded) {
-        return "-----BEGIN " + label + "-----\\n"
-                + Base64.getMimeEncoder(64, new byte[]{'\\n'}).encodeToString(encoded)
-                + "\\n-----END " + label + "-----";
+        return "-----BEGIN " + label + "-----\n"
+                + Base64.getMimeEncoder(64, new byte[]{'\n'}).encodeToString(encoded)
+                + "\n-----END " + label + "-----";
     }
 }
