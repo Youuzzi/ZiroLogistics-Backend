@@ -5,7 +5,6 @@ import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAc
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.context.annotation.Profile;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
@@ -64,7 +63,7 @@ public class WmsJwtAuthenticationConverter implements Converter<Jwt, Authenticat
                 .map(permission -> new SimpleGrantedAuthority("PERM_" + permission))
                 .collect(Collectors.toUnmodifiableSet());
 
-        return new UsernamePasswordAuthenticationToken(principal, null, authorities);
+        return new WmsJwtAuthenticationToken(principal, authorities);
     }
 
     private static OAuth2AuthenticationException invalidToken() {
