@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.wms.security.config;
 
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtAuthenticationConverter;
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtAuthenticationToken;
@@ -43,6 +44,9 @@ class WmsHttpSecurityEnabledTest {
 
     @MockBean
     private WmsJwtAuthenticationConverter authenticationConverter;
+
+    @MockBean
+    private WmsMembershipAccessService membershipAccessService;
 
     @Test
     void rejectsRequestsWithoutBearerToken() throws Exception {
