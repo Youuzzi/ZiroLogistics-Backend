@@ -157,7 +157,7 @@ class WmsTenantIdentityPersistenceIntegrationTest {
         tenantA.setStatus(TenantStatus.SUSPENDED);
         tenantRepository.saveAndFlush(tenantA);
         assertThrows(WmsMembershipAccessDeniedException.class, () ->
-                membershipAccessService.resolve(user.getPublicId(), membershipA.getPublicId()));
+                membershipAccessService.resolve(userPublicId, membershipAPublicId));
     }
 
     private static TenantEntity tenant(String code) {
