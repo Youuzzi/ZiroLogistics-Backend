@@ -120,6 +120,8 @@ class WmsTenantIdentityPersistenceIntegrationTest {
 
         WmsMembershipAccess accessA = membershipAccessService.resolve(
                 userPublicId, membershipAPublicId);
+        assertThrows(WmsMembershipAccessDeniedException.class, () ->
+                membershipAccessService.resolve("not-the-authenticated-user", membershipAPublicId));
         WmsMembershipAccess accessB = membershipAccessService.resolve(
                 userPublicId, membershipBPublicId);
 
