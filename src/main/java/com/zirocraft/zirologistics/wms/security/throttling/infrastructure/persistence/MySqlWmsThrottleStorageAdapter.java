@@ -9,7 +9,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -85,7 +84,7 @@ public final class MySqlWmsThrottleStorageAdapter implements WmsThrottleStorageP
                     """, Long.class,
                     sourceKey.keyVersion(),
                     digestBytes(sourceKey),
-                    timestamp(sourceWindowStartedAt));
+                    utcDateTime(sourceWindowStartedAt));
 
             LocalDateTime blockedUntil = jdbcTemplate.queryForObject("""
                     SELECT MAX(blocked_until)
@@ -94,7 +93,7 @@ public final class MySqlWmsThrottleStorageAdapter implements WmsThrottleStorageP
                       AND key_version = ?
                       AND bucket_key_hash = ?
                       AND blocked_until > ?
-                    """, Timestamp.class,
+                    """, LocalDateTime.class,
                     accountKey.keyVersion(),
                     digestBytes(accountKey),
                     utcDateTime(decisionTime));
