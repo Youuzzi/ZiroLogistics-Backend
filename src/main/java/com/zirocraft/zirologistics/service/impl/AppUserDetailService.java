@@ -1,5 +1,7 @@
 package com.zirocraft.zirologistics.service.impl;
 
+import com.zirocraft.zirologistics.config.LegacyRuntime;
+
 import com.zirocraft.zirologistics.entity.UserEntity;
 import com.zirocraft.zirologistics.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +16,7 @@ import java.util.Collections;
 
 @Service
 @RequiredArgsConstructor
+@LegacyRuntime
 public class AppUserDetailService implements UserDetailsService {
 
     private final UserRepository userRepository;
