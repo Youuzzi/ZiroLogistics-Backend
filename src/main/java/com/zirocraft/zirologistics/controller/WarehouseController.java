@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.controller;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import com.zirocraft.zirologistics.io.request.WarehouseRequest;
 import com.zirocraft.zirologistics.io.response.WarehouseResponse;
@@ -16,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1.0/warehouses")
 @RequiredArgsConstructor
-@LegacyRuntime
 public class WarehouseController {
 
     private final WarehouseService warehouseService;
