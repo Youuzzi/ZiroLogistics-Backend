@@ -19,7 +19,6 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 
-import java.util.List;
 
 @Configuration(proxyBeanMethods = false)
 @Profile("wms")
@@ -72,6 +71,10 @@ public class WmsJwtConfiguration {
                 tokenUse.equals(jwt.getClaimAsString("token_use"))
                         ? OAuth2TokenValidatorResult.success()
                         : failure("Invalid token use");
+        OAuth2TokenValidator<Jwt> keyIdValidator = jwt ->
+                properties.getKeyId().equals(jwt.getHeaders().get("kid"))
+                        ? OAuth2TokenValidatorResult.success()
+                        : failure("Unknown signing key identifier");
         OAuth2TokenValidator<Jwt> membershipValidator = jwt -> {
             String membershipId = jwt.getClaimAsString("mid");
             boolean valid = membershipRequired
@@ -82,7 +85,7 @@ public class WmsJwtConfiguration {
         };
 
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
-                issuerAndTime, audienceValidator, tokenUseValidator, membershipValidator));
+                issuerAndTime, audienceValidator, tokenUseValidator, keyIdValidator, membershipValidator));
         return decoder;
     }
 
