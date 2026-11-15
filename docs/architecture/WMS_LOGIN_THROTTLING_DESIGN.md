@@ -70,8 +70,14 @@ A check-then-increment sequence implemented as separate SELECT and UPDATE statem
 
 The implementation must use a single atomic database mutation per bucket (for example, a unique-key upsert with conditional counter/window updates) or a transaction with an explicit row lock and a well-defined insert-race strategy.
 
+Use distinct semantics for the two dimensions:
+- the source bucket counts every credential-login request and is atomically updated before user lookup/password verification;
+- the account bucket tracks failed credential outcomes. Its active cooldown is checked before password verification; a failed password or unknown account atomically increments it after verification. A successful authentication clears/decays the account failure state according to the approved policy, but never clears source history.
+
+This avoids counting a successful password as a failed account attempt. It also means already in-flight requests can finish after another request crosses the account threshold; the source bucket is the pre-verification control that limits parallel bursts. This residual concurrency window must be bounded and measured in tests/load tests rather than falsely described as zero.
+
 Requirements:
-- account and source buckets must both be evaluated and updated consistently for each login attempt;
+- source bucket update and account cooldown check must have explicit transaction/consistency semantics;
 - concurrent requests for the same bucket must not lose increments;
 - the result returned to the service must be based on the post-update state;
 - use database UTC time for persisted window/cooldown comparisons to avoid clock skew between application instances;
@@ -88,14 +94,14 @@ Proposed request flow:
 1. Apply HTTP payload size, content-type, and basic request-shape validation.
 2. Resolve the client source using the trusted-proxy policy.
 3. Normalize email using `WmsEmailNormalizer` where possible.
-4. Atomically account for the source attempt and, when normalizable, the account attempt.
-5. If either bucket is currently throttled, return the same generic authentication failure envelope used for invalid credentials; do not reveal which dimension triggered it.
+4. Atomically increment/check the source bucket. If throttled, return the generic authentication failure envelope without revealing the source rule.
+5. Check the account cooldown (when the email is normalizable). If throttled, return the same generic authentication failure envelope.
 6. Perform user lookup, active-status check, and password verification only when permitted.
-7. Record failed credential outcomes against the account dimension. Ensure unknown account and wrong password follow indistinguishable external response paths.
+7. For a wrong password or unknown account, atomically increment the account failure bucket. Ensure both outcomes follow indistinguishable external response paths.
 8. On successful authentication, clear or decay only the account failure state according to the approved policy; do not erase source-abuse history merely because one credential was valid.
 9. Emit safe metrics/audit events without credentials or raw identifiers.
 
-The exact placement of source-attempt counting and failed-account counting needs a precise implementation contract. In particular, avoid counting a successful login as a failed account password attempt, while still counting it as source request volume.
+The source bucket counts every login request, including successful attempts. The account bucket counts failed credential outcomes (including unknown-account attempts) and is cleared/decayed after a successful authentication according to policy. The implementation must ensure the account cooldown check and failure increment use the same logical key/window rules.
 
 ## 7. Threshold and cooldown policy
 
