@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.security.config;
 
+import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtAuthenticationConverter;
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtAuthenticationToken;
@@ -13,6 +14,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,6 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = WmsHttpSecurityEnabledTest.ProbeController.class)
+@ContextConfiguration(classes = WmsRuntimeApplication.class)
 @Import(WmsSecurityConfiguration.class)
 @ActiveProfiles("wms")
 @TestPropertySource(properties = "wms.security.jwt.enabled=true")
