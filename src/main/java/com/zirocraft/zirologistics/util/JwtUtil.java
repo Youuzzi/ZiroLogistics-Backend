@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.util;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -18,7 +17,6 @@ import java.util.Map;
 import java.util.function.Function;
 
 @Component
-@LegacyRuntime
 public class JwtUtil {
 
     @Value("${ziro.jwt.secret}")
