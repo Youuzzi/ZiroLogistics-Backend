@@ -35,6 +35,21 @@ class WmsJwtConfigurationTest {
     }
 
     @Test
+    void jwtBeansRemainDisabledInWmsProfileUnlessExplicitlyEnabled() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.getEnvironment().setActiveProfiles("wms");
+            context.getEnvironment().getPropertySources().addFirst(
+                    new org.springframework.core.env.MapPropertySource(
+                            "test", java.util.Map.of("wms.security.jwt.enabled", "false")));
+            context.register(WmsJwtConfiguration.class);
+            context.refresh();
+
+            assertThat(context.getBeansOfType(JwtEncoder.class)).isEmpty();
+            assertThat(context.getBeansOfType(JwtDecoder.class)).isEmpty();
+        }
+    }
+
+    @Test
     void acceptsOnlyTheMatchingTokenProfileAndAudience() throws Exception {
         KeyPair pair = generateKeyPair();
         WmsJwtProperties properties = properties(pair);
