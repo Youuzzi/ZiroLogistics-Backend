@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.service.impl;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import com.zirocraft.zirologistics.entity.*;
 import com.zirocraft.zirologistics.exception.ApiException;
@@ -16,7 +15,6 @@ import java.math.RoundingMode;
 
 @Service
 @RequiredArgsConstructor
-@LegacyRuntime
 public class InboundServiceImpl implements InboundService {
 
     private final ItemRepository itemRepository;
