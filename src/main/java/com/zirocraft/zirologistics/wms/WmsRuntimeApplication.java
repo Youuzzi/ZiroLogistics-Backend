@@ -4,7 +4,6 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Profile;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 /**
  * Independent WMS application entry point.
@@ -16,7 +15,6 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @Profile("wms")
 @SpringBootApplication(scanBasePackages = "com.zirocraft.zirologistics.wms")
 @EntityScan(basePackages = "com.zirocraft.zirologistics.wms")
-@EnableJpaRepositories(basePackages = "com.zirocraft.zirologistics.wms")
 public class WmsRuntimeApplication {
 
     public static void main(String[] args) {
