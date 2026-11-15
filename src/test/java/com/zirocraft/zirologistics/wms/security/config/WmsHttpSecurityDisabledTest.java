@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(controllers = WmsHttpSecurityDisabledTest.ProbeController.class)
 @ContextConfiguration(classes = WmsHttpSecurityTestApplication.class)
-@Import(WmsSecurityConfiguration.class)
+@Import({WmsSecurityConfiguration.class, WmsHttpSecurityDisabledTest.ProbeController.class})
 @ActiveProfiles("wms")
 @TestPropertySource(properties = "wms.security.jwt.enabled=false")
 class WmsHttpSecurityDisabledTest {
