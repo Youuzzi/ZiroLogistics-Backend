@@ -114,10 +114,14 @@ class WmsTenantIdentityPersistenceIntegrationTest {
         assertNotNull(user.getPublicId());
         assertNotNull(membershipA.getPublicId());
 
+        String userPublicId = user.getPublicId();
+        String membershipAPublicId = membershipA.getPublicId();
+        String membershipBPublicId = membershipB.getPublicId();
+
         WmsMembershipAccess accessA = membershipAccessService.resolve(
-                user.getPublicId(), membershipA.getPublicId());
+                userPublicId, membershipAPublicId);
         WmsMembershipAccess accessB = membershipAccessService.resolve(
-                user.getPublicId(), membershipB.getPublicId());
+                userPublicId, membershipBPublicId);
 
         assertEquals(tenantA.getId(), accessA.tenantId());
         assertEquals(membershipA.getId(), accessA.membershipId());
@@ -128,7 +132,7 @@ class WmsTenantIdentityPersistenceIntegrationTest {
         role.setStatus(RoleStatus.INACTIVE);
         roleRepository.saveAndFlush(role);
         assertFalse(membershipAccessService.resolve(
-                user.getPublicId(), membershipA.getPublicId())
+                userPublicId, membershipAPublicId)
                 .hasPermission("inventory.balance.read"));
 
         role.setStatus(RoleStatus.ACTIVE);
@@ -137,7 +141,7 @@ class WmsTenantIdentityPersistenceIntegrationTest {
         membershipA.setStatus(MembershipStatus.SUSPENDED);
         membershipRepository.saveAndFlush(membershipA);
         assertThrows(WmsMembershipAccessDeniedException.class, () ->
-                membershipAccessService.resolve(user.getPublicId(), membershipA.getPublicId()));
+                membershipAccessService.resolve(userPublicId, membershipAPublicId));
         membershipA.setStatus(MembershipStatus.ACTIVE);
         membershipRepository.saveAndFlush(membershipA);
 
