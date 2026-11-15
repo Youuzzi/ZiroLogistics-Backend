@@ -1,6 +1,6 @@
 package com.zirocraft.zirologistics.integration;
 
-import org.flywaydb.core.Flyway;
+import org.flywaydb.core.Flyway;\nimport org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
