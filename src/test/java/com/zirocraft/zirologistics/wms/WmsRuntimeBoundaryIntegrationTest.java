@@ -13,7 +13,16 @@ import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
-@SpringBootTest(classes = WmsRuntimeApplication.class, properties = {"spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration"})
+@SpringBootTest(
+        classes = WmsRuntimeApplication.class,
+        properties = {
+                "spring.datasource.url=jdbc:h2:mem:wms_runtime_boundary;DB_CLOSE_DELAY=-1;MODE=MySQL",
+                "spring.datasource.username=sa",
+                "spring.datasource.password=",
+                "spring.datasource.driver-class-name=org.h2.Driver",
+                "spring.jpa.hibernate.ddl-auto=none",
+                "spring.flyway.enabled=false"
+        })
 @ActiveProfiles({"wms", "test"})
 class WmsRuntimeBoundaryIntegrationTest {
 
