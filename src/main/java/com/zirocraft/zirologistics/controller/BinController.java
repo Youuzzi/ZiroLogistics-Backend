@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.controller;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import com.zirocraft.zirologistics.io.request.BinRequest;
 import com.zirocraft.zirologistics.io.response.BinResponse;
@@ -16,7 +15,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1.0/bins")
 @RequiredArgsConstructor
-@LegacyRuntime
 public class BinController {
 
     private final BinService binService;
