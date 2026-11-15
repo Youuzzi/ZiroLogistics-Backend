@@ -13,7 +13,7 @@ The WMS runtime now has:
 - effective permissions resolved from current active database assignments;
 - no WMS login/register/tenant-selection/refresh/logout endpoints and no WMS HTTP security filter chain.
 
-The repository currently has Spring Security and JJWT 0.11.5 dependencies. The WMS implementation must not reuse the legacy application's authentication principal, JWT subject semantics, filter chain, or role model without a separate compatibility review.
+The repository has Spring Security, JJWT 0.11.5 (retained for the legacy runtime), and the Spring OAuth2 Resource Server JWT support used by WMS. The WMS implementation must not reuse the legacy application's authentication principal, JWT subject semantics, filter chain, or role model without a separate compatibility review.
 
 ## 2. Security invariants
 
@@ -150,7 +150,24 @@ Password changes and account-wide logout also need explicit semantics. Without a
 
 No production login endpoint should be enabled until the full HTTP security and abuse-resistance test suite passes.
 
-## 9. References
+## 9. Implemented security foundation (code status)
+
+The following foundation slices have been merged:
+- WMS-only Argon2id `PasswordEncoder` configuration with a 19 MiB / 2-iteration / parallelism-1 baseline and focused matching/profile-isolation tests.
+- WMS email lookup normalization using trim and `Locale.ROOT` lowercase, centralized through `WmsUserLookupService`. Existing database values are not rewritten.
+- WMS JWT key configuration is being implemented separately from the HTTP security chain. It uses Spring OAuth2 Resource Server/Nimbus, RS256, an RSA key pair supplied by deployment environment, separate tenant-selection and access decoders, and validation for issuer, timestamp, audience, token-use, key ID, and membership-claim profile.
+
+The WMS JWT configuration is disabled by default, including when the WMS profile starts. A deployment must explicitly set `WMS_JWT_ENABLED=true` before the JWT beans are created. Only then are these deployment variables required:
+- `WMS_JWT_ISSUER`
+- `WMS_JWT_SELECTION_AUDIENCE`
+- `WMS_JWT_ACCESS_AUDIENCE`
+- `WMS_JWT_KEY_ID`
+- `WMS_JWT_PUBLIC_KEY_PEM`
+- `WMS_JWT_PRIVATE_KEY_PEM`
+
+The private key must be provisioned through secret management and must never be committed to source control. RSA keys below 2048 bits or mismatched public/private key pairs are rejected. This initial configuration supports one active key ID; multi-key rotation and overlap are not implemented yet. No JWT signing endpoint, authentication endpoint, or `SecurityFilterChain` is enabled by this foundation.
+
+## 10. References
 
 These sources inform the design. They do not mandate the application's exact endpoint names, token lifetimes, or schema.
 
