@@ -29,6 +29,7 @@ class WmsV1SchemaMigrationIntegrationTest {
         Flyway flyway = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/wms-migration")
+                .target(MigrationVersion.fromVersion("1"))
                 .load();
         flyway.migrate();
         flyway.validate();
