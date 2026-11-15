@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.controller;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import com.zirocraft.zirologistics.io.request.AuthRequest;
 import com.zirocraft.zirologistics.io.response.AuthResponse;
@@ -14,7 +13,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1.0/auth")
 @RequiredArgsConstructor
-@LegacyRuntime
 public class AuthController {
 
     private final AuthServiceImpl authService;
