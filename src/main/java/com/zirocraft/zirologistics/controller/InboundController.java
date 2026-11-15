@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.controller;
 
+
 import com.zirocraft.zirologistics.io.request.InboundRequest;
 import com.zirocraft.zirologistics.service.InboundService;
 import jakarta.validation.Valid;

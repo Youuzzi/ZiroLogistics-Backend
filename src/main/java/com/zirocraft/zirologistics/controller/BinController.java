@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.controller;
 
+
 import com.zirocraft.zirologistics.io.request.BinRequest;
 import com.zirocraft.zirologistics.io.response.BinResponse;
 import com.zirocraft.zirologistics.service.BinService;
