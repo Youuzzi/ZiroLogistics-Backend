@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.wms.security.application;
 
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.security.config.WmsJwtProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,7 @@ import org.mockito.ArgumentCaptor;
 class WmsJwtTokenServiceTest {
 
     private JwtEncoder jwtEncoder;
+    private WmsMembershipAccessService membershipAccessService;
     private WmsJwtTokenService tokenService;
     private ArgumentCaptor<JwtEncoderParameters> parametersCaptor;
 
@@ -39,7 +41,8 @@ class WmsJwtTokenServiceTest {
         properties.setAccessAudience("zirologistics-wms-api");
         properties.setKeyId("wms-test-key-1");
 
-        tokenService = new WmsJwtTokenService(jwtEncoder, properties);
+        membershipAccessService = mock(WmsMembershipAccessService.class);
+        tokenService = new WmsJwtTokenService(jwtEncoder, properties, membershipAccessService);
         parametersCaptor = ArgumentCaptor.forClass(JwtEncoderParameters.class);
     }
 
@@ -73,7 +76,11 @@ class WmsJwtTokenServiceTest {
                 10L, "user-public-id", 20L, "tenant-public-id",
                 30L, "membership-public-id", Set.of("inventory.balance.read"));
 
-        String token = tokenService.issueAccessToken(access);
+        when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
+                .thenReturn(access);
+
+        String token = tokenService.issueAccessToken("user-public-id", "membership-public-id");
+        verify(membershipAccessService).resolve("user-public-id", "membership-public-id");
 
         assertThat(token).isEqualTo("signed.jwt.token");
         verify(jwtEncoder).encode(parametersCaptor.capture());
@@ -95,20 +102,8 @@ class WmsJwtTokenServiceTest {
     void rejectsBlankUserAndMissingResolvedMembership() {
         assertThatThrownBy(() -> tokenService.issueTenantSelectionToken(" "))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> tokenService.issueAccessToken(null))
+        assertThatThrownBy(() -> tokenService.issueAccessToken("user-public-id", " "))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test
-    void rejectsResolvedMembershipWithoutPublicIdentifiers() {
-        WmsMembershipAccess missingUser = new WmsMembershipAccess(
-                1L, " ", 2L, "tenant", 3L, "membership", Set.of());
-        WmsMembershipAccess missingMembership = new WmsMembershipAccess(
-                1L, "user", 2L, "tenant", 3L, "", Set.of());
-
-        assertThatThrownBy(() -> tokenService.issueAccessToken(missingUser))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> tokenService.issueAccessToken(missingMembership))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
 }
