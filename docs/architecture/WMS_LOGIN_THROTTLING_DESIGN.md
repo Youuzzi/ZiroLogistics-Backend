@@ -98,7 +98,7 @@ Proposed request flow:
 5. Check the account cooldown (when the email is normalizable). If throttled, return the same generic authentication failure envelope.
 6. Perform user lookup, active-status check, and password verification only when permitted.
 7. For a wrong password or unknown account, atomically increment the account failure bucket. Ensure both outcomes follow indistinguishable external response paths.
-8. On successful authentication, clear or decay only the account failure state according to the approved policy; do not erase source-abuse history merely because one credential was valid.
+8. On successful authentication, atomically reset only the account failure state under the active HMAC key version before issuing a tenant-selection token; never erase source-abuse history.
 9. Emit safe metrics/audit events without credentials or raw identifiers.
 
 The source bucket counts every login request, including successful attempts. The account bucket counts failed credential outcomes (including unknown-account attempts). A successful authentication resets only ACCOUNT bucket history for the active HMAC key version; it never resets SOURCE history. The implementation must ensure the account cooldown check, failure increment, and success reset use the same normalized account identity and key version.
@@ -131,7 +131,7 @@ This prevents repeated requests from extending a victim's cooldown indefinitely.
 
 The MySQL adapter must use the pre-increment counter value in its atomic upsert condition so exactly one concurrent request performs the threshold-crossing transition. Do not use a rolling `GREATEST(existingBlockedUntil, now + cooldown)` update for every post-threshold failure.
 
-This policy does not yet approve numeric thresholds, window lengths, or cooldown durations. Successful-login reset/decay semantics remain a separate decision and must not erase source history.
+This policy does not yet approve numeric thresholds, window lengths, or cooldown durations. Successful-login reset semantics are defined in section 7.2 and must not erase source history.
 
 
 ## 7.2 Successful-login account reset
