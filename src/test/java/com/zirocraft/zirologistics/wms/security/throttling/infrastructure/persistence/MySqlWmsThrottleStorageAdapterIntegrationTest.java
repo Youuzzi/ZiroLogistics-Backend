@@ -134,6 +134,37 @@ class MySqlWmsThrottleStorageAdapterIntegrationTest {
     }
 
     @Test
+    void repeatedFailuresDoNotExtendCooldownAfterThresholdCrossing() {
+        WmsThrottleBucketKey account = key(WmsThrottleBucketType.ACCOUNT, "9");
+        Instant firstCooldown = WINDOW.plusSeconds(300);
+
+        WmsThrottleAccountFailureResult first = adapter.recordFailedAccountAttempt(
+                account, WINDOW, 3, firstCooldown);
+        assertEquals(1, first.failureCount());
+        assertNull(first.blockedUntil());
+
+        WmsThrottleAccountFailureResult second = adapter.recordFailedAccountAttempt(
+                account, WINDOW, 3, WINDOW.plusSeconds(600));
+        assertEquals(2, second.failureCount());
+        assertNull(second.blockedUntil());
+
+        WmsThrottleAccountFailureResult threshold = adapter.recordFailedAccountAttempt(
+                account, WINDOW, 3, firstCooldown);
+        assertEquals(3, threshold.failureCount());
+        assertEquals(firstCooldown, threshold.blockedUntil());
+
+        WmsThrottleAccountFailureResult fourth = adapter.recordFailedAccountAttempt(
+                account, WINDOW, 3, WINDOW.plusSeconds(3_600));
+        assertEquals(4, fourth.failureCount());
+        assertEquals(firstCooldown, fourth.blockedUntil());
+
+        WmsThrottleAccountFailureResult fifth = adapter.recordFailedAccountAttempt(
+                account, WINDOW, 3, WINDOW.plusSeconds(7_200));
+        assertEquals(5, fifth.failureCount());
+        assertEquals(firstCooldown, fifth.blockedUntil());
+    }
+
+    @Test
     void cleanupIsBoundedAndRetainsActiveCooldowns() {
         WmsThrottleBucketKey expired = key(WmsThrottleBucketType.ACCOUNT, "4");
         WmsThrottleBucketKey active = key(WmsThrottleBucketType.ACCOUNT, "5");

@@ -123,6 +123,16 @@ Policy requirements:
 - ensure legitimate users behind NAT/shared IPs are not disproportionately blocked;
 - provide documented administrative recovery that does not expose a bypass endpoint.
 
+## 7.1 Bounded cooldown semantics
+
+For a fixed account window, the cooldown is created exactly once when the atomic failure counter crosses the configured threshold. Later failures in the same window must not move the existing `blocked_until` timestamp forward.
+
+This prevents repeated requests from extending a victim's cooldown indefinitely. The cooldown duration is measured from the threshold-crossing decision, not from every subsequent request. When the cooldown expires, the account may attempt authentication again; the source bucket remains an independent control. A new account window can independently cross its threshold and create a new cooldown.
+
+The MySQL adapter must use the pre-increment counter value in its atomic upsert condition so exactly one concurrent request performs the threshold-crossing transition. Do not use a rolling `GREATEST(existingBlockedUntil, now + cooldown)` update for every post-threshold failure.
+
+This policy does not yet approve numeric thresholds, window lengths, or cooldown durations. Successful-login reset/decay semantics remain a separate decision and must not erase source history.
+
 ## 8. Outage behavior
 
 The throttle is part of the credential-authentication security boundary.
