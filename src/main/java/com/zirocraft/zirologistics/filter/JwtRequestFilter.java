@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.filter;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import com.zirocraft.zirologistics.service.impl.AppUserDetailService;
 import com.zirocraft.zirologistics.util.JwtUtil;
@@ -20,7 +19,6 @@ import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
-@LegacyRuntime
 public class JwtRequestFilter extends OncePerRequestFilter {
 
     private final AppUserDetailService userDetailsService;
