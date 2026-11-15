@@ -1,6 +1,6 @@
 # WMS V1 — Actual Schema Implementation Baseline
 
-- **Status:** Schema source frozen; migration validation pending CI
+- **Status:** Schema source frozen; migration passed the main-branch CI gate after PR #11 merge
 - **Database:** `zirowms_v1`
 - **Ownership model:** tenant-based
 - **Target compatibility:** MySQL 8.4 (must pass the dedicated Testcontainers gate)
@@ -21,7 +21,7 @@ The exported baseline contains:
 - BIGINT AUTO_INCREMENT primary keys;
 - no application rows or seed data in the export.
 
-The export header reports **MySQL Server 8.0.44**, while the intended deployment/test target is MySQL 8.4. This is an explicit compatibility gate, not an assumption: the WMS migration integration test runs the complete migration on a disposable MySQL 8.4 Testcontainers database. Do not mark MySQL 8.4 compatibility verified until that CI test passes.
+The export header reports **MySQL Server 8.0.44**, while the intended deployment/test target is MySQL 8.4. The complete WMS migration was executed by the dedicated integration test on a disposable MySQL 8.4 Testcontainers database, and the PR #11 main-branch CI run passed after merge. This verifies migration compatibility for the tested migration path; it does not by itself verify application runtime mappings or production deployment behavior.
 
 ## 2. Tenant model authority
 
@@ -56,7 +56,7 @@ No sample tenant, user, password, role assignment, or operational data is seeded
 5. all tables use InnoDB;
 6. all tables use `utf8mb4_0900_ai_ci`.
 
-The test does not connect to a developer database. A passing CI run is required before merging the migration PR.
+The test does not connect to a developer database. The migration PR was merged after its CI run passed. The main-branch CI run after merge also passed. This gate validates migration execution and schema structure only; it does not validate WMS application runtime behavior.
 
 ## 5. Backend implementation order after migration approval
 
