@@ -2,6 +2,7 @@ package com.zirocraft.zirologistics.wms.authorization.application;
 
 import com.zirocraft.zirologistics.wms.authorization.infrastructure.persistence.WmsMembershipAccessProjection;
 import com.zirocraft.zirologistics.wms.authorization.infrastructure.persistence.WmsMembershipAccessRepository;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,7 @@ import java.util.Set;
  * access token have been independently authenticated.
  */
 @Service
+@Profile("wms")
 public class WmsMembershipAccessService {
 
     private final WmsMembershipAccessRepository accessRepository;
