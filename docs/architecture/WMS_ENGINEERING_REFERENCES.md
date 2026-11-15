@@ -71,6 +71,17 @@ This list deliberately separates formal/open standards from product-vendor docum
 - Use in ZiroLogistics: validate applied migration names/types/checksums against available migrations. Migration tests must run against disposable databases.
 - Applicability note: validation detects migration history/checksum drift; it does not prove that business data or application mappings are correct.
 
+### OWASP Logging Cheat Sheet
+- Official guidance: https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html
+- Use in ZiroLogistics: application/security event logging, event selection, safe log content, access restrictions, verification, monitoring, and retention considerations.
+- Applicability note: logging scope and retention must be proportionate to risk and applicable privacy/legal requirements; do not indiscriminately collect sensitive data.
+
+### OWASP API Security Top 10 (2023)
+- Official project: https://owasp.org/projects/api-security-project
+- Official edition: https://api-security.owasp.org/editions/2023/en/0x11-t10/
+- Use in ZiroLogistics: threat-model object-level authorization (API1), authentication (API2), property-level authorization/mass assignment (API3), resource consumption (API4), function-level authorization (API5), sensitive business flows (API6), and API inventory/integration risks.
+- Applicability note: the Top 10 is an awareness and risk taxonomy, not a certification or complete security test plan.
+
 ## E. Product-specific decisions still required
 
 The references above do not settle these decisions for ZiroLogistics. They require product analysis and, where appropriate, an ADR:
