@@ -1,6 +1,6 @@
 # WMS Login Throttling Storage Port and Redis Readiness
 
-**Status:** Architecture direction approved; implementation details and numeric security policy remain pending.  
+**Status:** Architecture direction approved; semantic storage port implemented; MySQL adapter and numeric security policy pending.  
 **Date:** 2026-11-15  
 **Scope:** Storage boundary for WMS credential-login throttling.  
 **Related design:** [WMS Login Throttling Design](WMS_LOGIN_THROTTLING_DESIGN.md)  
@@ -29,35 +29,37 @@ A process-local map or Caffeine cache is not an acceptable substitute: separate 
 
 The initial MySQL implementation must still be designed for concurrency. A read-then-write counter is not acceptable. Updates and decisions must be atomic at the logical operation boundary, using database transactions, unique constraints, conditional updates/upserts, or row locking with tested insert-race handling.
 
-## 3. Storage port contract
+## 3. Implemented semantic storage port
 
-The application layer must depend on a semantic port, not a generic key/value abstraction.
+The application-owned contract is `WmsThrottleStoragePort` in the WMS throttling application package. It exposes only domain keys, UTC `Instant` values, policy inputs, and application result records. It does not expose JDBC, JPA, MySQL, Redis, or provider SDK types.
 
-The port should expose only the operations required by the throttle use case. Names below are illustrative; implementation may refine them while preserving these semantics:
+The contract currently defines:
 
-- **Evaluate pre-verification request:** atomically account for the source request and evaluate the current account cooldown before password verification. Return a decision based on committed/post-update state.
-- **Record failed credential outcome:** atomically increment the account failure state after a wrong password or unknown account outcome.
-- **Record successful credential outcome:** clear or decay only the account failure state according to the approved policy. Never erase source history as a side effect of successful authentication.
-- **Cleanup expired state:** bounded maintenance operation; must not be on the login request critical path.
+- **Pre-verification operation:** atomically increment the source bucket and check the account's active cooldown at the supplied decision instant. The returned source count is the committed post-increment count.
+- **Failed credential outcome:** atomically increment the account failure bucket; the adapter receives the approved threshold and absolute cooldown instant as explicit policy inputs.
+- **Bounded cleanup:** delete at most the supplied batch size, retaining rows with a cooldown that remains active at the supplied decision instant.
 
-The port contract must define:
-- bucket identity and key-version semantics;
-- time source and UTC/window boundary behavior;
-- idempotency expectations and retry safety;
-- concurrency guarantees and linearization point;
-- transaction boundaries and partial-failure behavior;
-- bounded timeout/lock-wait behavior;
-- failure classification without leaking storage details to clients.
+The contract requires SOURCE and ACCOUNT key types in their corresponding positions. Result records reject invalid counters and expose a deterministic cooldown evaluation method.
 
-Do not expose Spring `DataSource`, JPA entities, JDBC types, Redis commands, Lua scripts, or provider SDK types from the application port.
+### Policy deliberately not embedded
+
+The port does not choose source thresholds, account thresholds, fixed-window lengths, cooldown durations, retention periods, or retry policy. No numeric values are approved. The future use case must calculate UTC window boundaries and supply policy values explicitly.
+
+### Remaining contract decisions before login integration
+
+- Successful-login account-state clearing/decay semantics, including races with in-flight failed attempts.
+- Idempotency/retry semantics for ambiguous database commit outcomes.
+- Transaction timeout and lock-wait budget.
+- Whether source thresholds require an additional persisted decision field or can be evaluated safely from the committed count.
+- Cleanup schedule and retention duration.
+
+These must be resolved and tested before the port is integrated into credential verification.
 
 ### 3.1 Atomicity requirement
 
-The pre-verification operation must not implement separate unprotected "check source", "increment source", and "check account" calls in application code. The adapter must provide the required atomicity and consistent decision for both dimensions.
+The pre-verification operation must not implement separate unprotected "check source", "increment source", and "check account" calls in application code. The adapter must provide the required atomicity and a consistent decision for both dimensions.
 
-The outcome operation must similarly prevent lost account increments under concurrent requests.
-
-The MySQL adapter should prefer a single well-defined transaction for the related state changes. If the chosen schema/algorithm requires multiple statements, document lock ordering and unique-key race handling. Tests must prove the contract, not merely verify individual repository methods.
+The failed-outcome operation must prevent lost account increments under concurrent requests. If the chosen schema/algorithm requires multiple statements, document lock ordering and unique-key race handling. Tests must prove the contract, not merely verify individual repository methods.
 
 A future Redis adapter must meet the same observable contract, potentially using a Lua script or another atomic Redis primitive. If it cannot meet the contract, it is not a valid adapter.
 
@@ -127,21 +129,19 @@ A local Docker Redis instance or an unowned self-managed service is not enough t
 
 ## 8. Delivery sequence
 
-1. Finalize the throttle algorithm, table shape, and semantic port contract.
-2. Benchmark the configured Argon2id implementation in a representative environment.
-3. Approve thresholds, windows, cooldown, and outage behavior using measured results.
-4. Implement additive Flyway V2 and the MySQL adapter.
-5. Prove atomicity, concurrency, retention, and fail-closed behavior with MySQL 8.4 Testcontainers.
-6. Integrate the port into the WMS login use case only after the preceding controls pass.
-7. Reassess Redis only when production evidence or an existing managed service justifies it.
+1. Finalize the remaining semantic contract decisions above.
+2. Implement the MySQL adapter against the additive V2 table.
+3. Prove atomicity, concurrency, retention, and fail-closed behavior with MySQL 8.4 Testcontainers.
+4. Benchmark and approve thresholds, windows, cooldown, and outage behavior using representative performance evidence.
+5. Integrate the port into the WMS login use case only after the preceding controls pass.
+6. Reassess Redis only when production evidence or an existing managed service justifies it.
 
 ## 9. Verification status
 
-This document records an architecture decision only. It does not claim that:
-- a storage port or MySQL adapter has been implemented;
-- Flyway V2 exists;
+The semantic application port and result-contract unit tests are implemented. It does not claim that:
+- a MySQL persistence adapter exists;
+- login throttling is active or integrated with credential verification;
 - any numeric threshold is approved;
-- Argon2id performance has been benchmarked;
 - a login endpoint is available;
 - Redis is installed or required.
 
