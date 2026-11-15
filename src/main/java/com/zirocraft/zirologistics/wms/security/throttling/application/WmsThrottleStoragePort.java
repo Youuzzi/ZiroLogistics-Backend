@@ -54,6 +54,23 @@ public interface WmsThrottleStoragePort {
             Instant cooldownUntil);
 
     /**
+     * Atomically removes all ACCOUNT failure rows for the supplied account
+     * bucket identity across every fixed window. The operation must not touch
+     * SOURCE buckets or another key version/digest. It is called only after
+     * credentials have been verified and the global user is confirmed active,
+     * before a tenant-selection token is issued.
+     *
+     * The delete and concurrent failed-account upserts are serialized by the
+     * database's transaction/row-lock ordering: failures committed before the
+     * reset are removed; failures committed after it remain as new failure
+     * state. Callers must not blindly retry when commit outcome is unknown.
+     *
+     * @param accountKey active ACCOUNT bucket identity
+     * @return number of account-window rows deleted
+     */
+    int resetAccountFailures(WmsThrottleBucketKey accountKey);
+
+    /**
      * Deletes at most batchSize expired rows older than retentionCutoff.
      * Rows with a cooldown later than decisionTime must be retained.
      * This bounded maintenance operation must never run on the login request
