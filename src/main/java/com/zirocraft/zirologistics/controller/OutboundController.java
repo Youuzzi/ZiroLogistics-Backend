@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.controller;
 
-import com.zirocraft.zirologistics.config.LegacyRuntime;
 
 import com.zirocraft.zirologistics.io.request.OutboundRequest;
 import com.zirocraft.zirologistics.service.OutboundService;
@@ -13,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1.0/outbound")
 @RequiredArgsConstructor
-@LegacyRuntime
 public class OutboundController {
 
     private final OutboundService outboundService;
