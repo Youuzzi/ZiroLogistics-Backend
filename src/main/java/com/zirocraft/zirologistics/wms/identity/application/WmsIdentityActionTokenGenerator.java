@@ -5,6 +5,7 @@ import com.zirocraft.zirologistics.wms.identity.domain.WmsGeneratedIdentityActio
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Objects;
 
@@ -34,10 +35,13 @@ public final class WmsIdentityActionTokenGenerator {
     public WmsGeneratedIdentityActionToken generate() {
         byte[] secret = new byte[SECRET_LENGTH_BYTES];
         secureRandom.nextBytes(secret);
-
-        String rawToken = TOKEN_ENCODER.encodeToString(secret);
-        byte[] digest = sha256(secret);
-        return new WmsGeneratedIdentityActionToken(rawToken, digest);
+        try {
+            String rawToken = TOKEN_ENCODER.encodeToString(secret);
+            byte[] digest = sha256(secret);
+            return new WmsGeneratedIdentityActionToken(rawToken, digest);
+        } finally {
+            Arrays.fill(secret, (byte) 0);
+        }
     }
 
     /**
@@ -56,10 +60,14 @@ public final class WmsIdentityActionTokenGenerator {
             throw new IllegalArgumentException("Identity action token is invalid");
         }
 
-        if (secret.length != SECRET_LENGTH_BYTES || !TOKEN_ENCODER.encodeToString(secret).equals(rawToken)) {
-            throw new IllegalArgumentException("Identity action token is invalid");
+        try {
+            if (secret.length != SECRET_LENGTH_BYTES || !TOKEN_ENCODER.encodeToString(secret).equals(rawToken)) {
+                throw new IllegalArgumentException("Identity action token is invalid");
+            }
+            return sha256(secret);
+        } finally {
+            Arrays.fill(secret, (byte) 0);
         }
-        return sha256(secret);
     }
 
     private static byte[] sha256(byte[] value) {
