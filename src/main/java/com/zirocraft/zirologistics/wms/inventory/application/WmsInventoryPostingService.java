@@ -185,6 +185,9 @@ public class WmsInventoryPostingService {
                 throw new IllegalArgumentException("Only active stock items can be posted");
             }
             if (!STOCK_STATUSES.contains(leg.stockStatus())) throw new IllegalArgumentException("Stock status is invalid");
+            if ("ISSUE".equals(type) && !"AVAILABLE".equals(leg.stockStatus())) {
+                throw new IllegalArgumentException("Issue can only consume AVAILABLE stock");
+            }
             if (!Set.of("ACTIVE").contains(leg.warehouseStatus()) || !"ACTIVE".equals(leg.locationStatus())) {
                 throw new IllegalArgumentException("Warehouse and location must be active");
             }
@@ -215,6 +218,14 @@ public class WmsInventoryPostingService {
                     && source.locationId() == destination.locationId()) {
                 throw new IllegalArgumentException("Transfer must change physical location");
             }
+            if ("TRANSFER".equals(type) && !source.stockStatus().equals(destination.stockStatus())) {
+                throw new IllegalArgumentException("Transfer must preserve stock status");
+            }
+            if ("STATUS_CHANGE".equals(type)
+                    && (source.warehouseId() != destination.warehouseId()
+                    || source.locationId() != destination.locationId())) {
+                throw new IllegalArgumentException("Status change cannot change physical location");
+            }
             if ("DAMAGE".equals(type)
                     && (!"AVAILABLE".equals(source.stockStatus()) || !"DAMAGED".equals(destination.stockStatus()))) {
                 throw new IllegalArgumentException("Damage must move AVAILABLE stock to DAMAGED");
@@ -224,9 +235,16 @@ public class WmsInventoryPostingService {
             }
         }
         for (ResolvedLeg leg : legs) {
-            if (leg.serialId() != null && !("RETURN".equals(type)
-                    ? "SHIPPED".equals(leg.serialStatus()) : "AVAILABLE".equals(leg.serialStatus()))) {
-                throw new IllegalArgumentException("Serial is not in a state valid for this movement");
+            if (leg.serialId() != null) {
+                String expectedSerialStatus = switch (type) {
+                    case "RETURN" -> "SHIPPED";
+                    case "STATUS_CHANGE" -> serialStatusForStock(legs.getFirst().stockStatus());
+                    case "TRANSFER" -> serialStatusForStock(leg.stockStatus());
+                    default -> "AVAILABLE";
+                };
+                if (expectedSerialStatus == null || !expectedSerialStatus.equals(leg.serialStatus())) {
+                    throw new IllegalArgumentException("Serial is not in a state valid for this movement");
+                }
             }
             if (leg.serialId() != null && !"RETURN".equals(type)
                     && (!"TRANSFER".equals(type) || leg.index() == 0)
@@ -348,18 +366,33 @@ public class WmsInventoryPostingService {
                     """, leg.warehouseId(), leg.locationId(), leg.serialId());
             if (changed != 1) throw new IllegalStateException("Serial return transition failed");
         } else if ("DAMAGE".equals(movement) && leg.index() == 1) {
-            jdbc.update("""
+            int changed = jdbc.update("""
                     UPDATE inventory_serials SET status = 'DAMAGED', version = version + 1,
                         updated_at = UTC_TIMESTAMP(6) WHERE id = ? AND status = 'AVAILABLE'
                     """, leg.serialId());
+            if (changed != 1) throw new IllegalStateException("Serial damage transition failed");
         } else if ("STATUS_CHANGE".equals(movement) && leg.index() == 1) {
-            jdbc.update("""
+            String sourceStatus = serialStatusForStock(legs.getFirst().stockStatus());
+            String targetStatus = serialStatusForStock(leg.stockStatus());
+            if (sourceStatus == null || targetStatus == null) {
+                throw new IllegalArgumentException("Stock status cannot be represented by serial lifecycle state");
+            }
+            int changed = jdbc.update("""
                     UPDATE inventory_serials SET status = ?, version = version + 1,
-                        updated_at = UTC_TIMESTAMP(6) WHERE id = ? AND status = 'AVAILABLE'
-                    """, leg.stockStatus(), leg.serialId());
+                        updated_at = UTC_TIMESTAMP(6) WHERE id = ? AND status = ?
+                    """, targetStatus, leg.serialId(), sourceStatus);
+            if (changed != 1) throw new IllegalStateException("Serial status transition failed");
         }
     }
 
+    private static String serialStatusForStock(String stockStatus) {
+        return switch (stockStatus) {
+            case "AVAILABLE" -> "AVAILABLE";
+            case "QUARANTINED" -> "QUARANTINED";
+            case "DAMAGED" -> "DAMAGED";
+            default -> null;
+        };
+    }
     private void writeAudit(Access access, NormalizedCommand command, String groupId, int count) {
         Map<String, Object> payload = Map.of(
                 "movementType", command.movementType(),
