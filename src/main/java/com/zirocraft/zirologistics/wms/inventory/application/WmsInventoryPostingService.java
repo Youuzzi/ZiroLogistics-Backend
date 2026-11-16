@@ -81,18 +81,26 @@ public class WmsInventoryPostingService {
                         .thenComparing(ResolvedLeg::itemId)
                         .thenComparing(ResolvedLeg::lotId, Comparator.nullsFirst(Comparator.naturalOrder()))
                         .thenComparing(ResolvedLeg::stockStatus))
-                .forEach(leg -> lockedBalances.put(balanceKey(leg), lockOrCreateBalance(access.tenantId(), leg)));
+                .forEach(leg -> {
+                    String key = balanceKey(leg);
+                    if (!lockedBalances.containsKey(key)) {
+                        lockedBalances.put(key, lockOrCreateBalance(access.tenantId(), leg));
+                    }
+                });
+        Map<String, BigDecimal> runningOnHand = new HashMap<>();
 
         for (ResolvedLeg leg : legs) {
-            Balance balance = lockedBalances.get(balanceKey(leg));
+            String key = balanceKey(leg);
+            Balance balance = lockedBalances.get(key);
             BigDecimal delta = signedDelta(normalized.movementType(), leg.index(), leg.quantity());
-            BigDecimal before = balance.onHand();
+            BigDecimal before = runningOnHand.getOrDefault(key, balance.onHand());
             BigDecimal after = before.add(delta).setScale(4, RoundingMode.UNNECESSARY);
             if (after.signum() < 0) throw new IllegalStateException("Insufficient on-hand inventory");
             if (delta.signum() < 0 && before.subtract(balance.reserved()).compareTo(delta.abs()) < 0) {
                 throw new IllegalStateException("Insufficient available inventory");
             }
             updateBalance(balance.id(), delta);
+            runningOnHand.put(key, after);
             insertLedger(access, normalized, movementGroupId, entryNo++, leg, delta, before, after);
             transitionSerial(normalized.movementType(), legs, leg);
             Map<String, Object> entry = new LinkedHashMap<>();
@@ -241,7 +249,6 @@ public class WmsInventoryPostingService {
         boolean paired = Set.of("TRANSFER", "DAMAGE", "STATUS_CHANGE").contains(type);
         if (paired && legs.size() != 2) throw new IllegalArgumentException(type + " requires exactly two legs");
         if (!paired && legs.isEmpty()) throw new IllegalArgumentException("At least one posting leg is required");
-        Set<String> buckets = new HashSet<>();
         for (ResolvedLeg leg : legs) {
             if (!"ACTIVE".equals(leg.itemStatus()) || !leg.stockItem()) {
                 throw new IllegalArgumentException("Only active stock items can be posted");
@@ -262,8 +269,7 @@ public class WmsInventoryPostingService {
             if (serialTracked && leg.quantity().compareTo(BigDecimal.ONE) != 0) {
                 throw new IllegalArgumentException("Serial-tracked posting quantity must equal one");
             }
-            String bucket = balanceKey(leg);
-            if (!buckets.add(bucket)) throw new IllegalArgumentException("Duplicate balance bucket in one posting");
+
         }
         if (paired) {
             ResolvedLeg source = legs.get(0);
