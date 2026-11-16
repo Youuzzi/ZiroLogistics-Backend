@@ -21,6 +21,7 @@ CREATE TABLE `wms_identity_action_tokens` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_wms_identity_action_token_digest` (`token_digest`),
   KEY `idx_wms_identity_action_token_user_purpose` (`user_id`, `purpose`, `created_at`),
+  KEY `idx_wms_identity_action_token_inviter` (`invited_by_user_id`, `purpose`, `created_at`),
   KEY `idx_wms_identity_action_token_tenant_email` (`tenant_id`, `target_email`, `purpose`, `created_at`),
   KEY `idx_wms_identity_action_token_cleanup` (`expires_at`, `consumed_at`, `revoked_at`),
   CONSTRAINT `chk_wms_identity_action_token_purpose`
