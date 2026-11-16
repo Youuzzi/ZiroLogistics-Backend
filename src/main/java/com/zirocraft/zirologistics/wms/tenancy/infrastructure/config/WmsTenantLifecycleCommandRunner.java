@@ -42,7 +42,7 @@ public class WmsTenantLifecycleCommandRunner implements ApplicationRunner {
 
         WmsTenantLifecycleResult result = service.transition(
                 action, properties.getTenantPublicId(), properties.getReason(),
-                properties.getOperationRef(), properties.getConfirmation());
+                properties.getOperationRef(), properties.getOperatorReference(), properties.getConfirmation());
         System.out.println("WMS_TENANT_LIFECYCLE_COMPLETED");
         System.out.println("operationRef=" + result.operationRef());
         System.out.println("tenantPublicId=" + result.tenantPublicId());
