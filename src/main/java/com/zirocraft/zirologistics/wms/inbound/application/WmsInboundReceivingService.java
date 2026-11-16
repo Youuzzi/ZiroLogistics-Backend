@@ -75,7 +75,7 @@ public class WmsInboundReceivingService {
     public Map<String, Object> get(WmsAuthenticatedPrincipal principal, String receiptPublicId) {
         Access access = access(principal, "WMS_INBOUND_RECEIPT_READ");
         Map<String, Object> receipt = receipt(access.tenantId(), receiptPublicId);
-        Map<String, Object> result = new LinkedHashMap<>(receipt);
+        Map<String, Object> result = new LinkedHashMap<>(publicReceipt(receipt));
         result.put("lines", jdbc.queryForList("""
                 SELECT l.public_id, l.line_number, i.public_id AS item_public_id, i.sku, i.item_name,
                        u.uom_code, l.expected_qty, l.received_qty, l.accepted_qty, l.rejected_qty,
