@@ -457,7 +457,7 @@ public class WmsInventoryMasterDataService {
         String fromCode = normalizeUomCode(fromUomCode);
         String toCode = normalizeUomCode(toUomCode);
         Map<String, Object> before = conversionByCodes(access.tenantId(), number(item, "id"), fromCode, toCode);
-        if (Boolean.TRUE.equals(before.get("is_active")) || ((Number) before.get("is_active")).intValue() != 0) {
+        if (bool(before.get("is_active"))) {
             jdbc.update("""
                     UPDATE item_uom_conversions SET is_active = 0, updated_at = UTC_TIMESTAMP(6)
                     WHERE tenant_id = ? AND item_id = ?
@@ -724,6 +724,8 @@ public class WmsInventoryMasterDataService {
     }
 
     public record CategoryCommand(String code, String name, String description, String parentCategoryPublicId) {}
+    public record IdentifierCommand(String type, String value, Boolean primary) {}
+    public record UomConversionCommand(String fromUomCode, String toUomCode, BigDecimal factor) {}
     public record ItemCommand(
             String sku, String name, String description, String categoryPublicId,
             String baseUomCode, String trackingMethod, Boolean stockItem, Boolean purchasable,
