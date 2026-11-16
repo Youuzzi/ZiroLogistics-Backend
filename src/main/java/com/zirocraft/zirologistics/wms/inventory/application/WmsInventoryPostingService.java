@@ -415,6 +415,7 @@ public class WmsInventoryPostingService {
         Map<String, Object> payload = Map.of(
                 "movementType", command.movementType(),
                 "requestId", command.requestId().toString(),
+                "movementGroupId", groupId,
                 "entryCount", count);
         final String json;
         try {
@@ -431,7 +432,7 @@ public class WmsInventoryPostingService {
                 JOIN tenant_memberships m ON m.id = ? AND m.tenant_id = t.id AND m.status = 'ACTIVE'
                 JOIN users u ON u.id = m.user_id AND u.public_id = ? AND u.status = 'ACTIVE'
                 WHERE t.id = ? AND t.status = 'ACTIVE'
-                """, UUID.randomUUID().toString(), command.requestId().toString(), groupId,
+                """, UUID.randomUUID().toString(), groupId, groupId,
                 json, access.membershipId(), access.userPublicId(), access.tenantId());
         if (written != 1) throw new AccessDeniedException("Audit actor is no longer active");
     }
@@ -513,13 +514,17 @@ public class WmsInventoryPostingService {
             if (quantity.precision() > 19) {
                 throw new IllegalArgumentException("Quantity must fit DECIMAL(19,4)");
             }
+            String serialNumber = optional(leg.serialNumber());
+            if (serialNumber != null && serialNumber.length() > 150) {
+                throw new IllegalArgumentException("Serial number is too long");
+            }
             return new PostingLeg(
                     required(leg.warehousePublicId(), "warehouse public ID"),
                     required(leg.locationPublicId(), "location public ID"),
                     required(leg.itemPublicId(), "item public ID"),
                     optional(leg.lotPublicId()),
                     optional(leg.serialPublicId()),
-                    optional(leg.serialNumber()),
+                    serialNumber,
                     leg.stockStatus() == null ? "AVAILABLE" : leg.stockStatus().trim().toUpperCase(Locale.ROOT),
                     quantity);
         }).toList();
