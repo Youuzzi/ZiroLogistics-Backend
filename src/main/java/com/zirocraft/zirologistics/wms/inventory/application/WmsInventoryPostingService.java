@@ -220,7 +220,8 @@ public class WmsInventoryPostingService {
             if (leg.serialId() != null && !"AVAILABLE".equals(leg.serialStatus())) {
                 throw new IllegalArgumentException("Serial is not in an AVAILABLE state");
             }
-            if (leg.serialId() != null && (!Objects.equals(leg.serialWarehouse(), leg.warehouseId())
+            if (leg.serialId() != null && (!"TRANSFER".equals(type) || leg.index() == 0)
+                    && (!Objects.equals(leg.serialWarehouse(), leg.warehouseId())
                     || !Objects.equals(leg.serialLocation(), leg.locationId()))) {
                 throw new IllegalArgumentException("Serial current location does not match posting source");
             }
