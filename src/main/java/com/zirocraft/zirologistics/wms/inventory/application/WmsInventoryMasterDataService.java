@@ -553,6 +553,123 @@ public class WmsInventoryMasterDataService {
         return rows.getFirst();
     }
 
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listLots(WmsAuthenticatedPrincipal principal, String itemPublicId,
+                                               String status) {
+        Access access = access(principal, "WMS_LOT_READ");
+        Map<String, Object> item = requireItem(access.tenantId(), itemPublicId);
+        if (!Set.of("LOT", "LOT_AND_SERIAL").contains(item.get("tracking_method"))) {
+            throw new IllegalArgumentException("Item is not configured for lot tracking");
+        }
+        if (status == null || status.isBlank()) {
+            return jdbc.queryForList("""
+                    SELECT public_id, lot_number, supplier_lot_number, manufacture_date, received_date,
+                           expiry_date, status, notes, version, created_at, updated_at
+                    FROM inventory_lots WHERE tenant_id = ? AND item_id = ?
+                    ORDER BY lot_number LIMIT 500
+                    """, access.tenantId(), number(item, "id"));
+        }
+        String normalized = enumValue(status, Set.of("ACTIVE", "QUARANTINED", "BLOCKED", "EXPIRED", "CLOSED"),
+                "lot status");
+        return jdbc.queryForList("""
+                SELECT public_id, lot_number, supplier_lot_number, manufacture_date, received_date,
+                       expiry_date, status, notes, version, created_at, updated_at
+                FROM inventory_lots WHERE tenant_id = ? AND item_id = ? AND status = ?
+                ORDER BY lot_number LIMIT 500
+                """, access.tenantId(), number(item, "id"), normalized);
+    }
+
+    @Transactional
+    public Map<String, Object> createLot(WmsAuthenticatedPrincipal principal, String itemPublicId,
+                                         LotCommand command) {
+        Access access = access(principal, "WMS_LOT_MANAGE");
+        Objects.requireNonNull(command, "lot command is required");
+        String lotNumber = bounded(command.lotNumber(), "lot number", 1, 120);
+        String supplierLot = optional(command.supplierLotNumber(), 120);
+        String notes = optional(command.notes(), 1000);
+        validateLotDates(command.manufactureDate(), command.receivedDate(), command.expiryDate());
+        lockTenant(access.tenantId());
+        Map<String, Object> item = requireItem(access.tenantId(), itemPublicId);
+        if (!Set.of("LOT", "LOT_AND_SERIAL").contains(item.get("tracking_method"))) {
+            throw new IllegalArgumentException("Item is not configured for lot tracking");
+        }
+        String publicId = UUID.randomUUID().toString();
+        try {
+            jdbc.update("""
+                    INSERT INTO inventory_lots
+                      (public_id, tenant_id, item_id, lot_number, supplier_lot_number,
+                       manufacture_date, received_date, expiry_date, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, publicId, access.tenantId(), number(item, "id"), lotNumber, supplierLot,
+                    command.manufactureDate(), command.receivedDate(), command.expiryDate(), notes);
+        } catch (DuplicateKeyException duplicate) {
+            throw new IllegalStateException("Lot number already exists for this item");
+        }
+        Map<String, Object> after = lotByPublicId(access.tenantId(), number(item, "id"), publicId);
+        audit(access, "INVENTORY_LOT_CREATED", publicId, Map.of(), after);
+        return publicView(after);
+    }
+
+    @Transactional
+    public Map<String, Object> changeLotStatus(WmsAuthenticatedPrincipal principal, String itemPublicId,
+                                                String lotPublicId, String requestedStatus,
+                                                long expectedVersion) {
+        Access access = access(principal, "WMS_LOT_MANAGE");
+        String status = enumValue(requestedStatus, Set.of("ACTIVE", "QUARANTINED", "BLOCKED", "EXPIRED", "CLOSED"),
+                "lot status");
+        lockTenant(access.tenantId());
+        Map<String, Object> item = requireItem(access.tenantId(), itemPublicId);
+        Map<String, Object> before = lotByPublicId(access.tenantId(), number(item, "id"), lotPublicId);
+        if (number(before, "version") != expectedVersion) throw new IllegalStateException("Lot version conflict");
+        if (Objects.equals(before.get("status"), status)) return publicView(before);
+        if (!"ACTIVE".equals(status)) {
+            Integer occupied = jdbc.queryForObject("""
+                    SELECT COUNT(*) FROM inventory_balances
+                    WHERE tenant_id = ? AND item_id = ?
+                      AND lot_id = (SELECT id FROM inventory_lots WHERE tenant_id = ? AND public_id = ?)
+                      AND (on_hand_qty > 0 OR reserved_qty > 0)
+                    """, Integer.class, access.tenantId(), number(item, "id"), access.tenantId(), lotPublicId);
+            if (occupied != null && occupied > 0) {
+                throw new IllegalStateException("Lot with on-hand or reserved inventory cannot be closed or blocked");
+            }
+        }
+        int changed = jdbc.update("""
+                UPDATE inventory_lots SET status = ?, version = version + 1, updated_at = UTC_TIMESTAMP(6)
+                WHERE tenant_id = ? AND item_id = ? AND public_id = ? AND version = ?
+                """, status, access.tenantId(), number(item, "id"), lotPublicId, expectedVersion);
+        if (changed != 1) throw new IllegalStateException("Lot version conflict");
+        Map<String, Object> after = lotByPublicId(access.tenantId(), number(item, "id"), lotPublicId);
+        audit(access, "INVENTORY_LOT_STATUS_CHANGED", lotPublicId, before, after);
+        return publicView(after);
+    }
+
+    private Map<String, Object> lotByPublicId(Long tenantId, long itemId, String publicId) {
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+                SELECT id, public_id, lot_number, supplier_lot_number, manufacture_date,
+                       received_date, expiry_date, status, notes, version, created_at, updated_at
+                FROM inventory_lots WHERE tenant_id = ? AND item_id = ? AND public_id = ?
+                """, tenantId, itemId, publicId);
+        if (rows.isEmpty()) throw new IllegalArgumentException("Lot not found");
+        return rows.getFirst();
+    }
+
+    private static void validateLotDates(java.time.LocalDate manufacture, java.time.LocalDate received,
+                                         java.time.LocalDate expiry) {
+        if (manufacture != null && expiry != null && expiry.isBefore(manufacture)) {
+            throw new IllegalArgumentException("Lot expiry date cannot precede manufacture date");
+        }
+        if (manufacture != null && received != null && received.isBefore(manufacture)) {
+            throw new IllegalArgumentException("Lot received date cannot precede manufacture date");
+        }
+    }
+
+    private static Map<String, Object> publicView(Map<String, Object> row) {
+        Map<String, Object> result = new LinkedHashMap<>(row);
+        result.remove("id");
+        return result;
+    }
+
     private Access access(WmsAuthenticatedPrincipal principal, String permission) {
         if (principal == null) throw new AccessDeniedException("Tenant context is required");
         WmsMembershipAccess resolved = accessService.resolve(principal.userPublicId(), principal.membershipPublicId());
@@ -749,6 +866,10 @@ public class WmsInventoryMasterDataService {
     private static boolean bool(Object value) {
         return value instanceof Boolean b ? b : ((Number) value).intValue() != 0;
     }
+
+    public record LotCommand(String lotNumber, String supplierLotNumber,
+                             java.time.LocalDate manufactureDate, java.time.LocalDate receivedDate,
+                             java.time.LocalDate expiryDate, String notes) {}
 
     public record CategoryCommand(String code, String name, String description, String parentCategoryPublicId) {}
     public record IdentifierCommand(String type, String value, Boolean primary) {}
