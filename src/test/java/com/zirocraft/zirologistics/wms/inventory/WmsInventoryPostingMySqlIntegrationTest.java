@@ -146,7 +146,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
 
         assertEquals("AVAILABLE", serialStatus(f, serialPublicId));
         assertEquals(new BigDecimal("1.0000"), balance(f, f.locationA(), "AVAILABLE"));
-        assertEquals(6, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", f.tenantId()));
+        assertEquals(5, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", f.tenantId()));
     }
 
     @Test
@@ -216,8 +216,8 @@ class WmsInventoryPostingMySqlIntegrationTest {
     }
 
     private WmsAuthenticatedPrincipal principal(Fixture f) {
-        return new WmsAuthenticatedPrincipal("user-public", f.tenantId(), f.tenantPublicId(),
-                f.membershipId(), "membership-public", Set.of(
+        return new WmsAuthenticatedPrincipal(f.userPublicId(), f.tenantId(), f.tenantPublicId(),
+                f.membershipId(), f.membershipPublicId(), Set.of(
                 "WMS_INVENTORY_POST", "WMS_INVENTORY_READ", "WMS_INVENTORY_LEDGER_READ"));
     }
 
@@ -270,8 +270,8 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 new WmsMembershipAccess(userId, userPublicId, tenantId, tenantPublicId,
                         membershipId, membershipPublicId, Set.of(
                         "WMS_INVENTORY_POST", "WMS_INVENTORY_READ", "WMS_INVENTORY_LEDGER_READ")));
-        return new Fixture(tenantId, tenantPublicId, userId, membershipId, warehouseId,
-                warehousePublicId, locationAId, locationAPublicId, locationBPublicId, itemId, itemPublicId);
+        return new Fixture(tenantId, tenantPublicId, userId, userPublicId, membershipId, membershipPublicId,
+                warehouseId, warehousePublicId, locationAId, locationAPublicId, locationBPublicId, itemId, itemPublicId);
     }
 
     private BigDecimal balance(Fixture f, String locationPublicId, String status) {
@@ -293,8 +293,9 @@ class WmsInventoryPostingMySqlIntegrationTest {
 
     private static String uuid() { return UUID.randomUUID().toString(); }
 
-    private record Fixture(long tenantId, String tenantPublicId, long userId, long membershipId,
-                           long warehouseId, String warehousePublicId, long locationAId,
+    private record Fixture(long tenantId, String tenantPublicId, long userId, String userPublicId,
+                           long membershipId, String membershipPublicId, long warehouseId,
+                           String warehousePublicId, long locationAId,
                            String locationA, String locationB, long itemId, String itemPublicId) {
         String locationA() { return locationA; }
         String locationB() { return locationB; }
