@@ -7,6 +7,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.ZoneId;
 import java.util.Locale;
+import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -17,7 +18,9 @@ import java.util.regex.Pattern;
 public final class WmsPlatformBootstrapService {
     private static final Pattern TENANT_CODE = Pattern.compile("[A-Z0-9][A-Z0-9_-]{2,63}");
     private static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
-    private static final String OWNER_PERMISSION = "WMS_IDENTITY_MEMBERSHIP_INVITE";
+    private static final List<String> OWNER_PERMISSIONS = List.of(
+            "WMS_IDENTITY_MEMBERSHIP_INVITE",
+            "WMS_TENANT_PROFILE_UPDATE");
 
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transaction;
@@ -91,17 +94,19 @@ public final class WmsPlatformBootstrapService {
             Long roleId = jdbc.queryForObject(
                     "SELECT id FROM roles WHERE public_id = ?", Long.class, rolePublicId);
 
-            Long permissionId = jdbc.queryForObject(
-                    "SELECT id FROM permissions WHERE permission_code = ?",
-                    Long.class, OWNER_PERMISSION);
             jdbc.update("""
                     INSERT INTO membership_roles (tenant_id, membership_id, role_id)
                     VALUES (?, ?, ?)
                     """, tenantId, membershipId, roleId);
-            jdbc.update("""
-                    INSERT INTO role_permissions (role_id, permission_id)
-                    VALUES (?, ?)
-                    """, roleId, permissionId);
+            for (String permissionCode : OWNER_PERMISSIONS) {
+                Long permissionId = jdbc.queryForObject(
+                        "SELECT id FROM permissions WHERE permission_code = ?",
+                        Long.class, permissionCode);
+                jdbc.update("""
+                        INSERT INTO role_permissions (role_id, permission_id)
+                        VALUES (?, ?)
+                        """, roleId, permissionId);
+            }
 
             int completed = jdbc.update("""
                     UPDATE wms_platform_bootstrap_state
