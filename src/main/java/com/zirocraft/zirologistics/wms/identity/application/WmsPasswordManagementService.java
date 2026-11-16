@@ -120,7 +120,6 @@ public class WmsPasswordManagementService {
             throw new IllegalStateException("WMS password encoder returned an invalid result");
         }
 
-        Instant now = clock.instant();
         Objects.requireNonNull(transactionTemplate.execute(status -> {
             UserEntity locked = userRepository.findByIdForUpdate(snapshot.getId())
                     .orElseThrow(() -> new BadCredentialsException("Current credentials are invalid"));
@@ -130,6 +129,7 @@ public class WmsPasswordManagementService {
                 throw new IllegalStateException("Password changed concurrently; authenticate and retry");
             }
 
+            Instant now = clock.instant();
             locked.setPasswordHash(newHash);
             userRepository.saveAndFlush(locked);
             tokenStorage.revokeOutstandingForUser(
@@ -241,9 +241,6 @@ public class WmsPasswordManagementService {
                     || user.getStatus() != UserStatus.ACTIVE
                     || !token.targetEmail().equals(WmsEmailNormalizer.normalize(user.getEmail()))) {
                 throw new WmsIdentityActionTokenRejectedException();
-            }
-            if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
-                throw new IllegalArgumentException("New password must differ from the current password");
             }
 
             user.setPasswordHash(newHash);
