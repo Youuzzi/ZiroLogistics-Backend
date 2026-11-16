@@ -3,12 +3,12 @@ package com.zirocraft.zirologistics.wms.identity.application;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
+import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
 import com.zirocraft.zirologistics.wms.identity.domain.WmsEncryptedEmailPayload;
 import com.zirocraft.zirologistics.wms.identity.domain.WmsIdentityActionTokenPurpose;
 import com.zirocraft.zirologistics.wms.identity.domain.WmsIdentityActionTokenRecord;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.UserEntity;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.UserRepository;
-import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +24,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -164,15 +166,19 @@ class WmsPasswordManagementMySqlIntegrationTest {
                 nullableLong(rs, "tenant_id"),
                 nullableLong(rs, "invited_by_user_id"),
                 rs.getString("target_email"),
-                rs.getTimestamp("expires_at").toInstant(),
-                rs.getTimestamp("consumed_at") == null ? null : rs.getTimestamp("consumed_at").toInstant(),
-                rs.getTimestamp("revoked_at") == null ? null : rs.getTimestamp("revoked_at").toInstant(),
-                rs.getTimestamp("created_at").toInstant()), digest);
+                toInstant(rs.getObject("expires_at", LocalDateTime.class)),
+                toInstant(rs.getObject("consumed_at", LocalDateTime.class)),
+                toInstant(rs.getObject("revoked_at", LocalDateTime.class)),
+                toInstant(rs.getObject("created_at", LocalDateTime.class))), digest);
     }
 
     private static Long nullableLong(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
         long value = rs.getLong(column);
         return rs.wasNull() ? null : value;
+    }
+
+    private static Instant toInstant(LocalDateTime value) {
+        return value == null ? null : value.toInstant(ZoneOffset.UTC);
     }
 
     private static UUID uuidFromBytes(byte[] bytes) {
