@@ -137,6 +137,45 @@ class WmsInventoryPostingMySqlIntegrationTest {
         assertEquals(BigDecimal.ZERO.setScale(4), balance(fixture));
     }
 
+    @Test
+    void transferDamageAndStatusChangeMoveExactQuantitiesBetweenBuckets() {
+        post(fixture, UUID.randomUUID(), "RECEIPT", leg(fixture, null, null, "AVAILABLE", "5.0000"));
+        String secondLocation = createLocation(fixture);
+
+        WmsInventoryPostingService.PostingLeg transferSource = new WmsInventoryPostingService.PostingLeg(
+                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                null, null, null, "AVAILABLE", new BigDecimal("2.0000"));
+        WmsInventoryPostingService.PostingLeg transferDestination = new WmsInventoryPostingService.PostingLeg(
+                fixture.warehousePublicId(), secondLocation, fixture.itemPublicId(),
+                null, null, null, "AVAILABLE", new BigDecimal("2.0000"));
+        postingService.post(fixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                UUID.randomUUID(), "TRANSFER", List.of(transferSource, transferDestination), null));
+        assertEquals(new BigDecimal("3.0000"), bucketBalance(fixture, fixture.locationPublicId(), "AVAILABLE"));
+        assertEquals(new BigDecimal("2.0000"), bucketBalance(fixture, secondLocation, "AVAILABLE"));
+
+        WmsInventoryPostingService.PostingLeg damageSource = new WmsInventoryPostingService.PostingLeg(
+                fixture.warehousePublicId(), secondLocation, fixture.itemPublicId(),
+                null, null, null, "AVAILABLE", new BigDecimal("1.0000"));
+        WmsInventoryPostingService.PostingLeg damageDestination = new WmsInventoryPostingService.PostingLeg(
+                fixture.warehousePublicId(), secondLocation, fixture.itemPublicId(),
+                null, null, null, "DAMAGED", new BigDecimal("1.0000"));
+        postingService.post(fixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                UUID.randomUUID(), "DAMAGE", List.of(damageSource, damageDestination), null));
+        assertEquals(new BigDecimal("1.0000"), bucketBalance(fixture, secondLocation, "AVAILABLE"));
+        assertEquals(new BigDecimal("1.0000"), bucketBalance(fixture, secondLocation, "DAMAGED"));
+
+        WmsInventoryPostingService.PostingLeg statusSource = new WmsInventoryPostingService.PostingLeg(
+                fixture.warehousePublicId(), secondLocation, fixture.itemPublicId(),
+                null, null, null, "DAMAGED", new BigDecimal("1.0000"));
+        WmsInventoryPostingService.PostingLeg statusDestination = new WmsInventoryPostingService.PostingLeg(
+                fixture.warehousePublicId(), secondLocation, fixture.itemPublicId(),
+                null, null, null, "QUARANTINED", new BigDecimal("1.0000"));
+        postingService.post(fixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                UUID.randomUUID(), "STATUS_CHANGE", List.of(statusSource, statusDestination), null));
+        assertEquals(new BigDecimal("0.0000"), bucketBalance(fixture, secondLocation, "DAMAGED"));
+        assertEquals(new BigDecimal("1.0000"), bucketBalance(fixture, secondLocation, "QUARANTINED"));
+        assertEquals(7, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+    }
     private boolean issueSucceeds(Fixture f, UUID requestId) {
         try {
             post(f, requestId, "ISSUE", leg(f, null, null, "AVAILABLE", "4.0000"));
@@ -164,6 +203,26 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 """, BigDecimal.class, f.tenantId(), f.itemPublicId());
     }
 
+    private String createLocation(Fixture f) {
+        long warehouseId = jdbc.queryForObject("SELECT id FROM warehouses WHERE public_id = ?",
+                Long.class, f.warehousePublicId());
+        String publicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO warehouse_locations (public_id, tenant_id, warehouse_id, location_code, location_name, location_type, status)
+                VALUES (?, ?, ?, ?, 'Inventory Transfer Bin', 'BIN', 'ACTIVE')
+                """, publicId, f.tenantId(), warehouseId, "BIN_" + UUID.randomUUID().toString().substring(0, 8));
+        return publicId;
+    }
+
+    private BigDecimal bucketBalance(Fixture f, String locationPublicId, String stockStatus) {
+        return jdbc.queryForObject("""
+                SELECT COALESCE(SUM(b.on_hand_qty), 0.0000)
+                FROM inventory_balances b
+                JOIN warehouse_locations l ON l.id = b.location_id AND l.tenant_id = b.tenant_id
+                JOIN items i ON i.id = b.item_id AND i.tenant_id = b.tenant_id
+                WHERE b.tenant_id = ? AND l.public_id = ? AND i.public_id = ? AND b.stock_status = ?
+                """, BigDecimal.class, f.tenantId(), locationPublicId, f.itemPublicId(), stockStatus);
+    }
     private String serialStatus(Fixture f, String serialPublicId) {
         return jdbc.queryForObject("SELECT status FROM inventory_serials WHERE tenant_id = ? AND public_id = ?",
                 String.class, f.tenantId(), serialPublicId);
