@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessDeniedException;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import com.zirocraft.zirologistics.wms.tenancy.domain.TenantStatus;
 import com.zirocraft.zirologistics.wms.tenancy.infrastructure.persistence.TenantEntity;
@@ -108,7 +109,7 @@ public class WmsTenantProfileService {
                 || !Objects.equals(principal.tenantPublicId(), access.tenantPublicId())
                 || !Objects.equals(principal.membershipId(), access.membershipId())
                 || !Objects.equals(principal.membershipPublicId(), access.membershipPublicId())) {
-            throw new AccessDeniedException("Resolved tenant context is unavailable");
+            throw new WmsMembershipAccessDeniedException();
         }
         return access;
     }
