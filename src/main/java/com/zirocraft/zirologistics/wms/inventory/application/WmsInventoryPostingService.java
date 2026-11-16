@@ -132,6 +132,11 @@ public class WmsInventoryPostingService {
         }
         lockIds("warehouses", resolved.stream().map(ResolvedLeg::warehouseId).toList(), tenantId, "warehouse");
         resolved = resolved.stream().map(leg -> {
+            Map<String, Object> warehouse = requiredRowForUpdate(
+                    "SELECT status FROM warehouses WHERE id = ? AND tenant_id = ?", leg.warehouseId(), tenantId);
+            return leg.withWarehouseStatus(string(warehouse, "status"));
+        }).toList();
+        resolved = resolved.stream().map(leg -> {
             Map<String, Object> location = requiredRow(
                     "SELECT id, status FROM warehouse_locations WHERE tenant_id = ? AND warehouse_id = ? AND public_id = ?",
                     tenantId, leg.warehouseId(), leg.locationPublicId(), "Location not found");
@@ -139,8 +144,14 @@ public class WmsInventoryPostingService {
         }).toList();
         lockIds("warehouse_locations", resolved.stream().map(ResolvedLeg::locationId).toList(), tenantId, "location");
         resolved = resolved.stream().map(leg -> {
+            Map<String, Object> location = requiredRowForUpdate(
+                    "SELECT status FROM warehouse_locations WHERE id = ? AND warehouse_id = ? AND tenant_id = ?",
+                    leg.locationId(), leg.warehouseId(), tenantId);
+            return leg.withLocation(leg.locationId(), string(location, "status"));
+        }).toList();
+        resolved = resolved.stream().map(leg -> {
             Map<String, Object> item = requiredRow("""
-                    SELECT id, public_id, tracking_method, is_stock_item, status
+                    SELECT id, tracking_method, is_stock_item, status
                     FROM items WHERE tenant_id = ? AND public_id = ?
                     """, tenantId, leg.itemPublicId(), "Item not found");
             return leg.withItem(number(item, "id"), string(item, "tracking_method"),
@@ -148,17 +159,34 @@ public class WmsInventoryPostingService {
         }).toList();
         lockIds("items", resolved.stream().map(ResolvedLeg::itemId).toList(), tenantId, "item");
         resolved = resolved.stream().map(leg -> {
+            Map<String, Object> item = requiredRowForUpdate(
+                    "SELECT tracking_method, is_stock_item, status FROM items WHERE id = ? AND tenant_id = ?",
+                    leg.itemId(), tenantId);
+            return leg.withItem(leg.itemId(), string(item, "tracking_method"),
+                    bool(item.get("is_stock_item")), string(item, "status"));
+        }).toList();
+        resolved = resolved.stream().map(leg -> {
             Long lotId = null;
+            String lotStatus = null;
             if (leg.lotPublicId() != null) {
-                lotId = requiredId("""
-                        SELECT id FROM inventory_lots
-                        WHERE tenant_id = ? AND item_id = ? AND public_id = ? AND status = 'ACTIVE'
-                        """, tenantId, leg.itemId(), leg.lotPublicId(), "Active lot not found");
+                Map<String, Object> lot = requiredRow("""
+                        SELECT id, status FROM inventory_lots
+                        WHERE tenant_id = ? AND item_id = ? AND public_id = ?
+                        """, tenantId, leg.itemId(), leg.lotPublicId(), "Lot not found");
+                lotId = number(lot, "id");
+                lotStatus = string(lot, "status");
             }
-            return leg.withLot(lotId);
+            return leg.withLot(lotId, lotStatus);
         }).toList();
         lockIds("inventory_lots", resolved.stream().map(ResolvedLeg::lotId)
                 .filter(Objects::nonNull).toList(), tenantId, "lot");
+        resolved = resolved.stream().map(leg -> {
+            if (leg.lotId() == null) return leg;
+            Map<String, Object> lot = requiredRowForUpdate(
+                    "SELECT status FROM inventory_lots WHERE id = ? AND tenant_id = ? AND item_id = ?",
+                    leg.lotId(), tenantId, leg.itemId());
+            return leg.withLotStatus(string(lot, "status"));
+        }).toList();
         resolved = resolveSerials(tenantId, resolved);
         return resolved;
     }
@@ -185,7 +213,23 @@ public class WmsInventoryPostingService {
         }
         lockIds("inventory_serials", result.stream().map(ResolvedLeg::serialId)
                 .filter(Objects::nonNull).toList(), tenantId, "serial");
-        return result;
+        return result.stream().map(leg -> {
+            if (leg.serialId() == null) return leg;
+            Map<String, Object> serial = requiredRowForUpdate("""
+                    SELECT status, current_warehouse_id, current_location_id
+                    FROM inventory_serials WHERE id = ? AND tenant_id = ? AND item_id = ?
+                      AND lot_id <=> ?
+                    """, leg.serialId(), tenantId, leg.itemId(), leg.lotId());
+            return leg.withSerial(leg.serialId(), string(serial, "status"),
+                    nullableNumber(serial.get("current_warehouse_id")),
+                    nullableNumber(serial.get("current_location_id")));
+        }).toList();
+    }
+
+    private Map<String, Object> requiredRowForUpdate(String sql, Object... args) {
+        List<Map<String, Object>> rows = jdbc.queryForList(sql + " FOR UPDATE", args);
+        if (rows.isEmpty()) throw new IllegalArgumentException("Referenced inventory record is no longer available");
+        return rows.getFirst();
     }
 
     private void validateMovement(NormalizedCommand command, List<ResolvedLeg> legs) {
@@ -201,6 +245,9 @@ public class WmsInventoryPostingService {
             if (!STOCK_STATUSES.contains(leg.stockStatus())) throw new IllegalArgumentException("Stock status is invalid");
             if (!"ACTIVE".equals(leg.warehouseStatus()) || !"ACTIVE".equals(leg.locationStatus())) {
                 throw new IllegalArgumentException("Warehouse and location must be active");
+            }
+            if (leg.lotId() != null && !"ACTIVE".equals(leg.lotStatus())) {
+                throw new IllegalArgumentException("Lot is not active");
             }
             boolean lotTracked = Set.of("LOT", "LOT_AND_SERIAL").contains(leg.trackingMethod());
             boolean serialTracked = Set.of("SERIAL", "LOT_AND_SERIAL").contains(leg.trackingMethod());
@@ -603,36 +650,45 @@ public class WmsInventoryPostingService {
                                String serialNumber, String stockStatus, BigDecimal quantity,
                                long warehouseId, Long locationId, Long itemId, Long lotId,
                                Long serialId, String trackingMethod, boolean stockItem, String itemStatus,
-                               String warehouseStatus, String locationStatus, String serialStatus,
+                               String warehouseStatus, String locationStatus, String lotStatus, String serialStatus,
                                Long serialWarehouse, Long serialLocation) {
         ResolvedLeg(int index, PostingLeg leg, long warehouseId, String warehouseStatus) {
             this(index, leg.warehousePublicId(), leg.locationPublicId(), leg.itemPublicId(),
                     leg.lotPublicId(), leg.serialPublicId(), leg.serialNumber(), leg.stockStatus(),
                     leg.quantity(), warehouseId, null, null, null, null, null, false, null,
-                    warehouseStatus, null, null, null, null);
+                    warehouseStatus, null, null, null, null, null);
         }
         ResolvedLeg withLocation(long id, String status) {
             return new ResolvedLeg(index, warehousePublicId, locationPublicId, itemPublicId, lotPublicId,
                     serialPublicId, serialNumber, stockStatus, quantity, warehouseId, id, itemId, lotId,
                     serialId, trackingMethod, stockItem, itemStatus, warehouseStatus, status,
-                    serialStatus, serialWarehouse, serialLocation);
+                    lotStatus, serialStatus, serialWarehouse, serialLocation);
         }
         ResolvedLeg withItem(long id, String tracking, boolean stock, String status) {
             return new ResolvedLeg(index, warehousePublicId, locationPublicId, itemPublicId, lotPublicId,
                     serialPublicId, serialNumber, stockStatus, quantity, warehouseId, locationId, id, lotId,
-                    serialId, tracking, stock, status, warehouseStatus, locationStatus, serialStatus,
+                    serialId, tracking, stock, status, warehouseStatus, locationStatus, lotStatus, serialStatus,
                     serialWarehouse, serialLocation);
         }
-        ResolvedLeg withLot(Long id) {
+        ResolvedLeg withLot(Long id, String status) {
             return new ResolvedLeg(index, warehousePublicId, locationPublicId, itemPublicId, lotPublicId,
                     serialPublicId, serialNumber, stockStatus, quantity, warehouseId, locationId, itemId, id,
                     serialId, trackingMethod, stockItem, itemStatus, warehouseStatus, locationStatus,
+                    status, serialStatus, serialWarehouse, serialLocation);
+        }
+        ResolvedLeg withLotStatus(String status) {
+            return withLot(lotId, status);
+        }
+        ResolvedLeg withWarehouseStatus(String status) {
+            return new ResolvedLeg(index, warehousePublicId, locationPublicId, itemPublicId, lotPublicId,
+                    serialPublicId, serialNumber, stockStatus, quantity, warehouseId, locationId, itemId, lotId,
+                    serialId, trackingMethod, stockItem, itemStatus, status, locationStatus, lotStatus,
                     serialStatus, serialWarehouse, serialLocation);
         }
         ResolvedLeg withSerial(Long id, String status, Long warehouse, Long location) {
             return new ResolvedLeg(index, warehousePublicId, locationPublicId, itemPublicId, lotPublicId,
                     serialPublicId, serialNumber, stockStatus, quantity, warehouseId, locationId, itemId, lotId,
-                    id, trackingMethod, stockItem, itemStatus, warehouseStatus, locationStatus, status,
+                    id, trackingMethod, stockItem, itemStatus, warehouseStatus, locationStatus, lotStatus, status,
                     warehouse, location);
         }
     }
