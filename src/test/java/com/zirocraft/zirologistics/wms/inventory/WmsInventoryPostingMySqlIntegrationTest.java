@@ -245,6 +245,19 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 """, membershipPublicId, tenantId, userId);
         long membershipId = jdbc.queryForObject("SELECT id FROM tenant_memberships WHERE public_id = ?",
                 Long.class, membershipPublicId);
+        String rolePublicId = uuid();
+        jdbc.update("""
+                INSERT INTO roles (public_id, tenant_id, role_code, role_name, description, is_system_role, status)
+                VALUES (?, ?, 'INVENTORY_TEST_OWNER', 'Inventory Test Owner', 'Integration test role', 0, 'ACTIVE')
+                """, rolePublicId, tenantId);
+        long roleId = jdbc.queryForObject("SELECT id FROM roles WHERE public_id = ?", Long.class, rolePublicId);
+        jdbc.update("INSERT INTO membership_roles (tenant_id, membership_id, role_id) VALUES (?, ?, ?)",
+                tenantId, membershipId, roleId);
+        jdbc.update("""
+                INSERT INTO role_permissions (role_id, permission_id)
+                SELECT ?, id FROM permissions
+                WHERE permission_code IN ('WMS_INVENTORY_POST', 'WMS_INVENTORY_READ', 'WMS_INVENTORY_LEDGER_READ')
+                """, roleId);
         jdbc.update("""
                 INSERT INTO warehouses (public_id, tenant_id, warehouse_code, warehouse_name)
                 VALUES (?, ?, 'MAIN', 'Main Warehouse')
