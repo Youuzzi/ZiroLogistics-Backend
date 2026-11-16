@@ -73,7 +73,7 @@ public class WmsRoleManagementService {
                 """, publicId, access.tenantId(), normalizedCode, normalizedName, normalizedDescription);
         Map<String, Object> after = roleByPublicId(access.tenantId(), publicId);
         audit(access, "CREATE", publicId, Map.of(), after);
-        return after;
+        return roleResponse(after);
     }
 
     @Transactional
@@ -99,7 +99,7 @@ public class WmsRoleManagementService {
         if (changed != 1) throw new IllegalStateException("Role version conflict");
         Map<String, Object> after = roleByPublicId(access.tenantId(), rolePublicId);
         audit(access, "UPDATE", rolePublicId, before, after);
-        return after;
+        return roleResponse(after);
     }
 
     @Transactional
@@ -240,7 +240,9 @@ public class WmsRoleManagementService {
         if (principal == null) throw new AccessDeniedException("Tenant context is required");
         WmsMembershipAccess resolved = accessService.resolve(principal.userPublicId(), principal.membershipPublicId());
         if (!Objects.equals(resolved.tenantId(), principal.tenantId())
+                || !Objects.equals(resolved.tenantPublicId(), principal.tenantPublicId())
                 || !Objects.equals(resolved.membershipId(), principal.membershipId())
+                || !Objects.equals(resolved.membershipPublicId(), principal.membershipPublicId())
                 || !Objects.equals(resolved.userPublicId(), principal.userPublicId())) {
             throw new AccessDeniedException("Tenant context is unavailable");
         }
@@ -277,6 +279,12 @@ public class WmsRoleManagementService {
 
     private Map<String, Object> roleByPublicId(Long tenantId, String publicId) {
         return requireRole(tenantId, publicId);
+    }
+
+    private static Map<String, Object> roleResponse(Map<String, Object> role) {
+        Map<String, Object> response = new LinkedHashMap<>(role);
+        response.remove("id");
+        return response;
     }
 
     private void audit(Access access, String action, String subjectPublicId,
