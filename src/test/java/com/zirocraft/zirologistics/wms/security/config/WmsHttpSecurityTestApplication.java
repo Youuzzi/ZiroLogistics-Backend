@@ -12,5 +12,5 @@ import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
  */
 @SpringBootConfiguration(proxyBeanMethods = false)
 @EnableAutoConfiguration
-class WmsHttpSecurityTestApplication {
+public class WmsHttpSecurityTestApplication {
 }
