@@ -45,7 +45,7 @@ Tenant owners cannot change tenant lifecycle status through this API. Tenant sus
 
 ## 4. Audit
 
-Migration V8 creates `tenant_audit_events`. A profile update writes one `TENANT_PROFILE_UPDATED` event in the same transaction as the tenant row update. The event includes:
+Migration V8 creates `tenant_audit_events` with operator attribution and idempotent operation references. A profile update writes one `TENANT_PROFILE_UPDATED` event in the same transaction as the tenant row update. The event includes:
 - tenant and subject public identifiers;
 - active actor membership scoped to the same tenant;
 - before/after values for the editable profile fields;
@@ -53,7 +53,7 @@ Migration V8 creates `tenant_audit_events`. A profile update writes one `TENANT_
 
 The audit insert is performed only when the persisted actor user and membership remain active and belong to the same tenant. If the audit insert fails, the profile update rolls back. No passwords, action tokens, credentials, or email payloads are recorded.
 
-The table is append-only at the application layer. Production database grants must deny UPDATE and DELETE to the runtime role as part of deployment hardening.
+The table is append-only at the application layer. Events distinguish `TENANT_MEMBER` actors (with a same-tenant membership FK) from `PLATFORM_OPERATOR` actors (with a required operator reference and no membership ID). Lifecycle events carry a unique operation reference so retries are idempotent. Production database grants must deny UPDATE and DELETE to the runtime role as part of deployment hardening.
 
 ## 5. Migrations
 
@@ -75,11 +75,26 @@ The tenant profile MySQL integration test must verify:
 - audit event contains before/after values and is tenant-scoped;
 - failed validation or authorization leaves both profile and audit unchanged.
 
-## 7. Remaining tenant lifecycle work
+## 7. Controlled tenant lifecycle
 
-This slice deliberately does not implement platform-operator tenant suspension, reactivation, closure, or repeatable tenant provisioning. Those operations must use an explicit non-web operator workflow, audited reason codes, idempotent operation references, and safe state transitions:
+Tenant lifecycle status is not exposed through the tenant-facing HTTP API. It is changed only through the explicit non-web operator command:
 - `ACTIVE -> SUSPENDED`;
 - `SUSPENDED -> ACTIVE`;
 - `SUSPENDED -> CLOSED`.
 
-Hard deletion is not a tenant lifecycle operation. Closed tenants retain their historical records for audit and referential integrity. The lifecycle command must reject direct `ACTIVE -> CLOSED` transitions and must never accept a tenant ID from an HTTP caller.
+The command requires `--wms.tenant.lifecycle.command-mode=true`, `WMS_TENANT_LIFECYCLE_ENABLED=true`, an action, tenant public ID, reason (10–500 characters), unique UUID operation reference, and operator reference (3–120 safe identifier characters). Closing additionally requires exact confirmation `CLOSE:<tenant_code>`. The application entry point switches to non-web mode for this command and refuses simultaneous bootstrap and lifecycle command modes.
+
+Configuration uses:
+- `WMS_TENANT_LIFECYCLE_ENABLED`
+- `WMS_TENANT_LIFECYCLE_ACTION` (`SUSPEND`, `REACTIVATE`, or `CLOSE`)
+- `WMS_TENANT_LIFECYCLE_TENANT_PUBLIC_ID`
+- `WMS_TENANT_LIFECYCLE_REASON`
+- `WMS_TENANT_LIFECYCLE_OPERATION_REF`
+- `WMS_TENANT_LIFECYCLE_OPERATOR_REFERENCE`
+- `WMS_TENANT_LIFECYCLE_CONFIRMATION` (required only for closure)
+
+The operator reference is recorded in the audit event; it should identify the authenticated operator or controlled deployment identity and must not be a secret. A repeated operation reference for the same tenant and action returns the previously applied result. Reusing it for another tenant or action is rejected. The service locks the tenant row, checks the expected source state, updates status/version, and inserts the audit event in one transaction.
+
+Direct `ACTIVE -> CLOSED` is rejected. `CLOSED` is terminal. Hard deletion is not a tenant lifecycle operation; closed tenants retain historical records for audit and referential integrity. No tenant ID or status transition is accepted from a public HTTP caller.
+
+Repeatable tenant provisioning is still a separate controlled onboarding workflow and is not part of this profile/lifecycle slice.
