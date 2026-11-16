@@ -5,7 +5,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Locale;
 import java.util.UUID;
@@ -103,11 +102,14 @@ public final class WmsPlatformBootstrapService {
                     VALUES (?, ?)
                     """, roleId, permissionId);
 
-            jdbc.update("""
+            int completed = jdbc.update("""
                     UPDATE wms_platform_bootstrap_state
                     SET status = 'COMPLETED', operation_ref = ?, completed_at = UTC_TIMESTAMP(6)
                     WHERE id = 1 AND status = 'NOT_COMPLETED'
                     """, operationRef);
+            if (completed != 1) {
+                throw new BootstrapRejectedException("WMS bootstrap completion could not be recorded");
+            }
 
             return new Result(operationRef, tenantPublicId, userPublicId, membershipPublicId, rolePublicId);
         });
@@ -147,7 +149,10 @@ public final class WmsPlatformBootstrapService {
             throw new IllegalArgumentException("Invalid operator email");
         }
         String fullName = bounded(p.getOperatorFullName(), "operator full name", 2, 150);
-        String password = required(p.getOperatorPassword(), "operator password");
+        String password = p.getOperatorPassword();
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("Missing operator password");
+        }
         if (password.length() < 12 || password.length() > 128) {
             throw new IllegalArgumentException("Operator password must contain 12 to 128 characters");
         }
