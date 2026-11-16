@@ -74,7 +74,7 @@ class WmsWarehouseManagementServiceTest {
         verify(jdbc, times(1)).queryForList(
                 eq("SELECT id FROM tenants WHERE id = ? AND status = 'ACTIVE' FOR UPDATE"),
                 eq(Long.class), eq(10L));
-        verify(jdbc, never()).update(contains("INSERT INTO warehouses"), any(Object[].class));
+        verifyNoMoreInteractions(jdbc);
     }
 
     private static WmsAuthenticatedPrincipal principal() {
