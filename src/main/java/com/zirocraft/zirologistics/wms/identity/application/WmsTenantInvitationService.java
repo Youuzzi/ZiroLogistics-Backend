@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -163,12 +164,16 @@ public class WmsTenantInvitationService {
                 access.tenantId(),
                 normalizedEmail,
                 expiresAt));
-        WmsEncryptedEmailPayload encryptedPayload = encryption.encrypt(
-                messageId,
-                WmsIdentityActionTokenPurpose.INVITATION,
-                normalizedEmail,
-                plaintextPayload);
-        java.util.Arrays.fill(plaintextPayload, (byte) 0);
+        WmsEncryptedEmailPayload encryptedPayload;
+        try {
+            encryptedPayload = encryption.encrypt(
+                    messageId,
+                    WmsIdentityActionTokenPurpose.INVITATION,
+                    normalizedEmail,
+                    plaintextPayload);
+        } finally {
+            Arrays.fill(plaintextPayload, (byte) 0);
+        }
 
         outboxStorage.enqueue(
                 messageId,
