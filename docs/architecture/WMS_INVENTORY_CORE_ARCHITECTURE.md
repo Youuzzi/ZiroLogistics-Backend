@@ -52,11 +52,11 @@ The DDL is the authority for every column, type, nullability, CHECK allowlist, i
 
 ### 3.3 UOM and conversion
 
-- `units_of_measure` is a global controlled catalogue. Stage 8 exposes read-only lookup/list APIs; no tenant endpoint may create or mutate global UOM definitions.
+- `units_of_measure` is a global controlled catalogue. V1 creates the table but seeds no rows, so V11 must seed a reviewed baseline catalogue before item creation is enabled. Stage 8 exposes read-only lookup/list APIs; no tenant endpoint may create or mutate global UOM definitions. The initial catalogue should cover common count, mass, length, area, volume and time units; item-specific pack/carton conversions remain per-item, never global assumptions.
 - Supported dimensions are the exact V1 CHECK values: `COUNT`, `MASS`, `LENGTH`, `AREA`, `VOLUME`, `TIME`.
 - An item base UOM and all item-specific conversion endpoints must share the same dimension.
 - Conversion factor semantics are fixed: **1 unit of from_uom = conversion_factor units of to_uom**.
-- Conversion uses BigDecimal only; never binary floating point. Apply the target UOM decimal-place policy explicitly and reject precision loss unless the calling workflow explicitly requests an approved rounding mode.
+- Conversion uses BigDecimal only; never binary floating point. `units_of_measure.decimal_places` governs accepted input/display precision (0–6), while inventory balance/ledger quantities are DECIMAL(19,4). A converted stock quantity must be exactly representable at scale 4; reject excess precision rather than silently round. Any later approved rounding mode must be explicit and recorded by the calling document.
 - No implicit conversion path search or guessed conversion. Only an explicitly configured direct conversion is valid. A reverse conversion is not assumed unless the reverse row exists.
 - A conversion pair must not be duplicated. Conversion changes are audited; once referenced by posted operational documents, a conversion factor is not edited in place. Use a controlled deactivate/replacement policy and preserve transaction-line conversion snapshots in the relevant later workflow tables.
 
@@ -76,7 +76,7 @@ The DDL is the authority for every column, type, nullability, CHECK allowlist, i
 - Serial statuses are exactly `AVAILABLE`, `RESERVED`, `PICKED`, `SHIPPED`, `DAMAGED`, `QUARANTINED`, `RETURNED`, `LOST`; transitions are explicit and validated.
 - Serial location fields are either both null or both populated. Any populated location must belong to the same tenant/warehouse.
 - `SERIAL` and `LOT_AND_SERIAL` items require serial identity on every applicable stock movement; a serial movement quantity is exactly one unit in absolute value, as enforced by V1 ledger CHECK.
-- `LOT` and `LOT_AND_SERIAL` movements require a valid lot; `NONE` and `SERIAL` movements must not invent a lot.
+- `LOT` and `LOT_AND_SERIAL` movements require a valid lot. `NONE` items cannot carry lot identity. `SERIAL` items may optionally be associated with a lot only when the item policy and source workflow explicitly support that relationship; do not infer a lot.
 - Aggregate serial counts and lot allocations must reconcile with balance quantities. Serial status/location and ledger movement must be committed in the same transaction as the balance change.
 
 ### 3.6 Inventory balance
@@ -97,7 +97,7 @@ The DDL is the authority for every column, type, nullability, CHECK allowlist, i
 - Each entry has a non-zero delta and must satisfy `balance_after_qty = balance_before_qty + quantity_delta`.
 - Movement types must use the exact V1 CHECK allowlist: `RECEIPT`, `ISSUE`, `TRANSFER`, `ADJUSTMENT_IN`, `ADJUSTMENT_OUT`, `RETURN`, `DAMAGE`, `STATUS_CHANGE`, `OPENING_BALANCE`.
 - A movement group may contain multiple entries. Internal transfers require paired source-negative and destination-positive entries with the same movement group, and net quantity zero for each item/lot/stock-status combination.
-- `request_id` plus `entry_no` is the database idempotency uniqueness boundary per tenant. Reuse of a request ID must be detected before any new balance mutation. A retry may return the prior committed result only when the incoming canonical request matches the stored ledger facts; a conflicting reuse is rejected. Do not claim payload-hash protection because V1 has no request fingerprint column/table.
+- `request_id` plus `entry_no` is the database uniqueness boundary for ledger entries per tenant; it prevents duplicate entry numbers but is not, by itself, full request-payload idempotency. Stage 8 rejects duplicate request IDs before changing balances and returns a safe conflict unless the prior result can be proven identical from persisted ledger facts. Do not claim payload-hash protection or safe replay of arbitrary commands: V1 has no request fingerprint column/table. Stage 11 may add a dedicated idempotency registry after real workflow command shapes are known.
 - The actor is the authenticated membership resolved by the backend, never a client-supplied actor ID.
 - Reference type/IDs are server-populated from the calling workflow; clients cannot forge document ownership.
 
@@ -171,7 +171,7 @@ No public generic endpoint may post arbitrary ledger deltas. No manual balance e
 
 ## 7. V11 migration and verification gates
 
-V1–V10 are immutable. Stage 8 may add V11 only for the explicit permission catalogue/owner grants and tenant-audit event CHECK expansion. Do not add duplicate inventory tables; the complete stock schema already exists in V1.
+V1–V10 are immutable. V11 must add the explicit permission catalogue/owner grants, tenant-audit event CHECK expansion, and the initial global UOM seed catalogue (with deterministic codes/dimensions/decimal-place policy). Do not add duplicate inventory tables; the complete stock schema already exists in V1. The exact seed list is part of the V11 migration review and must be covered by migration integration tests.
 
 Before implementation merge, disposable MySQL 8.4 Testcontainers must verify:
 
