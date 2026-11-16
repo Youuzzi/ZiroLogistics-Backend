@@ -96,11 +96,12 @@ public class WmsInventoryQueryService {
                        lot.public_id AS lot_public_id, lot.lot_number,
                        s.public_id AS serial_public_id, s.serial_number, g.stock_status,
                        g.quantity_delta, g.balance_before_qty, g.balance_after_qty,
-                       g.reference_type, g.reference_id, g.reference_line_id,
-                       g.actor_membership_id, g.occurred_at, g.notes
+                       actor.public_id AS actor_membership_public_id, g.occurred_at, g.notes
                 FROM inventory_ledger g
                 JOIN items i ON i.id = g.item_id AND i.tenant_id = g.tenant_id
                 JOIN warehouses w ON w.id = g.warehouse_id AND w.tenant_id = g.tenant_id
+                LEFT JOIN tenant_memberships actor
+                    ON actor.id = g.actor_membership_id AND actor.tenant_id = g.tenant_id
                 JOIN warehouse_locations l ON l.id = g.location_id AND l.warehouse_id = g.warehouse_id
                     AND l.tenant_id = g.tenant_id
                 LEFT JOIN inventory_lots lot ON lot.id = g.lot_id AND lot.tenant_id = g.tenant_id
