@@ -1,6 +1,6 @@
 # WMS Flyway and MySQL 8.4 Compatibility
 
-**Status:** implementation proposal pending CI verification  
+**Status:** implemented; PR CI #186 passed  
 **Baseline:** Spring Boot 3.5.13, Java 21, MySQL 8.4 Testcontainers  
 **Scope:** Flyway dependency alignment only
 
@@ -57,4 +57,13 @@ Run the full suite with Docker Desktop running:
 
 ## Verification status
 
-Pending CI. Do not treat the dependency update as verified until the CI run confirms the dependency resolution and MySQL 8.4 migration tests.
+GitHub Actions Backend CI #186 completed successfully on commit `1f4bad3f94f6a67ffb753f1b34bac91b3dfe756e`.
+
+Observed in the CI job log:
+
+- Flyway connected to disposable MySQL 8.4 databases for WMS identity, throttle adapter, credential authentication, membership projection, WMS V1/V2 migrations, and the legacy initial migration test.
+- The previous Flyway warning stating that MySQL 8.4 was newer than the tested range ending at 8.1 did not appear in the CI log.
+- Maven reported `Tests run: 101, Failures: 0, Errors: 0, Skipped: 2` and `BUILD SUCCESS`.
+- The two skipped tests are the opt-in Argon2id benchmark and concurrency probes; they are intentionally excluded from ordinary CI.
+
+The Maven property explicitly pins both Flyway modules through Spring Boot's managed `flyway.version` property. For local dependency-resolution evidence, run the dependency-tree command above after syncing the merged change and confirm both modules report 11.20.3.
