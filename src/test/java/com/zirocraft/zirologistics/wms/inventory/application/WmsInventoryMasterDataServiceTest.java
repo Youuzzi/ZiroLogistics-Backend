@@ -84,6 +84,46 @@ class WmsInventoryMasterDataServiceTest {
         verify(jdbc).queryForList(contains("WHERE i.tenant_id = ?"), eq(10L));
     }
 
+
+    @Test
+    void identifierLookupPreservesLeadingZeroesAndIsTenantScoped() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ITEM_READ")));
+        when(jdbc.queryForList(anyString(), eq(10L), eq("GTIN"), eq("00012345678905")))
+                .thenReturn(List.of(java.util.Map.of("public_id", "item-public", "sku", "SKU-1",
+                        "item_name", "Item", "status", "ACTIVE", "tracking_method", "NONE",
+                        "is_stock_item", 1, "base_uom_code", "EA")));
+
+        var result = service.lookupItemByIdentifier(principal(), "gtin", "00012345678905");
+
+        assertEquals("item-public", result.get("public_id"));
+        verify(jdbc).queryForList(contains("WHERE x.tenant_id = ?"), eq(10L),
+                eq("GTIN"), eq("00012345678905"));
+    }
+
+    @Test
+    void identifierLookupRejectsMalformedGtinBeforeQuery() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ITEM_READ")));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.lookupItemByIdentifier(principal(), "GTIN", "12345"));
+
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void conversionFactorMustBePositiveAndWithinDatabasePrecision() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ITEM_UOM_CONVERSION_MANAGE")));
+
+        assertThrows(IllegalArgumentException.class, () -> service.addUomConversion(
+                principal(), "item-public",
+                new WmsInventoryMasterDataService.UomConversionCommand("EA", "CASE", new java.math.BigDecimal("0"))));
+
+        verifyNoInteractions(jdbc);
+    }
+
     private static WmsAuthenticatedPrincipal principal() {
         return new WmsAuthenticatedPrincipal(
                 "user-public", 10L, "tenant-public", 30L, "membership-public", Set.of());
