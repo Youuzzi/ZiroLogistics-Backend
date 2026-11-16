@@ -129,17 +129,17 @@ public class WmsTenantProfileService {
             TenantEntity tenant,
             Map<String, Object> before,
             Map<String, Object> after) {
-        Map<String, Object> changes = Map.of("before", before, "after", after);
+        Map<String, Object> change_payload = Map.of("before", before, "after", after);
         final String serialized;
         try {
-            serialized = objectMapper.writeValueAsString(changes);
+            serialized = objectMapper.writeValueAsString(change_payload);
         } catch (JsonProcessingException serializationFailure) {
             throw new IllegalStateException("Tenant audit event could not be serialized");
         }
 
         int inserted = jdbc.update("""
                 INSERT INTO tenant_audit_events
-                  (public_id, tenant_id, actor_membership_id, event_type, subject_public_id, changes)
+                  (public_id, tenant_id, actor_membership_id, event_type, subject_public_id, change_payload)
                 SELECT ?, t.id, m.id, 'TENANT_PROFILE_UPDATED', t.public_id, ?
                 FROM tenants t
                 INNER JOIN tenant_memberships m
