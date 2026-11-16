@@ -25,7 +25,9 @@ public class WmsRoleManagementService {
     private static final Set<String> DELEGABLE_PERMISSIONS = Set.of(
             "WMS_ROLE_READ", "WMS_ROLE_CREATE", "WMS_ROLE_UPDATE",
             "WMS_ROLE_DEACTIVATE", "WMS_PERMISSION_CATALOG_READ",
-            "WMS_MEMBERSHIP_ROLE_READ");
+            "WMS_MEMBERSHIP_ROLE_READ",
+            "WMS_WAREHOUSE_READ", "WMS_WAREHOUSE_CREATE", "WMS_WAREHOUSE_UPDATE",
+            "WMS_LOCATION_READ", "WMS_LOCATION_CREATE", "WMS_LOCATION_UPDATE");
     private static final Map<String, String> AUDIT_TYPES = Map.of(
             "CREATE", "ROLE_CREATED",
             "UPDATE", "ROLE_UPDATED",
@@ -129,7 +131,10 @@ public class WmsRoleManagementService {
                 FROM permissions WHERE permission_code IN (
                   'WMS_ROLE_READ', 'WMS_ROLE_CREATE', 'WMS_ROLE_UPDATE',
                   'WMS_ROLE_DEACTIVATE', 'WMS_PERMISSION_CATALOG_READ',
-                  'WMS_MEMBERSHIP_ROLE_READ'
+                  'WMS_MEMBERSHIP_ROLE_READ',
+                  'WMS_WAREHOUSE_READ', 'WMS_WAREHOUSE_CREATE', 'WMS_WAREHOUSE_UPDATE',
+                  'WMS_WAREHOUSE_STATUS_MANAGE', 'WMS_LOCATION_READ', 'WMS_LOCATION_CREATE',
+                  'WMS_LOCATION_UPDATE', 'WMS_LOCATION_STATUS_MANAGE'
                 ) ORDER BY module, permission_code
                 """);
     }
