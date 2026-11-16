@@ -55,6 +55,23 @@ class WmsHttpSecurityEnabledTest {
     }
 
     @Test
+    void permitsOnlyExactPublicPostAuthenticationRoutes() throws Exception {
+        mockMvc.perform(post("/api/wms/v1/auth/credentials")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("wms-public-post"));
+
+        mockMvc.perform(get("/api/wms/v1/auth/credentials"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/wms/v1/invitations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void acceptsOnlyBearerTokensResolvedByWmsAuthenticationConverter() throws Exception {
         Instant now = Instant.now();
         Jwt jwt = Jwt.withTokenValue("valid-test-token")
