@@ -63,4 +63,20 @@ class WmsEmailOutboxEncryptionConfigurationTest {
                             .hasStackTraceContaining("not valid Base64");
                 });
     }
+
+    @Test
+    void failsClosedWhenAesKeyLengthIsNot256Bits() {
+        String encodedKey = Base64.getEncoder().encodeToString(new byte[16]);
+
+        contextRunner
+                .withPropertyValues(
+                        "wms.identity.email.outbox.encryption.enabled=true",
+                        "wms.identity.email.outbox.encryption.current-key-version=1",
+                        "wms.identity.email.outbox.encryption.keys[1]=" + encodedKey)
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasStackTraceContaining("32 bytes");
+                });
+    }
 }
