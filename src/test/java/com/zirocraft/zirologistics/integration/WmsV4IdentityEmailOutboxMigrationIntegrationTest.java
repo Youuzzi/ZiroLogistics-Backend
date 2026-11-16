@@ -59,6 +59,7 @@ class WmsV4IdentityEmailOutboxMigrationIntegrationTest {
         Flyway throughV4 = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/wms-migration")
+                .target(MigrationVersion.fromVersion("4"))
                 .load();
         throughV4.migrate();
         throughV4.validate();
