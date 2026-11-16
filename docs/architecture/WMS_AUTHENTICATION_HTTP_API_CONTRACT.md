@@ -22,7 +22,7 @@ Status: API contract proposal. The current WMS security chain remains fail-close
 | POST | `/api/wms/v1/auth/password-resets` | Consume one-time reset token and set new password |
 | POST | `/api/wms/v1/auth/email-verification-requests` | Request verification email; always return generic accepted response |
 | POST | `/api/wms/v1/auth/email-verifications` | Consume one-time verification token |
-| POST | `/api/wms/v1/invitations/acceptances` | Accept invitation and establish/activate membership |
+| POST | `/api/wms/v1/invitations/acceptances` | Accept invitation for a new global user and establish membership |
 
 ## Authenticated routes
 
@@ -31,7 +31,7 @@ Status: API contract proposal. The current WMS security chain remains fail-close
 | POST | `/api/wms/v1/auth/logout` | Access token; until revocation/session persistence exists, response must not claim server-side revocation |
 | POST | `/api/wms/v1/auth/password-changes` | Access token subject; current password required |
 
-Invitation issuance is tenant-scoped and requires the authenticated membership to be active and hold the explicit `WMS_IDENTITY_MEMBERSHIP_INVITE` permission. The tenant ID is derived from the authenticated principal; it is never trusted from the request body.
+Invitation issuance is tenant-scoped and requires the authenticated membership to be active and hold the explicit `WMS_IDENTITY_MEMBERSHIP_INVITE` permission. The tenant ID is derived from the authenticated principal; it is never trusted from the request body. Existing global users accept an invitation through `POST /api/wms/v1/invitations/existing-account-acceptances`; that route is authenticated and the service verifies the invitation email matches the authenticated global user.
 
 ## Request/response rules
 
