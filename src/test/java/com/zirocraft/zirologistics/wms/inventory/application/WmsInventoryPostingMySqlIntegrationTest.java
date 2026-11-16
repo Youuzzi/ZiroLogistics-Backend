@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -178,8 +179,8 @@ class WmsInventoryPostingMySqlIntegrationTest {
         UUID second = UUID.randomUUID();
         CompletableFuture<Boolean> a = CompletableFuture.supplyAsync(() -> issueSucceeds(fixture, first));
         CompletableFuture<Boolean> b = CompletableFuture.supplyAsync(() -> issueSucceeds(fixture, second));
-        boolean firstSucceeded = a.get();
-        boolean secondSucceeded = b.get();
+        boolean firstSucceeded = a.get(30, TimeUnit.SECONDS);
+        boolean secondSucceeded = b.get(30, TimeUnit.SECONDS);
         assertNotEquals(firstSucceeded, secondSucceeded);
         assertEquals(new BigDecimal("1.0000"), balance(fixture));
         assertEquals(2, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
