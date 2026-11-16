@@ -131,8 +131,8 @@ public class WmsInventoryPostingService {
             if (leg.lotPublicId() != null) {
                 lotId = requiredId("""
                         SELECT id FROM inventory_lots
-                        WHERE tenant_id = ? AND item_id = ? AND public_id = ?
-                        """, tenantId, leg.itemId(), leg.lotPublicId(), "Lot not found");
+                        WHERE tenant_id = ? AND item_id = ? AND public_id = ? AND status = 'ACTIVE'
+                        """, tenantId, leg.itemId(), leg.lotPublicId(), "Active lot not found");
             }
             return leg.withLot(lotId);
         }).toList();
@@ -228,9 +228,13 @@ public class WmsInventoryPostingService {
                 throw new IllegalArgumentException("Serial current location does not match posting source");
             }
         }
-        if (type.equals("RECEIPT") && legs.stream().anyMatch(l -> l.serialNumber() == null && l.serialPublicId() == null)
-                && legs.stream().anyMatch(l -> Set.of("SERIAL", "LOT_AND_SERIAL").contains(l.trackingMethod()))) {
-            throw new IllegalArgumentException("Serial receipt requires a serial number");
+        if (type.equals("RECEIPT") && legs.stream().anyMatch(l ->
+                Set.of("SERIAL", "LOT_AND_SERIAL").contains(l.trackingMethod())
+                        && (l.serialNumber() == null || l.serialPublicId() != null))) {
+            throw new IllegalArgumentException("Serial receipt requires a new serial number");
+        }
+        if (legs.stream().anyMatch(l -> l.serialNumber() != null && l.serialPublicId() != null)) {
+            throw new IllegalArgumentException("Provide either an existing serial ID or a new serial number, not both");
         }
     }
 
