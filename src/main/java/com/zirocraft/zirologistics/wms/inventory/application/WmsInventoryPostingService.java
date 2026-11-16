@@ -55,9 +55,12 @@ public class WmsInventoryPostingService {
 
     @Transactional
     public Map<String, Object> post(WmsAuthenticatedPrincipal principal, PostingCommand command) {
+        if (principal == null) throw new AccessDeniedException("Tenant context is required");
+        // Lock the tenant before resolving effective permissions so role/membership mutations
+        // that share the tenant lock cannot race authorization with this posting transaction.
+        lockTenant(principal.tenantId());
         Access access = access(principal);
         NormalizedCommand normalized = normalize(command);
-        lockTenant(access.tenantId());
 
         // Resolve and lock reference rows in the shared warehouse -> location -> item -> lot -> serial order.
         List<ResolvedLeg> legs = resolveAndLockReferences(access.tenantId(), normalized);
