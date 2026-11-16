@@ -25,7 +25,7 @@ class WmsV7TenantProfilePermissionMigrationIntegrationTest {
             .withPassword("wms_v7_test");
 
     @Test
-    void seedsTenantProfilePermissionWithoutDefaultRoleGrant() throws Exception {
+    void grantsProfilePermissionOnlyToExistingSystemTenantOwner() throws Exception {
         Flyway throughV6 = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/wms-migration")
