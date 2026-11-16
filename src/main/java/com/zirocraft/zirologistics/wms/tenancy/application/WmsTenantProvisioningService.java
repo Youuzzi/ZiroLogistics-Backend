@@ -211,7 +211,6 @@ public class WmsTenantProvisioningService {
                 || !input.ownerFullName().equals(row.get("owner_full_name"))
                 || !input.operatorReference().equals(row.get("operator_reference"))
                 || !input.reason().equals(row.get("reason"))) {
-            // Full input comparison is performed below; tenant code/email mismatches are never reusable.
             throw new WmsTenantProvisioningRejectedException("Tenant provisioning operation reference does not match request");
         }
         UserStatus ownerStatus = UserStatus.valueOf((String) row.get("owner_status"));
