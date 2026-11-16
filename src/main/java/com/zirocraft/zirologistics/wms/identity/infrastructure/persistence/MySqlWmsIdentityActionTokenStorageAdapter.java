@@ -46,7 +46,7 @@ public class MySqlWmsIdentityActionTokenStorageAdapter implements WmsIdentityAct
                     toInstant(resultSet.getObject("expires_at", LocalDateTime.class)),
                     toInstant(resultSet.getObject("consumed_at", LocalDateTime.class)),
                     toInstant(resultSet.getObject("revoked_at", LocalDateTime.class)),
-                    toInstant(resultSet.getObject("created_at", LocalDateTime.class)));
+                    toInstant(resultSet.getObject("created_at", LocalDateTime.class));
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -131,6 +131,23 @@ public class MySqlWmsIdentityActionTokenStorageAdapter implements WmsIdentityAct
             throw new IllegalStateException("WMS identity action token insert returned no generated ID");
         }
         return key.longValue();
+    }
+
+    @Override
+    public Optional<WmsIdentityActionTokenRecord> findByDigest(
+            byte[] tokenDigest,
+            WmsIdentityActionTokenPurpose expectedPurpose) {
+        requireDigest(tokenDigest);
+        Objects.requireNonNull(expectedPurpose, "expectedPurpose must not be null");
+
+        List<WmsIdentityActionTokenRecord> rows = jdbcTemplate.query("""
+                SELECT id, token_digest, purpose, user_id, tenant_id, invited_by_user_id,
+                       target_email, expires_at, consumed_at, revoked_at, created_at
+                FROM wms_identity_action_tokens
+                WHERE token_digest = ?
+                  AND purpose = ?
+                """, TOKEN_ROW_MAPPER, tokenDigest.clone(), expectedPurpose.name());
+        return rows.stream().findFirst();
     }
 
     @Override
