@@ -313,7 +313,7 @@ public class WmsInventoryMasterDataService {
                 "identifier type");
         String value = normalizeIdentifier(type, command.value());
         boolean primary = Boolean.TRUE.equals(command.primary());
-        if (primary) clearPrimaryIdentifier(access.tenantId(), number(item, "id"));
+        if (primary) clearPrimaryIdentifier(access, number(item, "id"), null);
         String publicId = UUID.randomUUID().toString();
         try {
             jdbc.update("""
@@ -342,7 +342,7 @@ public class WmsInventoryMasterDataService {
                 "identifier type");
         String value = normalizeIdentifier(type, command.value());
         boolean primary = Boolean.TRUE.equals(command.primary());
-        if (primary) clearPrimaryIdentifier(access.tenantId(), itemId);
+        if (primary) clearPrimaryIdentifier(access, itemId, identifierPublicId);
         try {
             int changed = jdbc.update("""
                     UPDATE item_identifiers
@@ -471,9 +471,35 @@ public class WmsInventoryMasterDataService {
         return after;
     }
 
-    private void clearPrimaryIdentifier(Long tenantId, long itemId) {
-        jdbc.update("UPDATE item_identifiers SET is_primary = 0 WHERE tenant_id = ? AND item_id = ? AND is_primary = 1",
-                tenantId, itemId);
+    private void clearPrimaryIdentifier(Access access, long itemId, String excludedPublicId) {
+        List<Map<String, Object>> current = excludedPublicId == null
+                ? jdbc.queryForList("""
+                    SELECT public_id, identifier_type, identifier_value, is_primary, created_at
+                    FROM item_identifiers
+                    WHERE tenant_id = ? AND item_id = ? AND is_primary = 1
+                    LIMIT 1
+                    """, access.tenantId(), itemId)
+                : jdbc.queryForList("""
+                    SELECT public_id, identifier_type, identifier_value, is_primary, created_at
+                    FROM item_identifiers
+                    WHERE tenant_id = ? AND item_id = ? AND is_primary = 1 AND public_id <> ?
+                    LIMIT 1
+                    """, access.tenantId(), itemId, excludedPublicId);
+        int changed = excludedPublicId == null
+                ? jdbc.update("""
+                    UPDATE item_identifiers SET is_primary = 0
+                    WHERE tenant_id = ? AND item_id = ? AND is_primary = 1
+                    """, access.tenantId(), itemId)
+                : jdbc.update("""
+                    UPDATE item_identifiers SET is_primary = 0
+                    WHERE tenant_id = ? AND item_id = ? AND is_primary = 1 AND public_id <> ?
+                    """, access.tenantId(), itemId, excludedPublicId);
+        if (changed > 0 && !current.isEmpty()) {
+            Map<String, Object> before = current.getFirst();
+            Map<String, Object> after = identifierByPublicId(
+                    access.tenantId(), itemId, (String) before.get("public_id"));
+            audit(access, "ITEM_IDENTIFIER_UPDATED", (String) before.get("public_id"), before, after);
+        }
     }
 
     private Map<String, Object> identifierByPublicId(Long tenantId, long itemId, String publicId) {
