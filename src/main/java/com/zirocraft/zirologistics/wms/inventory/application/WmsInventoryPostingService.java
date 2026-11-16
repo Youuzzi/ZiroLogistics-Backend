@@ -71,7 +71,7 @@ public class WmsInventoryPostingService {
                 leg = registerSerial(access.tenantId(), leg);
             }
             Balance balance = lockOrCreateBalance(access.tenantId(), leg);
-            BigDecimal delta = signedDelta(normalized.movementType(), leg.index());
+            BigDecimal delta = signedDelta(normalized.movementType(), leg.index(), leg.quantity());
             BigDecimal before = balance.onHand();
             BigDecimal after = before.add(delta).setScale(4, RoundingMode.UNNECESSARY);
             if (after.signum() < 0) throw new IllegalStateException("Insufficient on-hand inventory");
@@ -457,11 +457,11 @@ public class WmsInventoryPostingService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
-    private static BigDecimal signedDelta(String movement, int index) {
+    private static BigDecimal signedDelta(String movement, int index, BigDecimal quantity) {
         return switch (movement) {
-            case "RECEIPT", "RETURN", "OPENING_BALANCE", "ADJUSTMENT_IN" -> BigDecimal.ONE;
-            case "ISSUE", "ADJUSTMENT_OUT" -> BigDecimal.ONE.negate();
-            case "TRANSFER", "DAMAGE", "STATUS_CHANGE" -> index == 0 ? BigDecimal.ONE.negate() : BigDecimal.ONE;
+            case "RECEIPT", "RETURN", "OPENING_BALANCE", "ADJUSTMENT_IN" -> quantity;
+            case "ISSUE", "ADJUSTMENT_OUT" -> quantity.negate();
+            case "TRANSFER", "DAMAGE", "STATUS_CHANGE" -> index == 0 ? quantity.negate() : quantity;
             default -> throw new IllegalArgumentException("Movement type is unsupported");
         };
     }
