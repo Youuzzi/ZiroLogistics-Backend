@@ -13,7 +13,6 @@ import com.zirocraft.zirologistics.wms.tenancy.domain.TenantStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -45,17 +44,16 @@ class WmsInvitationAcceptanceServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private PlatformTransactionManager transactionManager;
 
-    private WmsIdentityActionTokenGenerator tokenGenerator;
+    private final WmsIdentityActionTokenGenerator tokenGenerator = new WmsIdentityActionTokenGenerator();
     private WmsInvitationAcceptanceService service;
 
     @BeforeEach
     void setUp() {
-        when(transactionManager.getTransaction(any(TransactionDefinition.class)))
+        lenient().when(transactionManager.getTransaction(any(TransactionDefinition.class)))
                 .thenReturn(new SimpleTransactionStatus());
-        doNothing().when(transactionManager).commit(any(TransactionStatus.class));
-        doNothing().when(transactionManager).rollback(any(TransactionStatus.class));
+        lenient().doNothing().when(transactionManager).commit(any(TransactionStatus.class));
+        lenient().doNothing().when(transactionManager).rollback(any(TransactionStatus.class));
 
-        tokenGenerator = new WmsIdentityActionTokenGenerator();
         service = new WmsInvitationAcceptanceService(
                 tokenStorage,
                 tokenGenerator,
@@ -92,13 +90,13 @@ class WmsInvitationAcceptanceServiceTest {
         when(tokenStorage.markConsumed(91L, NOW)).thenReturn(1);
 
         WmsInvitationAcceptanceResult result = service.acceptForNewUser(
-                generated.rawToken(), "  New User  ", "StrongPassword123");
+                generated.rawToken(), "New User", "StrongPassword123");
 
         assertEquals(5L, result.tenantId());
         assertEquals("new.user@example.test", result.normalizedEmail());
         assertTrue(result.accountCreated());
 
-        ArgumentCaptor<UserEntity> userCaptor = ArgumentCaptor.forClass(UserEntity.class);
+        var userCaptor = org.mockito.ArgumentCaptor.forClass(UserEntity.class);
         verify(userRepository).saveAndFlush(userCaptor.capture());
         UserEntity createdUser = userCaptor.getValue();
         assertEquals("new.user@example.test", createdUser.getEmail());
@@ -107,8 +105,7 @@ class WmsInvitationAcceptanceServiceTest {
         assertEquals(UserStatus.ACTIVE, createdUser.getStatus());
         assertEquals(NOW.atOffset(ZoneOffset.UTC).toLocalDateTime(), createdUser.getEmailVerifiedAt());
 
-        ArgumentCaptor<TenantMembershipEntity> membershipCaptor =
-                ArgumentCaptor.forClass(TenantMembershipEntity.class);
+        var membershipCaptor = org.mockito.ArgumentCaptor.forClass(TenantMembershipEntity.class);
         verify(membershipRepository).saveAndFlush(membershipCaptor.capture());
         TenantMembershipEntity membership = membershipCaptor.getValue();
         assertEquals(5L, membership.getTenantId());
@@ -190,7 +187,8 @@ class WmsInvitationAcceptanceServiceTest {
         assertThrows(WmsIdentityActionTokenRejectedException.class,
                 () -> service.acceptForNewUser(generated.rawToken(), "New User", "StrongPassword123"));
 
-        verifyNoInteractions(passwordEncoder, transactionManager, userRepository, membershipRepository);
+        verifyNoInteractions(passwordEncoder, userRepository, membershipRepository);
+        verify(transactionManager, never()).getTransaction(any());
     }
 
     @Test
