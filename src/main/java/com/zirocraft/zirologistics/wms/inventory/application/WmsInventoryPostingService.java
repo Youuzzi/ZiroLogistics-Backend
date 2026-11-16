@@ -522,7 +522,7 @@ public class WmsInventoryPostingService {
             this(index, leg.warehousePublicId(), leg.locationPublicId(), leg.itemPublicId(),
                     leg.lotPublicId(), leg.serialPublicId(), leg.serialNumber(), leg.stockStatus(),
                     leg.quantity(), warehouseId, null, null, null, null, null, false, null,
-                    warehouseStatus, null, null, null, null, null);
+                    warehouseStatus, null, null, null, null);
         }
         ResolvedLeg withLocation(long id, String status) {
             return new ResolvedLeg(index, warehousePublicId, locationPublicId, itemPublicId, lotPublicId,
