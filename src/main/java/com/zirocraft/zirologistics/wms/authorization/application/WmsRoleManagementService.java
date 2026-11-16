@@ -256,7 +256,7 @@ public class WmsRoleManagementService {
         }
         if (!resolved.hasPermission(requiredPermission)) throw new AccessDeniedException("Permission denied");
         return new Access(resolved.tenantId(), resolved.membershipId(), resolved.userPublicId(),
-                resolved.permissions());
+                resolved.permissionCodes());
     }
 
     private void lockTenant(Long tenantId) {
