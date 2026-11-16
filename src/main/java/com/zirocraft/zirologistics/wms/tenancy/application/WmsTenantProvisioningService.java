@@ -41,7 +41,7 @@ public class WmsTenantProvisioningService {
             "WMS_ITEM_IDENTIFIER_MANAGE", "WMS_ITEM_UOM_CONVERSION_MANAGE",
             "WMS_UOM_CATALOG_READ", "WMS_LOT_READ", "WMS_LOT_MANAGE",
             "WMS_SERIAL_READ", "WMS_SERIAL_MANAGE",
-            "WMS_INVENTORY_READ", "WMS_INVENTORY_LEDGER_READ");
+            "WMS_INVENTORY_READ", "WMS_INVENTORY_LEDGER_READ", "WMS_INVENTORY_POST");
 
     private final JdbcTemplate jdbc;
     private final PasswordEncoder passwordEncoder;
