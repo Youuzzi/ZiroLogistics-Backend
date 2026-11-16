@@ -65,12 +65,19 @@ public class WmsInventoryPostingService {
         String movementGroupId = UUID.randomUUID().toString();
         List<Map<String, Object>> entries = new ArrayList<>();
         int entryNo = 1;
+        Map<String, Balance> lockedBalances = new HashMap<>();
+        legs.stream().sorted(Comparator.comparingLong(ResolvedLeg::warehouseId)
+                        .thenComparing(ResolvedLeg::locationId)
+                        .thenComparing(ResolvedLeg::itemId)
+                        .thenComparing(ResolvedLeg::lotId, Comparator.nullsFirst(Comparator.naturalOrder()))
+                        .thenComparing(ResolvedLeg::stockStatus))
+                .forEach(leg -> lockedBalances.put(balanceKey(leg), lockOrCreateBalance(access.tenantId(), leg)));
 
         for (ResolvedLeg leg : legs) {
             if (leg.serialId() == null && leg.serialNumber() != null) {
                 leg = registerSerial(access.tenantId(), leg);
             }
-            Balance balance = lockOrCreateBalance(access.tenantId(), leg);
+            Balance balance = lockedBalances.get(balanceKey(leg));
             BigDecimal delta = signedDelta(normalized.movementType(), leg.index(), leg.quantity());
             BigDecimal before = balance.onHand();
             BigDecimal after = before.add(delta).setScale(4, RoundingMode.UNNECESSARY);
@@ -257,6 +264,10 @@ public class WmsInventoryPostingService {
         return leg.withSerial(id, "AVAILABLE", leg.warehouseId(), leg.locationId());
     }
 
+    private static String balanceKey(ResolvedLeg leg) {
+        return leg.warehouseId() + ":" + leg.locationId() + ":" + leg.itemId() + ":"
+                + leg.lotId() + ":" + leg.stockStatus();
+    }
     private Balance lockOrCreateBalance(long tenantId, ResolvedLeg leg) {
         jdbc.update("""
                 INSERT INTO inventory_balances
