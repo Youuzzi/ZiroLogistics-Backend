@@ -6,7 +6,7 @@ CREATE TABLE tenant_audit_events (
   actor_membership_id bigint DEFAULT NULL,
   event_type varchar(80) NOT NULL,
   subject_public_id char(36) NOT NULL,
-  changes json NOT NULL,
+  change_payload json NOT NULL,
   occurred_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   PRIMARY KEY (id),
   UNIQUE KEY uk_tenant_audit_events_public_id (public_id),
