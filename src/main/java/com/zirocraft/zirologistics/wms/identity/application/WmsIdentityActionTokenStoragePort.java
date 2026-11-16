@@ -11,8 +11,8 @@ import java.util.Optional;
  * Application-owned persistence port for durable WMS identity action tokens.
  *
  * Locking and multi-step operations must be called inside one Spring-managed
- * transaction. In particular, invitation tenant locking, prior-token
- * revocation, and insertion must share the same transaction.
+ * transaction. Invitation issuance and acceptance acquire the tenant row
+ * before locking or changing invitation-token rows to keep a consistent lock order.
  */
 public interface WmsIdentityActionTokenStoragePort {
 
@@ -40,6 +40,15 @@ public interface WmsIdentityActionTokenStoragePort {
             String normalizedTargetEmail,
             Instant expiresAt,
             Instant createdAt);
+
+    /**
+     * Reads a token by digest without acquiring a row lock.
+     * Use only to discover the tenant lock key; always re-read with
+     * findByDigestForUpdate before performing a state transition.
+     */
+    Optional<WmsIdentityActionTokenRecord> findByDigest(
+            byte[] tokenDigest,
+            WmsIdentityActionTokenPurpose expectedPurpose);
 
     /**
      * Retrieves and locks a token row by its digest and expected purpose.
