@@ -50,6 +50,8 @@ public class WmsTenantProvisioningService {
     public WmsTenantProvisioningResult provision(WmsTenantProvisioningProperties properties) {
         Input input = validate(properties);
         // Argon2id work is performed before opening the provisioning transaction.
+        String unreachablePassword = UUID.randomUUID() + UUID.randomUUID().toString();
+        String passwordHash = passwordEncoder.encode(unreachablePassword);
         if (passwordHash == null || passwordHash.isBlank()) {
             throw new WmsTenantProvisioningRejectedException("Tenant owner credential initialization failed");
         }
