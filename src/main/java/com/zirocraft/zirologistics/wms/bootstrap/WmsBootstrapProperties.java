@@ -1,7 +1,9 @@
 package com.zirocraft.zirologistics.wms.bootstrap;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
 
+@Component
 @ConfigurationProperties(prefix = "wms.bootstrap")
 public class WmsBootstrapProperties {
     private boolean enabled;
