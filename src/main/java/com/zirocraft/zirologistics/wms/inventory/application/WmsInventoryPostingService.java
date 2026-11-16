@@ -284,12 +284,26 @@ public class WmsInventoryPostingService {
                     throw new IllegalArgumentException("Transfer must preserve stock status");
                 }
             }
-            if ("DAMAGE".equals(type)
-                    && (!"AVAILABLE".equals(source.stockStatus()) || !"DAMAGED".equals(destination.stockStatus()))) {
-                throw new IllegalArgumentException("Damage must move AVAILABLE stock to DAMAGED");
+            if ("DAMAGE".equals(type)) {
+                if (!"AVAILABLE".equals(source.stockStatus()) || !"DAMAGED".equals(destination.stockStatus())) {
+                    throw new IllegalArgumentException("Damage must move AVAILABLE stock to DAMAGED");
+                }
+                if (source.warehouseId() != destination.warehouseId()
+                        || source.locationId() != destination.locationId()) {
+                    throw new IllegalArgumentException("Damage status movement must remain in the same location");
+                }
             }
-            if ("STATUS_CHANGE".equals(type) && source.stockStatus().equals(destination.stockStatus())) {
-                throw new IllegalArgumentException("Status change must change stock status");
+            if ("STATUS_CHANGE".equals(type)) {
+                if (source.stockStatus().equals(destination.stockStatus())) {
+                    throw new IllegalArgumentException("Status change must change stock status");
+                }
+                if (source.warehouseId() != destination.warehouseId()
+                        || source.locationId() != destination.locationId()) {
+                    throw new IllegalArgumentException("Stock status changes must remain in the same location");
+                }
+                if (source.serialId() != null && serialStatusForStock(destination.stockStatus()) == null) {
+                    throw new IllegalArgumentException("Target stock status is not supported for serial-tracked items");
+                }
             }
         }
         if ("ISSUE".equals(type) && legs.stream().anyMatch(l -> !"AVAILABLE".equals(l.stockStatus()))) {
@@ -297,6 +311,11 @@ public class WmsInventoryPostingService {
         }
         if ("RETURN".equals(type) && legs.stream().anyMatch(l -> !"QUARANTINED".equals(l.stockStatus()))) {
             throw new IllegalArgumentException("Returned stock must enter QUARANTINED status");
+        }
+        if (Set.of("ADJUSTMENT_IN", "ADJUSTMENT_OUT", "OPENING_BALANCE").contains(type)
+                && legs.stream().anyMatch(l -> Set.of("SERIAL", "LOT_AND_SERIAL").contains(l.trackingMethod())
+                    && !"AVAILABLE".equals(l.stockStatus()))) {
+            throw new IllegalArgumentException("Serial inventory adjustments must use AVAILABLE stock status");
         }
         for (ResolvedLeg leg : legs) {
             if (leg.serialId() != null) {
@@ -308,7 +327,10 @@ public class WmsInventoryPostingService {
                 };
                 if (!validState) throw new IllegalArgumentException("Serial is not in a state valid for this movement");
             }
-            if (leg.serialId() != null && !"RETURN".equals(type)
+            boolean restoringLostSerial = leg.serialId() != null
+                    && Set.of("ADJUSTMENT_IN", "OPENING_BALANCE").contains(type)
+                    && "LOST".equals(leg.serialStatus());
+            if (leg.serialId() != null && !"RETURN".equals(type) && !restoringLostSerial
                     && (!"TRANSFER".equals(type) || leg.index() == 0)
                     && (!Objects.equals(leg.serialWarehouse(), leg.warehouseId())
                     || !Objects.equals(leg.serialLocation(), leg.locationId()))) {
@@ -443,6 +465,25 @@ public class WmsInventoryPostingService {
                       AND current_warehouse_id IS NULL AND current_location_id IS NULL
                     """, leg.warehouseId(), leg.locationId(), leg.serialId());
             if (changed != 1) throw new IllegalStateException("Serial return transition failed");
+        } else if ("ADJUSTMENT_OUT".equals(movement)) {
+            int changed = jdbc.update("""
+                    UPDATE inventory_serials
+                    SET status = 'LOST', current_warehouse_id = NULL, current_location_id = NULL,
+                        version = version + 1, updated_at = UTC_TIMESTAMP(6)
+                    WHERE id = ? AND status = 'AVAILABLE'
+                      AND current_warehouse_id = ? AND current_location_id = ?
+                    """, leg.serialId(), leg.warehouseId(), leg.locationId());
+            if (changed != 1) throw new IllegalStateException("Serial loss adjustment failed");
+        } else if (Set.of("ADJUSTMENT_IN", "OPENING_BALANCE").contains(movement)
+                && leg.serialNumber() == null) {
+            int changed = jdbc.update("""
+                    UPDATE inventory_serials
+                    SET status = 'AVAILABLE', current_warehouse_id = ?, current_location_id = ?,
+                        version = version + 1, updated_at = UTC_TIMESTAMP(6)
+                    WHERE id = ? AND status = 'LOST'
+                      AND current_warehouse_id IS NULL AND current_location_id IS NULL
+                    """, leg.warehouseId(), leg.locationId(), leg.serialId());
+            if (changed != 1) throw new IllegalStateException("Serial inventory restoration failed");
         } else if ("DAMAGE".equals(movement) && leg.index() == 1) {
             int changed = jdbc.update("""
                     UPDATE inventory_serials SET status = 'DAMAGED', version = version + 1,
