@@ -16,6 +16,10 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -120,6 +124,63 @@ class WmsPlatformBootstrapMySqlIntegrationTest {
         assertEquals(1, count("tenants"));
         assertEquals("NOT_COMPLETED", jdbc.queryForObject(
                 "SELECT status FROM wms_platform_bootstrap_state WHERE id=1", String.class));
+    }
+
+
+    @Test
+    void rollsBackAllCreatedRowsWhenTheReviewedPermissionIsMissing() {
+        jdbc.update("DELETE FROM permissions WHERE permission_code='WMS_IDENTITY_MEMBERSHIP_INVITE'");
+
+        assertThrows(RuntimeException.class, () -> service.bootstrap(properties));
+        assertEquals(0, count("users"));
+        assertEquals(0, count("tenants"));
+        assertEquals(0, count("tenant_memberships"));
+        assertEquals(0, count("roles"));
+        assertEquals("NOT_COMPLETED", jdbc.queryForObject(
+                "SELECT status FROM wms_platform_bootstrap_state WHERE id=1", String.class));
+    }
+
+    @Test
+    void concurrentInvocationsAllowExactlyOneBootstrapToCommit() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            Future<Boolean> first = pool.submit(() -> attemptAfter(start));
+            Future<Boolean> second = pool.submit(() -> attemptAfter(start));
+            start.countDown();
+
+            assertNotEquals(first.get(), second.get());
+            assertEquals(1, count("users"));
+            assertEquals(1, count("tenants"));
+            assertEquals(1, count("tenant_memberships"));
+            assertEquals(1, count("roles"));
+            assertEquals(1, jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM wms_platform_bootstrap_state WHERE status='COMPLETED'",
+                    Integer.class));
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void invalidConfigurationFailsBeforeAnyDatabaseWrite() {
+        properties.setOperatorPassword("short");
+
+        assertThrows(IllegalArgumentException.class, () -> service.bootstrap(properties));
+        assertEquals(0, count("users"));
+        assertEquals(0, count("tenants"));
+        assertEquals("NOT_COMPLETED", jdbc.queryForObject(
+                "SELECT status FROM wms_platform_bootstrap_state WHERE id=1", String.class));
+    }
+
+    private boolean attemptAfter(CountDownLatch start) throws Exception {
+        start.await();
+        try {
+            service.bootstrap(properties);
+            return true;
+        } catch (WmsPlatformBootstrapService.BootstrapRejectedException expected) {
+            return false;
+        }
     }
 
     private int count(String table) {
