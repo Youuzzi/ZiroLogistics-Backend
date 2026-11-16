@@ -17,6 +17,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
@@ -24,6 +25,7 @@ import java.util.Set;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -31,7 +33,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ContextConfiguration(classes = WmsHttpSecurityTestApplication.class)
 @Import({WmsSecurityConfiguration.class, WmsHttpSecurityEnabledTest.ProbeController.class})
 @ActiveProfiles("wms")
-@TestPropertySource(properties = "wms.security.jwt.enabled=true")
+@TestPropertySource(properties = {
+        "wms.security.jwt.enabled=true",
+        "wms.security.http.auth-endpoints-enabled=true"
+})
 class WmsHttpSecurityEnabledTest {
 
     @Autowired
@@ -46,6 +51,33 @@ class WmsHttpSecurityEnabledTest {
     @Test
     void rejectsRequestsWithoutBearerToken() throws Exception {
         mockMvc.perform(get("/wms/security-probe"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void permitsOnlyExactPublicPostAuthenticationRoutes() throws Exception {
+        mockMvc.perform(post("/api/wms/v1/auth/credentials")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("wms-public-post"));
+
+        mockMvc.perform(get("/api/wms/v1/auth/credentials"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/wms/v1/invitations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/wms/v1/invitations/acceptances")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/wms/v1/invitations/existing-account-acceptances")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -78,6 +110,21 @@ class WmsHttpSecurityEnabledTest {
 
     @RestController
     static class ProbeController {
+        @PostMapping(value = "/api/wms/v1/auth/credentials", produces = MediaType.TEXT_PLAIN_VALUE)
+        String publicPost() {
+            return "wms-public-post";
+        }
+
+        @PostMapping(value = "/api/wms/v1/invitations/acceptances", produces = MediaType.TEXT_PLAIN_VALUE)
+        String publicInvitationAcceptance() {
+            return "wms-public-invitation-acceptance";
+        }
+
+        @GetMapping(value = "/api/wms/v1/auth/credentials", produces = MediaType.TEXT_PLAIN_VALUE)
+        String nonPublicGet() {
+            return "wms-not-public-get";
+        }
+
         @GetMapping(value = "/wms/security-probe", produces = MediaType.TEXT_PLAIN_VALUE)
         String probe() {
             return "wms-protected";
