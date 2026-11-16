@@ -1,0 +1,107 @@
+# WMS Authentication and Account Lifecycle HTTP API Contract
+
+Status: API contract proposal. The current WMS security chain remains fail-closed; these routes are not enabled by this document.
+
+## Principles
+
+- WMS endpoints live under `/api/wms/v1` and are implemented in WMS-only packages scanned by `WmsRuntimeApplication`.
+- No legacy controller or legacy authentication service is reused.
+- Public routes are an explicit allowlist. Every route not listed below requires an authenticated WMS access token or is denied.
+- Passwords and raw action tokens are accepted only in request bodies over TLS. They must never appear in URLs, query strings, logs, traces, metrics, or exception messages.
+- All account-recovery request responses are generic to prevent account enumeration.
+- JSON errors use stable machine-readable codes but generic public messages.
+- Controllers are thin transport adapters; application services own policy and transactions.
+
+## Public authentication routes
+
+| Method | Route | Purpose |
+|---|---|---|
+| POST | `/api/wms/v1/auth/credentials` | Verify global user credentials and return tenant-selection token plus selectable memberships |
+| POST | `/api/wms/v1/auth/tenant-selection` | Exchange a tenant-selection token and selected membership public ID for an access token |
+| POST | `/api/wms/v1/auth/password-reset-requests` | Request password reset; always return generic accepted response |
+| POST | `/api/wms/v1/auth/password-resets` | Consume one-time reset token and set new password |
+| POST | `/api/wms/v1/auth/email-verification-requests` | Request verification email; always return generic accepted response |
+| POST | `/api/wms/v1/auth/email-verifications` | Consume one-time verification token |
+| POST | `/api/wms/v1/invitations/acceptances` | Accept invitation and establish/activate membership |
+
+## Authenticated routes
+
+| Method | Route | Required identity |
+|---|---|---|
+| POST | `/api/wms/v1/auth/logout` | Access token; until revocation/session persistence exists, response must not claim server-side revocation |
+| POST | `/api/wms/v1/auth/password-changes` | Access token subject; current password required |
+
+Invitation issuance is tenant-scoped and requires the authenticated membership to be active and hold the explicit `WMS_IDENTITY_MEMBERSHIP_INVITE` permission. The tenant ID is derived from the authenticated principal; it is never trusted from the request body.
+
+## Request/response rules
+
+### Credentials
+
+Input: normalized email and password. Socket peer address is supplied by the servlet container; X-Forwarded-For is considered only when the direct peer is in the deployment's explicitly configured trusted proxy CIDRs.
+
+Success: short-lived tenant-selection token and memberships the user can actively select. Do not return permissions in this token.
+
+Failure: generic authentication failure for unknown user, wrong password, inactive user, or throttled request. Throttle storage/policy unavailability fails closed.
+
+### Tenant selection
+
+Input: tenant-selection bearer token and membership public ID. The user identity is taken from the validated selection token. Membership and current database authorization are re-resolved before issuing the access token.
+
+Success: short-lived access token containing only subject, membership reference, issuer/audience/time claims, token use, and token ID. Permissions remain database-resolved.
+
+### Invitation and password lifecycle
+
+- Invitation issuance requires `WMS_IDENTITY_MEMBERSHIP_INVITE` on the current active membership.
+- New users are created only on successful invitation acceptance.
+- Existing global users retain their password and profile during invitation acceptance.
+- Password setup/reset/verification use one-time, purpose-bound tokens; token consumption and the associated state change share one transaction.
+- Password changes require the current password and authenticated global user identity.
+- Reset and verification request endpoints return the same public response for existing and unknown addresses.
+
+## Security filter-chain requirements
+
+1. Keep JWT-disabled mode deny-all.
+2. In JWT-enabled mode, permit only the exact public POST routes above.
+3. Require authentication for invitation issuance, password changes, logout, and all future protected routes.
+4. Use a separate tenant-selection token decoder for tenant selection. Do not accept an access token as a selection token or vice versa.
+5. Do not globally permit `/api/**`, `/auth/**`, actuator endpoints, or arbitrary OPTIONS/GET paths.
+6. Apply request-size limits and Bean Validation to all DTOs.
+7. Never log request bodies for credential, invitation, password, or token endpoints.
+8. Configure CORS origins explicitly at deployment; do not use wildcard origins with credentials.
+9. Do not claim logout revokes an access token until server-side session/revocation state is implemented.
+10. Authentication endpoints must not expose internal throttle state, user existence, SQL errors, or token lifecycle details.
+
+## Deployment gates
+
+HTTP credential login must remain disabled until all required configuration is explicitly supplied:
+- WMS profile and WMS-only datasource;
+- WMS JWT signing/verification key material and issuer/audiences;
+- reviewed login throttle policy and HMAC key;
+- MySQL throttle storage enabled and migrations applied;
+- trusted proxy CIDRs appropriate to the actual deployment topology;
+- identity email outbox encryption key ring and an operational email delivery worker for flows that send mail.
+
+No default thresholds, proxy CIDRs, JWT secrets, email keys, or CORS origins are invented by application code. Missing required configuration must fail closed.
+
+## Verification requirements
+
+Use MockMvc/Spring Security tests for exact route authorization and DTO validation, plus disposable MySQL 8.4 Testcontainers for application flows. Cover:
+- JWT disabled denies every WMS route;
+- JWT enabled permits only the listed public POST routes anonymously;
+- protected routes reject missing/invalid tokens;
+- selection decoder rejects access tokens and vice versa;
+- cross-user membership selection is rejected;
+- generic reset/verification responses prevent account enumeration;
+- invitation issuance requires the DB-resolved permission and tenant context;
+- X-Forwarded-For spoofing from an untrusted peer does not alter the source throttle identity;
+- throttle backend outage fails closed;
+- secrets and request bodies are absent from logs;
+- existing legacy HTTP security behavior remains unchanged.
+
+## Explicit non-goals
+
+- No public registration.
+- No refresh token or logout revocation claim without a separately designed durable session lifecycle.
+- No permissions embedded in JWT claims.
+- No reliance on frontend route guards for authorization.
+- No direct access to user-owned database instances during tests.
