@@ -69,6 +69,16 @@ class WmsHttpSecurityEnabledTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/wms/v1/invitations/acceptances")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/wms/v1/invitations/existing-account-acceptances")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -103,6 +113,11 @@ class WmsHttpSecurityEnabledTest {
         @PostMapping(value = "/api/wms/v1/auth/credentials", produces = MediaType.TEXT_PLAIN_VALUE)
         String publicPost() {
             return "wms-public-post";
+        }
+
+        @PostMapping(value = "/api/wms/v1/invitations/acceptances", produces = MediaType.TEXT_PLAIN_VALUE)
+        String publicInvitationAcceptance() {
+            return "wms-public-invitation-acceptance";
         }
 
         @GetMapping(value = "/api/wms/v1/auth/credentials", produces = MediaType.TEXT_PLAIN_VALUE)
