@@ -502,16 +502,16 @@ public class WmsInventoryPostingService {
                                Long serialId, String trackingMethod, boolean stockItem, String itemStatus,
                                String warehouseStatus, String locationStatus, String serialStatus,
                                Long serialWarehouse, Long serialLocation) {
-        ResolvedLeg(int index, PostingLeg leg, long warehouseId) {
+        ResolvedLeg(int index, PostingLeg leg, long warehouseId, String warehouseStatus) {
             this(index, leg.warehousePublicId(), leg.locationPublicId(), leg.itemPublicId(),
                     leg.lotPublicId(), leg.serialPublicId(), leg.serialNumber(), leg.stockStatus(),
                     leg.quantity(), warehouseId, null, null, null, null, null, false, null,
-                    null, null, null, null, null);
+                    warehouseStatus, null, null, null, null, null);
         }
-        ResolvedLeg withLocation(long id) {
+        ResolvedLeg withLocation(long id, String status) {
             return new ResolvedLeg(index, warehousePublicId, locationPublicId, itemPublicId, lotPublicId,
                     serialPublicId, serialNumber, stockStatus, quantity, warehouseId, id, itemId, lotId,
-                    serialId, trackingMethod, stockItem, itemStatus, warehouseStatus, locationStatus,
+                    serialId, trackingMethod, stockItem, itemStatus, warehouseStatus, status,
                     serialStatus, serialWarehouse, serialLocation);
         }
         ResolvedLeg withItem(long id, String tracking, boolean stock, String status) {
