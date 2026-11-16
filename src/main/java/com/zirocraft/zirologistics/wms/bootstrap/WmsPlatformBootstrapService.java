@@ -42,7 +42,8 @@ public final class WmsPlatformBootstrapService {
         String membershipPublicId = UUID.randomUUID().toString();
         String rolePublicId = UUID.randomUUID().toString();
 
-        return transaction.execute(status -> {
+        try {
+            return transaction.execute(status -> {
             String bootstrapStatus = jdbc.queryForObject(
                     "SELECT status FROM wms_platform_bootstrap_state WHERE id = 1 FOR UPDATE",
                     String.class);
@@ -112,7 +113,13 @@ public final class WmsPlatformBootstrapService {
             }
 
             return new Result(operationRef, tenantPublicId, userPublicId, membershipPublicId, rolePublicId);
-        });
+            });
+        } catch (BootstrapRejectedException expected) {
+            throw expected;
+        } catch (RuntimeException failure) {
+            // Do not propagate SQL diagnostics that may contain submitted identifiers.
+            throw new BootstrapRejectedException("WMS bootstrap failed; no changes were committed");
+        }
     }
 
     private void requireFreshDatabase() {
