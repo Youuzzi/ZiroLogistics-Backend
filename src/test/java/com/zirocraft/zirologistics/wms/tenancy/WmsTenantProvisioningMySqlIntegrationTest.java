@@ -110,6 +110,11 @@ class WmsTenantProvisioningMySqlIntegrationTest {
                 Integer.class, properties.getTenantCode()));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM tenant_audit_events WHERE operation_ref = ?",
                 Integer.class, result.operationRef()));
+
+        properties.setLegalName("Different Legal Entity");
+        assertThrows(RuntimeException.class, () -> provisioningService.provision(properties));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM tenants WHERE tenant_code = ?",
+                Integer.class, properties.getTenantCode()));
     }
 
     @Test
