@@ -35,4 +35,4 @@ JOIN permissions p ON p.permission_code IN (
   'WMS_MEMBERSHIP_ROLE_READ', 'WMS_MEMBERSHIP_ROLE_MANAGE'
 )
 WHERE r.role_code = 'TENANT_OWNER' AND r.is_system_role = 1
-ON DUPLICATE KEY UPDATE role_id = VALUES(role_id);
+;
