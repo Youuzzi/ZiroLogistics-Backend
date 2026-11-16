@@ -28,7 +28,6 @@ Status: API contract proposal. The current WMS security chain remains fail-close
 
 | Method | Route | Required identity |
 |---|---|---|
-| POST | `/api/wms/v1/auth/logout` | Access token; until revocation/session persistence exists, response must not claim server-side revocation |
 | POST | `/api/wms/v1/auth/password-changes` | Access token subject; current password required |
 | POST | `/api/wms/v1/invitations/existing-account-acceptances` | Access token subject must match the invited email |
 
@@ -63,21 +62,20 @@ Success: short-lived access token containing only subject, membership reference,
 
 1. Keep JWT-disabled mode deny-all.
 2. In JWT-enabled mode, permit only the exact public POST routes above.
-3. Require authentication for invitation issuance, password changes, logout, and all future protected routes.
+3. Require authentication for invitation issuance, existing-account invitation acceptance, password changes, and all future protected routes.
 4. Use a separate tenant-selection token decoder for tenant selection. Do not accept an access token as a selection token or vice versa.
 5. Do not globally permit `/api/**`, `/auth/**`, actuator endpoints, or arbitrary OPTIONS/GET paths.
 6. Apply request-size limits and Bean Validation to all DTOs.
 7. Never log request bodies for credential, invitation, password, or token endpoints.
 8. Configure CORS origins explicitly at deployment; do not use wildcard origins with credentials.
-9. Do not claim logout revokes an access token until server-side session/revocation state is implemented.
 10. Authentication endpoints must not expose internal throttle state, user existence, SQL errors, or token lifecycle details.
 
 ## Deployment gates
 
-HTTP credential login must remain disabled until all required configuration is explicitly supplied:
+HTTP identity endpoints remain disabled unless both `wms.security.jwt.enabled=true` and `wms.security.http.auth-endpoints-enabled=true` are explicitly set. Credential login additionally requires all of the following configuration:
 - WMS profile and WMS-only datasource;
 - WMS JWT signing/verification key material and issuer/audiences;
-- reviewed login throttle policy and HMAC key;
+- reviewed login throttle policy, dedicated Base64 HMAC key of at least 256 bits, and explicit key version;
 - MySQL throttle storage enabled and migrations applied;
 - trusted proxy CIDRs appropriate to the actual deployment topology;
 - identity email outbox encryption key ring and an operational email delivery worker for flows that send mail.
