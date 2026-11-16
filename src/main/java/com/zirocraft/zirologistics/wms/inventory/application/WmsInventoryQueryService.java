@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -134,6 +135,12 @@ public class WmsInventoryQueryService {
         return normalized;
     }
 
+    private static String normalizeFilter(String value, List<String> allowed) {
+        if (value == null || value.isBlank()) return null;
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        if (!allowed.contains(normalized)) throw new IllegalArgumentException("Inventory filter value is invalid");
+        return normalized;
+    }
     private static void addFilter(StringBuilder where, List<Object> args, String column, String value) {
         if (value != null && !value.isBlank()) {
             where.append(" AND ").append(column).append(" = ?");
