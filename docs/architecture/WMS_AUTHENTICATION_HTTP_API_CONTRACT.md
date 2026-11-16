@@ -7,7 +7,7 @@ Status: API contract proposal. The current WMS security chain remains fail-close
 - WMS endpoints live under `/api/wms/v1` and are implemented in WMS-only packages scanned by `WmsRuntimeApplication`.
 - No legacy controller or legacy authentication service is reused.
 - Public routes are an explicit allowlist. Every route not listed below requires an authenticated WMS access token or is denied.
-- Passwords and raw action tokens are accepted only in request bodies over TLS. They must never appear in URLs, query strings, logs, traces, metrics, or exception messages.
+- Passwords and raw action tokens are submitted to API endpoints only in request bodies over TLS. Email action links carry tokens only in the URL fragment (never the query string or request path); the frontend must read the fragment and POST the token in the request body. Tokens must never appear in server access logs, traces, metrics, or exception messages.
 - All account-recovery request responses are generic to prevent account enumeration.
 - JSON errors use stable machine-readable codes but generic public messages.
 - Controllers are thin transport adapters; application services own policy and transactions.
@@ -78,7 +78,8 @@ HTTP identity endpoints remain disabled unless both `wms.security.jwt.enabled=tr
 - reviewed login throttle policy, dedicated Base64 HMAC key of at least 256 bits, and explicit key version;
 - MySQL throttle storage enabled and migrations applied;
 - trusted proxy CIDRs appropriate to the actual deployment topology;
-- identity email outbox encryption key ring and an operational email delivery worker for flows that send mail.
+- identity email outbox encryption key ring;
+- if email delivery is enabled, SMTP host/port/username/password, verified sender address, HTTPS public action base URL, and the SMTP delivery worker configuration described below.
 
 No default thresholds, proxy CIDRs, JWT secrets, email keys, or CORS origins are invented by application code. Missing required configuration must fail closed.
 
@@ -104,3 +105,45 @@ Use MockMvc/Spring Security tests for exact route authorization and DTO validati
 - No permissions embedded in JWT claims.
 - No reliance on frontend route guards for authorization.
 - No direct access to user-owned database instances during tests.
+
+
+## Encrypted identity-email delivery worker
+
+The SMTP delivery worker is opt-in and remains inactive unless
+`wms.identity.email.delivery.enabled=true`. When enabled, startup requires
+SMTP credentials, a valid sender address, and an HTTPS public action base URL.
+Local HTTP is accepted only for localhost development. SMTP authentication and
+mandatory STARTTLS are enabled; SMTP debug logging is disabled.
+
+The worker claims one row at a time from the encrypted outbox using the existing
+MySQL `FOR UPDATE SKIP LOCKED` adapter, decrypts only in memory, validates the
+payload purpose and recipient against the outbox envelope, and sends one of the
+three purpose-specific messages (invitation, email verification, password reset).
+Raw action tokens are placed only in the action link fragment (for example, `#token=...`), never in a request path or query string. The frontend must extract the fragment and submit the token in the POST body; fragments are not transmitted in HTTP requests.
+After successful SMTP submission the row is marked `SENT`. Failures receive an
+opaque `DELIVERY_FAILED` code and bounded exponential retry; exhausted or
+expired messages move to `DEAD_LETTER`. Expired processing leases are recovered
+and the adapter's attempt-count fencing prevents stale workers from changing
+reclaimed rows.
+
+Delivery is at-least-once: if an SMTP server accepts a message but the database
+connection fails before `SENT` is persisted, a later retry can produce a
+duplicate email. SMTP itself does not provide a portable exactly-once guarantee.
+Operational deployments should use a dedicated mailbox/provider, alert on
+dead-letter growth, and protect the SMTP credentials and AES key ring through
+secret management.
+
+Required deployment environment variables when enabled:
+- `WMS_EMAIL_DELIVERY_ENABLED=true`
+- `WMS_SMTP_HOST`, `WMS_SMTP_PORT`, `WMS_SMTP_USERNAME`, `WMS_SMTP_PASSWORD`
+- `WMS_EMAIL_FROM` (verified sender address)
+- `WMS_PUBLIC_ACTION_BASE_URL` (HTTPS frontend origin)
+- Existing `WMS_EMAIL_OUTBOX_ENCRYPTION_ENABLED=true`, current key version, and AES-256 key ring
+
+Optional policy variables include `WMS_EMAIL_POLL_INTERVAL_MS`,
+`WMS_EMAIL_MAX_MESSAGES_PER_POLL`, `WMS_EMAIL_MAX_ATTEMPTS`,
+`WMS_EMAIL_RETRY_BASE_DELAY`, `WMS_EMAIL_RETRY_MAX_DELAY`,
+`WMS_EMAIL_PROCESSING_LEASE`, SMTP timeout variables, and the three
+`WMS_EMAIL_*_PATH` frontend route overrides. Default frontend paths are
+`/accept-invitation`, `/verify-email`, and `/reset-password`; the frontend
+must implement matching routes before real users receive these links.
