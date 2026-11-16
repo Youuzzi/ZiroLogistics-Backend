@@ -24,6 +24,7 @@ import java.util.Set;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -31,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ContextConfiguration(classes = WmsHttpSecurityTestApplication.class)
 @Import({WmsSecurityConfiguration.class, WmsHttpSecurityEnabledTest.ProbeController.class})
 @ActiveProfiles("wms")
-@TestPropertySource(properties = "wms.security.jwt.enabled=true")
+@TestPropertySource(properties = {\n        "wms.security.jwt.enabled=true",\n        "wms.security.http.auth-endpoints-enabled=true"\n})
 class WmsHttpSecurityEnabledTest {
 
     @Autowired
@@ -78,6 +79,16 @@ class WmsHttpSecurityEnabledTest {
 
     @RestController
     static class ProbeController {
+        @PostMapping(value = "/api/wms/v1/auth/credentials", produces = MediaType.TEXT_PLAIN_VALUE)
+        String publicPost() {
+            return "wms-public-post";
+        }
+
+        @GetMapping(value = "/api/wms/v1/auth/credentials", produces = MediaType.TEXT_PLAIN_VALUE)
+        String nonPublicGet() {
+            return "wms-not-public-get";
+        }
+
         @GetMapping(value = "/wms/security-probe", produces = MediaType.TEXT_PLAIN_VALUE)
         String probe() {
             return "wms-protected";
