@@ -139,8 +139,8 @@ public class WmsTenantProfileService {
 
         int inserted = jdbc.update("""
                 INSERT INTO tenant_audit_events
-                  (public_id, tenant_id, actor_membership_id, actor_type, operation_ref, event_type, subject_public_id, change_payload)
-                SELECT ?, t.id, m.id, 'TENANT_MEMBER', ?, 'TENANT_PROFILE_UPDATED', t.public_id, ?
+                  (public_id, tenant_id, actor_membership_id, actor_type, actor_reference, operation_ref, event_type, subject_public_id, change_payload)
+                SELECT ?, t.id, m.id, 'TENANT_MEMBER', NULL, ?, 'TENANT_PROFILE_UPDATED', t.public_id, ?
                 FROM tenants t
                 INNER JOIN tenant_memberships m
                   ON m.id = ? AND m.tenant_id = t.id AND m.status = 'ACTIVE'
