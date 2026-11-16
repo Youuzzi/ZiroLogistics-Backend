@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.annotation.DirtiesContext;
@@ -50,6 +51,7 @@ class WmsPlatformBootstrapMySqlIntegrationTest {
     @Autowired private WmsBootstrapProperties properties;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private WmsBootstrapCommandRunner commandRunner;
 
     @BeforeEach
     void resetDisposableDatabase() {
