@@ -78,7 +78,7 @@ class WmsInboundReceivingMySqlIntegrationTest {
 
     @Test
     void serialTrackedReceiptRegistersAndLinksEverySerialInSameTransaction() {
-        String serialItem = createItem(fixture, "SERIAL");
+        String serialItem = createItem(fixture.tenantId(), "SERIAL");
         String receiptId = createReceipt(fixture);
         String lineId = addLine(fixture, receiptId, serialItem, "2.0000");
         String first = "IN-" + UUID.randomUUID();
@@ -151,12 +151,12 @@ class WmsInboundReceivingMySqlIntegrationTest {
                 """, BigDecimal.class, f.tenantId(), f.tenantId(), itemPublicId);
     }
 
-    private String createItem(Fixture f, String tracking) {
+    private String createItem(long tenantId, String tracking) {
         String publicId = UUID.randomUUID().toString();
         jdbc.update("""
                 INSERT INTO items (public_id, tenant_id, sku, item_name, base_uom_id, tracking_method, status)
                 VALUES (?, ?, ?, 'Inbound Test Item', (SELECT id FROM units_of_measure WHERE uom_code = 'EA'), ?, 'ACTIVE')
-                """, publicId, f.tenantId(), "IN_" + UUID.randomUUID().toString().substring(0, 12), tracking);
+                """, publicId, tenantId, "IN_" + UUID.randomUUID().toString().substring(0, 12), tracking);
         return publicId;
     }
 
