@@ -124,6 +124,31 @@ class WmsInventoryMasterDataServiceTest {
         verifyNoInteractions(jdbc);
     }
 
+
+    @Test
+    void lotDateValidationRejectsExpiryBeforeManufactureBeforeDatabaseAccess() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_LOT_MANAGE")));
+
+        assertThrows(IllegalArgumentException.class, () -> service.createLot(principal(), "item-public",
+                new WmsInventoryMasterDataService.LotCommand("LOT-1", null,
+                        java.time.LocalDate.of(2026, 5, 10), null,
+                        java.time.LocalDate.of(2026, 5, 9), null)));
+
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void serialRegistrationRequiresWarehouseAndLocationTogether() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_SERIAL_MANAGE")));
+
+        assertThrows(IllegalArgumentException.class, () -> service.registerSerial(principal(), "item-public",
+                new WmsInventoryMasterDataService.SerialCommand("SER-1", null, "warehouse-public", null, null)));
+
+        verifyNoInteractions(jdbc);
+    }
+
     private static WmsAuthenticatedPrincipal principal() {
         return new WmsAuthenticatedPrincipal(
                 "user-public", 10L, "tenant-public", 30L, "membership-public", Set.of());
