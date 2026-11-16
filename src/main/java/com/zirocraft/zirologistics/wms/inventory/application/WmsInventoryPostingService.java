@@ -217,10 +217,12 @@ public class WmsInventoryPostingService {
             }
         }
         for (ResolvedLeg leg : legs) {
-            if (leg.serialId() != null && !"AVAILABLE".equals(leg.serialStatus())) {
-                throw new IllegalArgumentException("Serial is not in an AVAILABLE state");
+            if (leg.serialId() != null && !("RETURN".equals(type)
+                    ? "SHIPPED".equals(leg.serialStatus()) : "AVAILABLE".equals(leg.serialStatus()))) {
+                throw new IllegalArgumentException("Serial is not in a state valid for this movement");
             }
-            if (leg.serialId() != null && (!"TRANSFER".equals(type) || leg.index() == 0)
+            if (leg.serialId() != null && !"RETURN".equals(type)
+                    && (!"TRANSFER".equals(type) || leg.index() == 0)
                     && (!Objects.equals(leg.serialWarehouse(), leg.warehouseId())
                     || !Objects.equals(leg.serialLocation(), leg.locationId()))) {
                 throw new IllegalArgumentException("Serial current location does not match posting source");
@@ -314,13 +316,22 @@ public class WmsInventoryPostingService {
                     WHERE id = ?
                     """, destination.warehouseId(), destination.locationId(), leg.serialId());
         } else if ("ISSUE".equals(movement)) {
-            jdbc.update("""
+            int changed = jdbc.update("""
                     UPDATE inventory_serials
                     SET status = 'SHIPPED', shipped_at = UTC_TIMESTAMP(6),
                         current_warehouse_id = NULL, current_location_id = NULL,
                         version = version + 1, updated_at = UTC_TIMESTAMP(6)
                     WHERE id = ? AND status = 'AVAILABLE'
                     """, leg.serialId());
+            if (changed != 1) throw new IllegalStateException("Serial shipment transition failed");
+        } else if ("RETURN".equals(movement)) {
+            int changed = jdbc.update("""
+                    UPDATE inventory_serials
+                    SET status = 'RETURNED', current_warehouse_id = ?, current_location_id = ?,
+                        version = version + 1, updated_at = UTC_TIMESTAMP(6)
+                    WHERE id = ? AND status = 'SHIPPED'
+                    """, leg.warehouseId(), leg.locationId(), leg.serialId());
+            if (changed != 1) throw new IllegalStateException("Serial return transition failed");
         } else if ("DAMAGE".equals(movement) && leg.index() == 1) {
             jdbc.update("""
                     UPDATE inventory_serials SET status = 'DAMAGED', version = version + 1,
