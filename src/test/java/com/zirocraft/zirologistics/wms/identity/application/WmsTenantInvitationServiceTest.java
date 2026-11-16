@@ -55,7 +55,6 @@ class WmsTenantInvitationServiceTest {
     @BeforeEach
     void setUp() {
         encryptionService = new WmsEmailOutboxEncryptionService(Map.of(1, new byte[32]), 1);
-        when(encryptionProvider.getIfAvailable()).thenReturn(encryptionService);
         service = new WmsTenantInvitationService(
                 membershipAccessService,
                 tokenStorage,
@@ -71,6 +70,7 @@ class WmsTenantInvitationServiceTest {
 
     @Test
     void issuesDigestOnlyTokenAndQueuesEncryptedInvitationForNewIdentity() throws Exception {
+        when(encryptionProvider.getIfAvailable()).thenReturn(encryptionService);
         WmsMembershipAccess access = activeAccess(Set.of(WmsTenantInvitationService.INVITE_PERMISSION));
         when(membershipAccessService.resolve("user-public-1", "membership-public-11")).thenReturn(access);
         when(tokenStorage.lockTenantForInvitation(5L)).thenReturn(Optional.of(TenantStatus.ACTIVE));
