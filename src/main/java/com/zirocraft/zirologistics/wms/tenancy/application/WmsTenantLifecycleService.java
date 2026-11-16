@@ -29,11 +29,13 @@ public class WmsTenantLifecycleService {
             String tenantPublicId,
             String reason,
             String operationRef,
+            String operatorReference,
             String confirmation) {
         Objects.requireNonNull(action, "tenant lifecycle action is required");
         String normalizedTenantId = canonicalUuid(tenantPublicId, "tenant public ID");
         String normalizedOperationRef = canonicalUuid(operationRef, "operation reference");
         String normalizedReason = normalizeReason(reason);
+        String normalizedOperator = normalizeOperatorReference(operatorReference);
 
         List<Map<String, Object>> tenantRows = jdbc.queryForList("""
                 SELECT id, tenant_code, status
@@ -90,11 +92,11 @@ public class WmsTenantLifecycleService {
                 "operationRef", normalizedOperationRef));
         int audited = jdbc.update("""
                 INSERT INTO tenant_audit_events
-                  (public_id, tenant_id, actor_membership_id, actor_type, operation_ref,
+                  (public_id, tenant_id, actor_membership_id, actor_type, actor_reference, operation_ref,
                    event_type, subject_public_id, change_payload)
-                VALUES (?, ?, NULL, 'PLATFORM_OPERATOR', ?, ?, ?, ?)
+                VALUES (?, ?, NULL, 'PLATFORM_OPERATOR', ?, ?, ?, ?, ?)
                 """,
-                UUID.randomUUID().toString(), tenantId, normalizedOperationRef,
+                UUID.randomUUID().toString(), tenantId, normalizedOperator, normalizedOperationRef,
                 eventType(action), normalizedTenantId, payload);
         if (audited != 1) {
             throw new WmsTenantLifecycleRejectedException("Tenant lifecycle operation was rejected");
@@ -136,6 +138,13 @@ public class WmsTenantLifecycleService {
             throw new WmsTenantLifecycleRejectedException("Tenant lifecycle reason length is invalid");
         }
         return reason;
+    }
+
+    private static String normalizeOperatorReference(String value) {
+        if (value == null || !value.matches("[A-Za-z0-9._:@/-]{3,120}")) {
+            throw new WmsTenantLifecycleRejectedException("Tenant lifecycle operator reference is required");
+        }
+        return value;
     }
 
     private static String sourceStatus(WmsTenantLifecycleAction action) {
