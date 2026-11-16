@@ -4,6 +4,7 @@ import com.zirocraft.zirologistics.wms.tenancy.application.WmsTenantLifecycleAct
 import com.zirocraft.zirologistics.wms.tenancy.application.WmsTenantLifecycleResult;
 import com.zirocraft.zirologistics.wms.tenancy.application.WmsTenantLifecycleService;
 import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnNotWebApplication;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -12,6 +13,7 @@ import java.util.Locale;
 
 @Component
 @Profile("wms")
+@ConditionalOnNotWebApplication
 public class WmsTenantLifecycleCommandRunner implements ApplicationRunner {
     private final WmsTenantLifecycleProperties properties;
     private final WmsTenantLifecycleService service;
