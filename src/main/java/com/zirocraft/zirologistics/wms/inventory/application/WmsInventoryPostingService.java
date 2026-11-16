@@ -240,14 +240,8 @@ public class WmsInventoryPostingService {
             if (leg.serialId() != null) {
                 boolean validState = switch (type) {
                     case "RETURN" -> "SHIPPED".equals(leg.serialStatus());
-                    case "STATUS_CHANGE" -> {
-                        String expected = serialStatusForStock(legs.getFirst().stockStatus());
-                        yield Objects.equals(expected, leg.serialStatus())
-                                || ("AVAILABLE".equals(legs.getFirst().stockStatus())
-                                    && "RETURNED".equals(leg.serialStatus()))
-                                || ("QUARANTINED".equals(legs.getFirst().stockStatus())
-                                    && "RETURNED".equals(leg.serialStatus()));
-                    }
+                    case "STATUS_CHANGE" -> "RETURNED".equals(leg.serialStatus())
+                            || Objects.equals(serialStatusForStock(legs.getFirst().stockStatus()), leg.serialStatus());
                     default -> "AVAILABLE".equals(leg.serialStatus());
                 };
                 if (!validState) throw new IllegalArgumentException("Serial is not in a state valid for this movement");
@@ -285,15 +279,19 @@ public class WmsInventoryPostingService {
                     INSERT INTO inventory_serials
                       (public_id, tenant_id, item_id, lot_id, current_warehouse_id, current_location_id,
                        serial_number, status, received_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'AVAILABLE', UTC_TIMESTAMP(6))
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(6))
                     """, publicId, tenantId, leg.itemId(), leg.lotId(), leg.warehouseId(),
-                    leg.locationId(), leg.serialNumber());
+                    leg.locationId(), leg.serialNumber(), serialStatusForStock(leg.stockStatus()));
         } catch (DuplicateKeyException duplicate) {
             throw new IllegalStateException("Serial number already exists in this tenant");
         }
         Long id = requiredId("SELECT id FROM inventory_serials WHERE tenant_id = ? AND public_id = ?",
                 tenantId, publicId, "Serial registration failed");
-        return leg.withSerial(id, "AVAILABLE", leg.warehouseId(), leg.locationId());
+        String serialStatus = serialStatusForStock(leg.stockStatus());
+        if (serialStatus == null) {
+            throw new IllegalArgumentException("Receipt stock status cannot be represented by serial lifecycle state");
+        }
+        return leg.withSerial(id, serialStatus, leg.warehouseId(), leg.locationId());
     }
 
     private static String balanceKey(ResolvedLeg leg) {
