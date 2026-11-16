@@ -517,14 +517,7 @@ public class WmsInventoryPostingService {
         }
         List<PostingLeg> legs = command.legs().stream().map(leg -> {
             if (leg == null) throw new IllegalArgumentException("Posting leg is required");
-            BigDecimal quantity = leg.quantity();
-            if (quantity == null || quantity.signum() <= 0 || quantity.scale() > 4) {
-                throw new IllegalArgumentException("Quantity must be positive and fit DECIMAL(19,4)");
-            }
-            quantity = quantity.setScale(4, RoundingMode.UNNECESSARY);
-            if (quantity.precision() > 19) {
-                throw new IllegalArgumentException("Quantity must fit DECIMAL(19,4)");
-            }
+            BigDecimal quantity = normalizeQuantity(leg.quantity());
             String serialNumber = optional(leg.serialNumber());
             if (serialNumber != null && serialNumber.length() > 150) {
                 throw new IllegalArgumentException("Serial number is too long");
@@ -544,6 +537,20 @@ public class WmsInventoryPostingService {
         return new NormalizedCommand(command.requestId(), type, legs, notes);
     }
 
+    static BigDecimal normalizeQuantity(BigDecimal quantity) {
+        if (quantity == null || quantity.signum() <= 0) {
+            throw new IllegalArgumentException("Quantity must be positive and fit DECIMAL(19,4)");
+        }
+        try {
+            quantity = quantity.setScale(4, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException invalidPrecision) {
+            throw new IllegalArgumentException("Quantity must be exactly representable at scale 4", invalidPrecision);
+        }
+        if (quantity.precision() > 19) {
+            throw new IllegalArgumentException("Quantity must fit DECIMAL(19,4)");
+        }
+        return quantity;
+    }
     private static String required(String value, String field) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(field + " is required");
         return value.trim();
