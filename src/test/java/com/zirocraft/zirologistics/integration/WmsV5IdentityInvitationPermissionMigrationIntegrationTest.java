@@ -42,6 +42,7 @@ class WmsV5IdentityInvitationPermissionMigrationIntegrationTest {
         Flyway throughV5 = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/wms-migration")
+                .target(MigrationVersion.fromVersion("5"))
                 .load();
         throughV5.migrate();
         throughV5.validate();
