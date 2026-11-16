@@ -149,6 +149,7 @@ public class WmsWarehouseManagementService {
         if (number(beforeInternal, "version") != expectedVersion) {
             throw new IllegalStateException("Warehouse version conflict");
         }
+        if (Objects.equals(beforeStatus, afterStatus)) return publicWarehouse(beforeInternal);
         if (!allowedWarehouseTransition(beforeStatus, afterStatus)) {
             throw new IllegalStateException("Warehouse status transition is not allowed");
         }
@@ -302,8 +303,12 @@ public class WmsWarehouseManagementService {
         if (number(beforeInternal, "version") != expectedVersion) {
             throw new IllegalStateException("Location version conflict");
         }
+        if (Objects.equals(beforeStatus, afterStatus)) return publicLocation(beforeInternal);
         if (!allowedLocationTransition(beforeStatus, afterStatus)) {
             throw new IllegalStateException("Location status transition is not allowed");
+        }
+        if ("ACTIVE".equals(afterStatus) && !"ACTIVE".equals(warehouse.get("status"))) {
+            throw new IllegalStateException("Location cannot be activated while its warehouse is not active");
         }
         if (!"ACTIVE".equals(afterStatus)) {
             Integer occupied = jdbc.queryForObject("""
@@ -367,13 +372,17 @@ public class WmsWarehouseManagementService {
             long tenantId, long warehouseId, String publicId, boolean lock) {
         if (publicId == null || publicId.isBlank()) throw new WmsWarehouseNotFoundException();
         String sql = """
-                SELECT id, public_id, tenant_id, warehouse_id, parent_location_id, location_code,
-                       location_name, location_type, description, max_weight_capacity, weight_uom,
-                       max_volume_capacity, volume_uom, is_pickable, is_receivable, allow_mixed_skus,
-                       allow_mixed_lots, picking_sequence, putaway_sequence, status, version,
-                       created_at, updated_at
-                FROM warehouse_locations
-                WHERE tenant_id = ? AND warehouse_id = ? AND public_id = ?
+                SELECT l.id, l.public_id, l.tenant_id, l.warehouse_id, l.parent_location_id,
+                       p.public_id AS parent_location_public_id, l.location_code,
+                       l.location_name, l.location_type, l.description, l.max_weight_capacity, l.weight_uom,
+                       l.max_volume_capacity, l.volume_uom, l.is_pickable, l.is_receivable, l.allow_mixed_skus,
+                       l.allow_mixed_lots, l.picking_sequence, l.putaway_sequence, l.status, l.version,
+                       l.created_at, l.updated_at
+                FROM warehouse_locations l
+                LEFT JOIN warehouse_locations p
+                  ON p.id = l.parent_location_id AND p.warehouse_id = l.warehouse_id
+                     AND p.tenant_id = l.tenant_id
+                WHERE l.tenant_id = ? AND l.warehouse_id = ? AND l.public_id = ?
                 """ + (lock ? " FOR UPDATE" : "");
         List<Map<String, Object>> rows = jdbc.queryForList(sql, tenantId, warehouseId, publicId);
         if (rows.isEmpty()) throw new WmsWarehouseNotFoundException();
@@ -448,7 +457,7 @@ public class WmsWarehouseManagementService {
             throw new IllegalArgumentException("Country code is invalid");
         }
         String timezone = bounded(c.timezone(), "timezone", 1, 60);
-        try { ZoneId.of(timezone); } catch (RuntimeException invalid) {
+        if (!ZoneId.getAvailableZoneIds().contains(timezone) && !"UTC".equals(timezone)) {
             throw new IllegalArgumentException("Timezone is invalid");
         }
         String email = nullable(c.contactEmail(), "contact email", 254);
