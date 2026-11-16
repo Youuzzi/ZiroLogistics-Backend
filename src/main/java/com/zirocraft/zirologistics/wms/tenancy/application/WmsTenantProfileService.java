@@ -90,7 +90,7 @@ public class WmsTenantProfileService {
 
         try {
             TenantEntity saved = tenantRepository.saveAndFlush(tenant);
-            writeAudit(principal, saved, before, profileFields(saved));
+            writeAudit(access, saved, before, profileFields(saved));
             return toProfile(saved);
         } catch (OptimisticLockingFailureException concurrentUpdate) {
             throw new WmsTenantProfileConflictException();
