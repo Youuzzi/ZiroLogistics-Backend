@@ -6,7 +6,6 @@ import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrin
 import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityHttpEnabledCondition;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -84,8 +83,7 @@ public class WmsInventoryController {
                                     @Size(max = 36) String serialPublicId,
                                     @Size(max = 150) String serialNumber,
                                     @Size(max = 30) String stockStatus,
-                                    @NotNull @DecimalMin(value = "0.0001") @Digits(integer = 15, fraction = 4)
-                                    BigDecimal quantity) {
+                                    @NotNull @DecimalMin(value = "0.0001") BigDecimal quantity) {
         WmsInventoryPostingService.PostingLeg toCommand() {
             return new WmsInventoryPostingService.PostingLeg(warehousePublicId, locationPublicId, itemPublicId,
                     lotPublicId, serialPublicId, serialNumber, stockStatus, quantity);
