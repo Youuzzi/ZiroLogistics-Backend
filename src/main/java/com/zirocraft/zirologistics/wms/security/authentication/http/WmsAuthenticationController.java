@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.security.authentication.http;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import com.zirocraft.zirologistics.wms.identity.application.EmailVerificationRequestResult;
 import com.zirocraft.zirologistics.wms.identity.application.WmsEmailOutboxEncryptionService;
 import com.zirocraft.zirologistics.wms.identity.application.WmsEmailVerificationService;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 @Profile("wms")
 @RequestMapping("/api/wms/v1/auth")
 @Conditional(WmsIdentityHttpEnabledCondition.class)
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class WmsAuthenticationController {
 
     private final WmsCredentialAuthenticationService credentialAuthentication;
