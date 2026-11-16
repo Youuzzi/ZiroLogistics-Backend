@@ -45,7 +45,7 @@ Tenant owners cannot change tenant lifecycle status through this API. Tenant sus
 
 ## 4. Audit
 
-Migration V8 creates `tenant_audit_events` with operator attribution and idempotent operation references. A profile update writes one `TENANT_PROFILE_UPDATED` event in the same transaction as the tenant row update. The event includes:
+Migration V8 creates `tenant_audit_events` with tenant-member/operator attribution, tenant provisioning and lifecycle event types, and unique idempotent operation references. A profile update writes one `TENANT_PROFILE_UPDATED` event in the same transaction as the tenant row update. The event includes:
 - tenant and subject public identifiers;
 - active actor membership scoped to the same tenant;
 - before/after values for the editable profile fields;
@@ -75,7 +75,30 @@ The tenant profile MySQL integration test must verify:
 - audit event contains before/after values and is tenant-scoped;
 - failed validation or authorization leaves both profile and audit unchanged.
 
-## 7. Controlled tenant lifecycle
+## 7. Repeatable operator tenant provisioning
+
+New tenants are created only through the non-web operator command; there is no public registration or tenant-creation endpoint. The command requires `--wms.tenant.provisioning.command-mode=true` and `WMS_TENANT_PROVISIONING_ENABLED=true`. The application entry point switches to non-web mode, and the runner is excluded from servlet runtimes.
+
+Required configuration:
+- `WMS_TENANT_PROVISIONING_ENABLED`
+- `WMS_TENANT_PROVISIONING_TENANT_CODE`
+- `WMS_TENANT_PROVISIONING_LEGAL_NAME`
+- `WMS_TENANT_PROVISIONING_DISPLAY_NAME`
+- `WMS_TENANT_PROVISIONING_TIMEZONE`
+- `WMS_TENANT_PROVISIONING_CURRENCY`
+- `WMS_TENANT_PROVISIONING_OWNER_EMAIL`
+- `WMS_TENANT_PROVISIONING_OWNER_FULL_NAME`
+- `WMS_TENANT_PROVISIONING_OPERATION_REF` (unique UUID for idempotent retry)
+- `WMS_TENANT_PROVISIONING_OPERATOR_REFERENCE`
+- `WMS_TENANT_PROVISIONING_REASON`
+
+Provisioning creates the tenant, an active membership, a tenant-scoped `TENANT_OWNER` role, and only the explicit invitation/profile-update permission allowlist. A globally existing owner must already be ACTIVE and email-verified; the existing global identity is reused and never duplicated.
+
+For a new owner, the command creates a `PENDING_VERIFICATION` global identity with a random Argon2id hash that is never disclosed. The membership and role are prepared transactionally, but the pending global identity cannot authenticate. After the transaction commits, the command requests an email-verification message through the encrypted outbox. The owner verifies the address, then requests a password reset to establish their own password. If email encryption/outbox configuration is unavailable, the command reports failure after the tenant transaction; rerunning with the same operation reference safely reuses the tenant and retries the verification email.
+
+The operation reference is unique in the tenant audit table. A retry with the same operation reference, tenant code, and owner email returns the previously provisioned identifiers. Reuse with different input or for another operation is rejected. The owner email is not included in the audit payload or command output.
+
+## 8. Controlled tenant lifecycle
 
 Tenant lifecycle status is not exposed through the tenant-facing HTTP API. It is changed only through the explicit non-web operator command:
 - `ACTIVE -> SUSPENDED`;
