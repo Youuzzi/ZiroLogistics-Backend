@@ -13,7 +13,7 @@ public final class WmsGeneratedIdentityActionToken {
     private final String rawToken;
     private final byte[] digest;
 
-    WmsGeneratedIdentityActionToken(String rawToken, byte[] digest) {
+    public WmsGeneratedIdentityActionToken(String rawToken, byte[] digest) {
         this.rawToken = Objects.requireNonNull(rawToken, "rawToken must not be null");
         Objects.requireNonNull(digest, "digest must not be null");
         if (digest.length != 32) {
