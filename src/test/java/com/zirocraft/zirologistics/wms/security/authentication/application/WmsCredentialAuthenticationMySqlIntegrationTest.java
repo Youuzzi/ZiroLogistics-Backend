@@ -106,6 +106,8 @@ class WmsCredentialAuthenticationMySqlIntegrationTest {
         throttleService = new WmsLoginThrottleService(
                 keyHasher, addressResolver, storage, policy, Clock.systemUTC());
         tokenService = mock(WmsJwtTokenService.class);
+        when(tokenService.issueTenantSelectionToken(anyString()))
+                .thenReturn("test-tenant-selection-token");
     }
 
     @Test
@@ -130,6 +132,7 @@ class WmsCredentialAuthenticationMySqlIntegrationTest {
                 sourceAddress,
                 null);
 
+        assertEquals("test-tenant-selection-token", result.tenantSelectionToken());
         assertEquals(1, result.memberships().size());
         assertEquals(membership.getPublicId(), result.memberships().getFirst().membershipPublicId());
         assertEquals(tenant.getPublicId(), result.memberships().getFirst().tenantPublicId());
