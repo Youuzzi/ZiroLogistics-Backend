@@ -65,6 +65,13 @@ public class WmsInventoryPostingService {
         // Resolve and lock reference rows in the shared warehouse -> location -> item -> lot -> serial order.
         List<ResolvedLeg> legs = resolveAndLockReferences(access.tenantId(), normalized);
         validateMovement(normalized, legs);
+        // New serial rows are created before balance buckets to preserve the global lock order.
+        List<ResolvedLeg> registeredLegs = new ArrayList<>(legs.size());
+        for (ResolvedLeg leg : legs) {
+            registeredLegs.add(leg.serialId() == null && leg.serialNumber() != null
+                    ? registerSerial(access.tenantId(), leg) : leg);
+        }
+        legs = List.copyOf(registeredLegs);
         String movementGroupId = UUID.randomUUID().toString();
         List<Map<String, Object>> entries = new ArrayList<>();
         int entryNo = 1;
@@ -77,9 +84,6 @@ public class WmsInventoryPostingService {
                 .forEach(leg -> lockedBalances.put(balanceKey(leg), lockOrCreateBalance(access.tenantId(), leg)));
 
         for (ResolvedLeg leg : legs) {
-            if (leg.serialId() == null && leg.serialNumber() != null) {
-                leg = registerSerial(access.tenantId(), leg);
-            }
             Balance balance = lockedBalances.get(balanceKey(leg));
             BigDecimal delta = signedDelta(normalized.movementType(), leg.index(), leg.quantity());
             BigDecimal before = balance.onHand();
