@@ -79,7 +79,7 @@ class WmsTenantLifecycleMySqlIntegrationTest {
         WmsTenantLifecycleResult closed = lifecycleService.transition(
                 WmsTenantLifecycleAction.CLOSE, tenantPublicId,
                 "Operator closure after tenant requested closure", UUID.randomUUID().toString(),
-                "CLOSE:" + tenantCode(tenantPublicId));
+                "operator-console:production", "CLOSE:" + tenantCode(tenantPublicId));
         assertEquals("SUSPENDED", closed.previousStatus());
         assertEquals("CLOSED", closed.currentStatus());
         assertEquals("CLOSED", tenantStatus(tenantPublicId));
