@@ -1,6 +1,6 @@
 # WMS Authentication and Account Lifecycle HTTP API Contract
 
-Status: API contract proposal. The current WMS security chain remains fail-closed; these routes are not enabled by this document.
+Status: Implemented as opt-in WMS HTTP adapters. The endpoints remain disabled unless both `wms.security.jwt.enabled=true` and `wms.security.http.auth-endpoints-enabled=true` are explicitly configured; see the deployment gates below.
 
 ## Principles
 
@@ -68,7 +68,7 @@ Success: short-lived access token containing only subject, membership reference,
 6. Apply request-size limits and Bean Validation to all DTOs.
 7. Never log request bodies for credential, invitation, password, or token endpoints.
 8. Configure CORS origins explicitly at deployment; do not use wildcard origins with credentials.
-10. Authentication endpoints must not expose internal throttle state, user existence, SQL errors, or token lifecycle details.
+9. Authentication endpoints must not expose internal throttle state, user existence, SQL errors, or token lifecycle details.
 
 ## Deployment gates
 
