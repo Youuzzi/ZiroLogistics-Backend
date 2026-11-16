@@ -108,8 +108,8 @@ public class WmsInventoryPostingService {
             if (leg.serialId() != null) {
                 String serialPublicId = leg.serialPublicId();
                 if (serialPublicId == null) {
-                    serialPublicId = jdbc.queryForObject("SELECT public_id FROM inventory_serials WHERE id = ?",
-                            String.class, leg.serialId());
+                    serialPublicId = jdbc.queryForObject("SELECT public_id FROM inventory_serials WHERE id = ? AND tenant_id = ?",
+                            String.class, leg.serialId(), access.tenantId());
                 }
                 entry.put("serialPublicId", serialPublicId);
             }
@@ -338,6 +338,9 @@ public class WmsInventoryPostingService {
             }
         }
         boolean inboundSerial = Set.of("RECEIPT", "OPENING_BALANCE", "ADJUSTMENT_IN").contains(type);
+        if (inboundSerial && legs.stream().anyMatch(l -> l.serialPublicId() != null)) {
+            throw new IllegalArgumentException("Inbound serial movements must register a new serial number");
+        }
         if (legs.stream().anyMatch(l -> l.serialNumber() != null && !inboundSerial)) {
             throw new IllegalArgumentException("A new serial number is only valid for inbound stock");
         }
