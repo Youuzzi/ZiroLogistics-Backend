@@ -105,16 +105,16 @@ public class WmsInventoryPostingService {
         List<ResolvedLeg> resolved = new ArrayList<>();
         for (int i = 0; i < command.legs().size(); i++) {
             PostingLeg leg = command.legs().get(i);
-            long warehouseId = requiredId("SELECT id FROM warehouses WHERE tenant_id = ? AND public_id = ?",
+            Map<String, Object> warehouse = requiredRow("SELECT id, status FROM warehouses WHERE tenant_id = ? AND public_id = ?",
                     tenantId, leg.warehousePublicId(), "Warehouse not found");
-            resolved.add(new ResolvedLeg(i, leg, warehouseId));
+            resolved.add(new ResolvedLeg(i, leg, number(warehouse, "id"), string(warehouse, "status")));
         }
         lockIds("warehouses", resolved.stream().map(ResolvedLeg::warehouseId).toList(), tenantId, "warehouse");
         resolved = resolved.stream().map(leg -> {
-            long locationId = requiredId(
-                    "SELECT id FROM warehouse_locations WHERE tenant_id = ? AND warehouse_id = ? AND public_id = ?",
+            Map<String, Object> location = requiredRow(
+                    "SELECT id, status FROM warehouse_locations WHERE tenant_id = ? AND warehouse_id = ? AND public_id = ?",
                     tenantId, leg.warehouseId(), leg.locationPublicId(), "Location not found");
-            return leg.withLocation(locationId);
+            return leg.withLocation(number(location, "id"), string(location, "status"));
         }).toList();
         lockIds("warehouse_locations", resolved.stream().map(ResolvedLeg::locationId).toList(), tenantId, "location");
         resolved = resolved.stream().map(leg -> {
