@@ -61,7 +61,10 @@ class WmsPasswordManagementMySqlIntegrationTest {
     }
 
     @Autowired private WmsPasswordManagementService passwordManagementService;
+    @Autowired private WmsEmailVerificationService emailVerificationService;
     @Autowired private WmsEmailOutboxEncryptionService encryptionService;
+    @Autowired private WmsIdentityActionTokenGenerator tokenGenerator;
+    @Autowired private WmsIdentityActionTokenStoragePort tokenStorage;
     @Autowired private UserRepository userRepository;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private PasswordEncoder passwordEncoder;
@@ -74,12 +77,8 @@ class WmsPasswordManagementMySqlIntegrationTest {
         PasswordResetRequestResult request = passwordManagementService.requestPasswordReset(user.getEmail());
 
         assertTrue(request.accepted());
-        OutboxPayload outbox = latestPasswordResetOutbox(user.getEmail());
-        byte[] plaintext = encryptionService.decrypt(
-                outbox.messageId(),
-                WmsIdentityActionTokenPurpose.PASSWORD_RESET,
-                user.getEmail(),
-                new WmsEncryptedEmailPayload(outbox.keyVersion(), outbox.nonce(), outbox.ciphertext()));
+        OutboxPayload outbox = latestOutbox(user.getEmail(), "PASSWORD_RESET");
+        byte[] plaintext = decryptOutbox(outbox, user.getEmail(), WmsIdentityActionTokenPurpose.PASSWORD_RESET);
         JsonNode payload = objectMapper.readTree(plaintext);
         String rawToken = payload.get("actionToken").asText();
         assertEquals("PASSWORD_RESET", payload.get("purpose").asText());
@@ -91,8 +90,7 @@ class WmsPasswordManagementMySqlIntegrationTest {
         assertTrue(passwordEncoder.matches("ResetPassword456", updated.getPasswordHash()));
         assertFalse(passwordEncoder.matches("OriginalPassword123", updated.getPasswordHash()));
 
-        byte[] digest = new WmsIdentityActionTokenGenerator().digestPresentedToken(rawToken);
-        WmsIdentityActionTokenRecord token = findResetToken(digest);
+        WmsIdentityActionTokenRecord token = findToken(tokenGenerator.digestPresentedToken(rawToken));
         assertNotNull(token.consumedAt());
         assertNull(token.revokedAt());
 
@@ -105,12 +103,8 @@ class WmsPasswordManagementMySqlIntegrationTest {
         UserEntity user = createUser("change-flow", "OriginalPassword123");
         passwordManagementService.requestPasswordReset(user.getEmail());
 
-        OutboxPayload outbox = latestPasswordResetOutbox(user.getEmail());
-        byte[] plaintext = encryptionService.decrypt(
-                outbox.messageId(),
-                WmsIdentityActionTokenPurpose.PASSWORD_RESET,
-                user.getEmail(),
-                new WmsEncryptedEmailPayload(outbox.keyVersion(), outbox.nonce(), outbox.ciphertext()));
+        OutboxPayload outbox = latestOutbox(user.getEmail(), "PASSWORD_RESET");
+        byte[] plaintext = decryptOutbox(outbox, user.getEmail(), WmsIdentityActionTokenPurpose.PASSWORD_RESET);
         String rawToken = objectMapper.readTree(plaintext).get("actionToken").asText();
 
         passwordManagementService.changePassword(
@@ -119,13 +113,38 @@ class WmsPasswordManagementMySqlIntegrationTest {
         UserEntity updated = userRepository.findById(user.getId()).orElseThrow();
         assertTrue(passwordEncoder.matches("ChangedPassword456", updated.getPasswordHash()));
 
-        byte[] digest = new WmsIdentityActionTokenGenerator().digestPresentedToken(rawToken);
-        WmsIdentityActionTokenRecord token = findResetToken(digest);
+        WmsIdentityActionTokenRecord token = findToken(tokenGenerator.digestPresentedToken(rawToken));
         assertNull(token.consumedAt());
         assertNotNull(token.revokedAt());
 
         assertThrows(WmsIdentityActionTokenRejectedException.class,
                 () -> passwordManagementService.completePasswordReset(rawToken, "ResetPassword789"));
+    }
+
+    @Test
+    void emailVerificationActivatesPendingIdentityAndConsumesVerificationToken() throws Exception {
+        UserEntity user = createPendingUser("email-verification");
+
+        EmailVerificationRequestResult request =
+                emailVerificationService.requestEmailVerification(user.getEmail());
+
+        assertTrue(request.accepted());
+        OutboxPayload outbox = latestOutbox(user.getEmail(), "EMAIL_VERIFICATION");
+        byte[] plaintext = decryptOutbox(
+                outbox, user.getEmail(), WmsIdentityActionTokenPurpose.EMAIL_VERIFICATION);
+        JsonNode payload = objectMapper.readTree(plaintext);
+        String rawToken = payload.get("actionToken").asText();
+        assertEquals("EMAIL_VERIFICATION", payload.get("purpose").asText());
+
+        emailVerificationService.completeEmailVerification(rawToken);
+
+        UserEntity verified = userRepository.findById(user.getId()).orElseThrow();
+        assertEquals(UserStatus.ACTIVE, verified.getStatus());
+        assertNotNull(verified.getEmailVerifiedAt());
+
+        WmsIdentityActionTokenRecord token = findToken(tokenGenerator.digestPresentedToken(rawToken));
+        assertNotNull(token.consumedAt());
+        assertNull(token.revokedAt());
     }
 
     private UserEntity createUser(String label, String rawPassword) {
@@ -137,11 +156,20 @@ class WmsPasswordManagementMySqlIntegrationTest {
         return userRepository.saveAndFlush(user);
     }
 
-    private OutboxPayload latestPasswordResetOutbox(String email) {
+    private UserEntity createPendingUser(String label) {
+        UserEntity user = new UserEntity();
+        user.setEmail(label + "." + UUID.randomUUID() + "@example.test");
+        user.setFullName("Pending Verification " + label);
+        user.setPasswordHash(passwordEncoder.encode("PendingPassword123"));
+        user.setStatus(UserStatus.PENDING_VERIFICATION);
+        return userRepository.saveAndFlush(user);
+    }
+
+    private OutboxPayload latestOutbox(String email, String messageType) {
         return jdbcTemplate.queryForObject("""
                 SELECT message_id, payload_ciphertext, payload_nonce, encryption_key_version
                 FROM wms_identity_action_email_outbox
-                WHERE message_type = 'PASSWORD_RESET'
+                WHERE message_type = ?
                   AND recipient_email = ?
                 ORDER BY id DESC
                 LIMIT 1
@@ -149,10 +177,22 @@ class WmsPasswordManagementMySqlIntegrationTest {
                 uuidFromBytes(rs.getBytes("message_id")),
                 rs.getBytes("payload_ciphertext"),
                 rs.getBytes("payload_nonce"),
-                rs.getInt("encryption_key_version")), email);
+                rs.getInt("encryption_key_version")), messageType, email);
     }
 
-    private WmsIdentityActionTokenRecord findResetToken(byte[] digest) {
+    private byte[] decryptOutbox(
+            OutboxPayload outbox,
+            String email,
+            WmsIdentityActionTokenPurpose purpose) {
+        return encryptionService.decrypt(
+                outbox.messageId(),
+                purpose,
+                email,
+                new WmsEncryptedEmailPayload(
+                        outbox.keyVersion(), outbox.nonce(), outbox.ciphertext()));
+    }
+
+    private WmsIdentityActionTokenRecord findToken(byte[] digest) {
         return jdbcTemplate.queryForObject("""
                 SELECT id, token_digest, purpose, user_id, tenant_id, invited_by_user_id,
                        target_email, expires_at, consumed_at, revoked_at, created_at
