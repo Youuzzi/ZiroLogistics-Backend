@@ -22,6 +22,38 @@ class WmsUserLookupServiceTest {
     }
 
     @Test
+    void recordsSuccessfulLoginOnlyWhenTheDatabaseConfirmsTheUserIsStillActive() {
+        UserRepository repository = mock(UserRepository.class);
+        WmsUserLookupService service = new WmsUserLookupService(repository);
+        when(repository.recordSuccessfulLogin(17L)).thenReturn(1);
+
+        assertThat(service.recordSuccessfulLogin(17L)).isTrue();
+        verify(repository).recordSuccessfulLogin(17L);
+        verifyNoMoreInteractions(repository);
+    }
+
+    @Test
+    void refusesLoginMetadataWhenTheUserIsNoLongerActive() {
+        UserRepository repository = mock(UserRepository.class);
+        WmsUserLookupService service = new WmsUserLookupService(repository);
+        when(repository.recordSuccessfulLogin(17L)).thenReturn(0);
+
+        assertThat(service.recordSuccessfulLogin(17L)).isFalse();
+        verify(repository).recordSuccessfulLogin(17L);
+        verifyNoMoreInteractions(repository);
+    }
+
+    @Test
+    void rejectsInvalidUserIdBeforeDatabaseAccess() {
+        UserRepository repository = mock(UserRepository.class);
+        WmsUserLookupService service = new WmsUserLookupService(repository);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.recordSuccessfulLogin(0L))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(repository);
+    }
+
+    @Test
     void normalizesEmailBeforeExistenceCheck() {
         UserRepository repository = mock(UserRepository.class);
         WmsUserLookupService service = new WmsUserLookupService(repository);
