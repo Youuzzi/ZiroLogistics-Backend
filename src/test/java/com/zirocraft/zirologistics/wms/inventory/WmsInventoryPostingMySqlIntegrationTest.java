@@ -140,7 +140,15 @@ class WmsInventoryPostingMySqlIntegrationTest {
 
         assertEquals("AVAILABLE", serialStatus(f, serialPublicId));
         assertEquals(new BigDecimal("1.0000"), balance(f, f.locationA(), "AVAILABLE"));
-        assertEquals(5, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", f.tenantId()));
+
+        post(f, "ADJUSTMENT_OUT", leg(f, f.locationA(), serialPublicId, null, "AVAILABLE", "1.0000"));
+        assertEquals("LOST", serialStatus(f, serialPublicId));
+        assertEquals(new BigDecimal("0.0000"), balance(f, f.locationA(), "AVAILABLE"));
+
+        post(f, "ADJUSTMENT_IN", leg(f, f.locationA(), serialPublicId, null, "AVAILABLE", "1.0000"));
+        assertEquals("AVAILABLE", serialStatus(f, serialPublicId));
+        assertEquals(new BigDecimal("1.0000"), balance(f, f.locationA(), "AVAILABLE"));
+        assertEquals(7, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", f.tenantId()));
     }
 
     @Test
