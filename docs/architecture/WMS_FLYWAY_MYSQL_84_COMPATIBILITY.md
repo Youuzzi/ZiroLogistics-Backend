@@ -1,6 +1,6 @@
 # WMS Flyway and MySQL 8.4 Compatibility
 
-**Status:** implemented; PR CI #186 passed  
+**Status:** implemented; PR CI #187 passed  
 **Baseline:** Spring Boot 3.5.13, Java 21, MySQL 8.4 Testcontainers  
 **Scope:** Flyway dependency alignment only
 
@@ -25,25 +25,20 @@ The Maven property `flyway.version` is explicitly set to `11.20.3`. Spring Boot 
 
 The two Flyway modules must always resolve to the same version.
 
-## Required verification
+## Verification
 
-CI must confirm:
-
-1. The Maven dependency graph resolves both Flyway modules to 11.20.3.
-2. Flyway starts against disposable MySQL 8.4 Testcontainers without the previous “latest supported version ... 8.1” warning.
-3. Existing Flyway migration tests pass for the legacy migration test and WMS V1/V2 migration suites.
-4. WMS schema validation and the full Maven test suite pass.
-
-Useful local inspection command:
+CI must be supplemented by a local dependency-tree check after syncing the change:
 
 ```powershell
-.\mvnw.cmd dependency:tree "-Dincludes=org.flywaydb"
+.\\mvnw.cmd dependency:tree "-Dincludes=org.flywaydb"
 ```
+
+Expected: both `flyway-core` and `flyway-mysql` resolve to `11.20.3`.
 
 Run the full suite with Docker Desktop running:
 
 ```powershell
-.\mvnw.cmd test
+.\\mvnw.cmd test
 ```
 
 ## Safety boundaries
@@ -57,13 +52,14 @@ Run the full suite with Docker Desktop running:
 
 ## Verification status
 
-GitHub Actions Backend CI #186 completed successfully on commit `1f4bad3f94f6a67ffb753f1b34bac91b3dfe756e`.
+GitHub Actions Backend CI run #187 completed successfully on PR head commit `7d39b6e7b2d9ecb5f04eb840d308a6eec2bc335c`.
 
 Observed in the CI job log:
 
 - Flyway connected to disposable MySQL 8.4 databases for WMS identity, throttle adapter, credential authentication, membership projection, WMS V1/V2 migrations, and the legacy initial migration test.
 - The previous Flyway warning stating that MySQL 8.4 was newer than the tested range ending at 8.1 did not appear in the CI log.
+- WMS V1 and V2 migrations were successfully applied in the integration-test databases.
 - Maven reported `Tests run: 101, Failures: 0, Errors: 0, Skipped: 2` and `BUILD SUCCESS`.
 - The two skipped tests are the opt-in Argon2id benchmark and concurrency probes; they are intentionally excluded from ordinary CI.
 
-The Maven property explicitly pins both Flyway modules through Spring Boot's managed `flyway.version` property. For local dependency-resolution evidence, run the dependency-tree command above after syncing the merged change and confirm both modules report 11.20.3.
+The CI log confirms successful MySQL 8.4 migrations and removal of the prior compatibility warning. The explicit dependency-tree output remains a local verification step; do not mark that separate check complete until it has been run.
