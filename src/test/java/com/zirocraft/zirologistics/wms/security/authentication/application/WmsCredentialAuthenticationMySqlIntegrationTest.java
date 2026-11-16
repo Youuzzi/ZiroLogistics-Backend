@@ -75,6 +75,9 @@ class WmsCredentialAuthenticationMySqlIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
+    private WmsUserLookupService userLookupService;
+
+    @Autowired
     private TenantRepository tenantRepository;
 
     @Autowired
@@ -163,6 +166,10 @@ class WmsCredentialAuthenticationMySqlIntegrationTest {
                 java.util.HexFormat.of().parseHex(sourceKey.digestHex()));
         assertEquals(1, sourceRows, "successful login must not erase source history");
 
+        UserEntity authenticatedUser = userRepository.findById(user.getId()).orElseThrow();
+        assertNotNull(authenticatedUser.getLastLoginAt(),
+                "successful active-user authentication must persist last_login_at");
+
         verify(tokenService).issueTenantSelectionToken(user.getPublicId());
     }
 
@@ -188,13 +195,29 @@ class WmsCredentialAuthenticationMySqlIntegrationTest {
                 """, Integer.class, accountKey.keyVersion(),
                 java.util.HexFormat.of().parseHex(accountKey.digestHex()));
         assertEquals(1, failures);
+        UserEntity rejectedUser = userRepository.findByEmail(email).orElseThrow();
+        assertNull(rejectedUser.getLastLoginAt(),
+                "failed credentials must not update last_login_at");
         verifyNoInteractions(tokenService);
+    }
+
+    @Test
+    void suspendedUserCannotReceiveSuccessfulLoginMetadataUpdate() {
+        UserEntity user = createActiveUser(
+                "auth-suspended-" + UUID.randomUUID() + "@example.test", "correct-password");
+        user.setStatus(UserStatus.SUSPENDED);
+        userRepository.saveAndFlush(user);
+
+        boolean updated = userLookupService.recordSuccessfulLogin(user.getId());
+
+        assertFalse(updated);
+        assertNull(userRepository.findById(user.getId()).orElseThrow().getLastLoginAt());
     }
 
     private WmsCredentialAuthenticationService authenticationService() {
         return new WmsCredentialAuthenticationService(
                 throttleService,
-                new WmsUserLookupService(userRepository),
+                userLookupService,
                 passwordEncoder,
                 new WmsUnknownUserPasswordVerifier(passwordEncoder),
                 loginMembershipRepository,

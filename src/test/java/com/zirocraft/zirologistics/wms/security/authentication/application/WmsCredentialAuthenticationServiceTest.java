@@ -109,6 +109,7 @@ class WmsCredentialAuthenticationServiceTest {
         WmsLoginMembershipProjection membership = mock(WmsLoginMembershipProjection.class);
         when(userLookupService.findByEmail("user@example.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("correct-password", "stored-hash")).thenReturn(true);
+        when(userLookupService.recordSuccessfulLogin(17L)).thenReturn(true);
         when(membershipRepository.findSelectableMemberships(17L)).thenReturn(List.of(membership));
         when(membership.getMembershipPublicId()).thenReturn("membership-public-id");
         when(membership.getTenantPublicId()).thenReturn("tenant-public-id");
@@ -125,12 +126,28 @@ class WmsCredentialAuthenticationServiceTest {
         assertEquals("tenant-code", result.memberships().getFirst().tenantCode());
         assertEquals("Tenant Display", result.memberships().getFirst().tenantDisplayName());
 
-        var order = inOrder(throttleService, membershipRepository, tokenService);
+        var order = inOrder(throttleService, userLookupService, membershipRepository, tokenService);
         order.verify(throttleService).recordSuccessfulActiveUserAuthentication(attempt);
+        order.verify(userLookupService).recordSuccessfulLogin(17L);
         order.verify(membershipRepository).findSelectableMemberships(17L);
         order.verify(tokenService).issueTenantSelectionToken("user-public-id");
         verify(throttleService, never()).recordFailedCredential(any());
         verifyNoInteractions(dummyVerifier);
+    }
+
+    @Test
+    void failedLoginMetadataUpdatePreventsMembershipLookupAndTokenIssuance() {
+        UserEntity user = activeUser();
+        when(userLookupService.findByEmail("user@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("correct-password", "stored-hash")).thenReturn(true);
+        when(userLookupService.recordSuccessfulLogin(17L)).thenReturn(false);
+
+        assertThrows(WmsCredentialAuthenticationException.class,
+                () -> authenticate("correct-password"));
+
+        verify(throttleService).recordSuccessfulActiveUserAuthentication(attempt);
+        verify(userLookupService).recordSuccessfulLogin(17L);
+        verifyNoInteractions(membershipRepository, tokenService);
     }
 
     @Test

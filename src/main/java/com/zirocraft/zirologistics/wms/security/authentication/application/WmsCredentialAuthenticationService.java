@@ -90,6 +90,9 @@ public final class WmsCredentialAuthenticationService {
 
         // The reset must commit before any tenant-selection token is issued.
         throttleService.recordSuccessfulActiveUserAuthentication(attempt);
+        if (!userLookupService.recordSuccessfulLogin(user.getId())) {
+            throw new WmsCredentialAuthenticationException();
+        }
 
         List<WmsCredentialAuthenticationResult.SelectableMembership> memberships =
                 membershipRepository.findSelectableMemberships(user.getId()).stream()
