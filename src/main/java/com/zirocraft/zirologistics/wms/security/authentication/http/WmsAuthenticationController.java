@@ -15,7 +15,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,8 +27,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @Profile("wms")
 @RequestMapping("/api/wms/v1/auth")
-@ConditionalOnProperty(prefix = "wms.security.jwt", name = "enabled", havingValue = "true")
-@ConditionalOnProperty(prefix = "wms.security.http", name = "auth-endpoints-enabled", havingValue = "true")
+@Conditional(WmsIdentityHttpEnabledCondition.class)
 public class WmsAuthenticationController {
 
     private final WmsCredentialAuthenticationService credentialAuthentication;
