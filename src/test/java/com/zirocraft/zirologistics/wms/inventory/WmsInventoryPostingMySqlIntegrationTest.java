@@ -1,8 +1,6 @@
 package com.zirocraft.zirologistics.wms.inventory;
 
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
-import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
-import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.inventory.application.WmsInventoryPostingService;
 import com.zirocraft.zirologistics.wms.inventory.application.WmsInventoryQueryService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
