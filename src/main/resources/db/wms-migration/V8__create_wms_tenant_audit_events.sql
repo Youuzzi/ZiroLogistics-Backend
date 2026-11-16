@@ -30,5 +30,5 @@ CREATE TABLE tenant_audit_events (
       (actor_type = 'PLATFORM_OPERATOR' AND actor_membership_id IS NULL AND actor_reference IS NOT NULL)
     ),
   CONSTRAINT chk_tenant_audit_events_type
-    CHECK (event_type IN ('TENANT_PROFILE_UPDATED', 'TENANT_SUSPENDED', 'TENANT_REACTIVATED', 'TENANT_CLOSED'))
+    CHECK (event_type IN ('TENANT_PROFILE_UPDATED', 'TENANT_SUSPENDED', 'TENANT_REACTIVATED', 'TENANT_CLOSED', 'TENANT_PROVISIONED'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
