@@ -2,6 +2,8 @@ package com.zirocraft.zirologistics.wms.tenancy.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import com.zirocraft.zirologistics.wms.tenancy.domain.TenantStatus;
 import com.zirocraft.zirologistics.wms.tenancy.infrastructure.persistence.TenantEntity;
@@ -26,14 +28,17 @@ import java.util.UUID;
 public class WmsTenantProfileService {
     public static final String UPDATE_PERMISSION = "WMS_TENANT_PROFILE_UPDATE";
 
+    private final WmsMembershipAccessService membershipAccessService;
     private final TenantRepository tenantRepository;
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
 
     public WmsTenantProfileService(
+            WmsMembershipAccessService membershipAccessService,
             TenantRepository tenantRepository,
             JdbcTemplate jdbc,
             ObjectMapper objectMapper) {
+        this.membershipAccessService = Objects.requireNonNull(membershipAccessService);
         this.tenantRepository = Objects.requireNonNull(tenantRepository);
         this.jdbc = Objects.requireNonNull(jdbc);
         this.objectMapper = Objects.requireNonNull(objectMapper);
@@ -41,7 +46,8 @@ public class WmsTenantProfileService {
 
     @Transactional(readOnly = true)
     public WmsTenantProfile getCurrent(WmsAuthenticatedPrincipal principal) {
-        TenantEntity tenant = requireTenant(principal);
+        WmsMembershipAccess access = resolveAccess(principal);
+        TenantEntity tenant = requireTenant(access);
         return toProfile(tenant);
     }
 
@@ -50,14 +56,15 @@ public class WmsTenantProfileService {
             WmsAuthenticatedPrincipal principal,
             WmsTenantProfileUpdate update) {
         Objects.requireNonNull(update, "tenant profile update must not be null");
-        if (principal == null || !principal.hasPermission(UPDATE_PERMISSION)) {
+        WmsMembershipAccess access = resolveAccess(principal);
+        if (!access.hasPermission(UPDATE_PERMISSION)) {
             throw new AccessDeniedException("Missing tenant profile update permission");
         }
         if (update.expectedVersion() == null || update.expectedVersion() < 0) {
             throw new IllegalArgumentException("Expected tenant profile version is required");
         }
 
-        TenantEntity tenant = requireTenant(principal);
+        TenantEntity tenant = requireTenant(access);
         if (!Objects.equals(tenant.getVersion(), update.expectedVersion())) {
             throw new WmsTenantProfileConflictException();
         }
@@ -90,14 +97,26 @@ public class WmsTenantProfileService {
         }
     }
 
-    private TenantEntity requireTenant(WmsAuthenticatedPrincipal principal) {
-        if (principal == null || principal.tenantId() == null
-                || principal.tenantPublicId() == null || principal.tenantPublicId().isBlank()) {
+    private WmsMembershipAccess resolveAccess(WmsAuthenticatedPrincipal principal) {
+        if (principal == null || principal.userPublicId() == null || principal.userPublicId().isBlank()
+                || principal.membershipPublicId() == null || principal.membershipPublicId().isBlank()) {
             throw new AccessDeniedException("Resolved tenant context is required");
         }
-        TenantEntity tenant = tenantRepository.findById(principal.tenantId())
+        WmsMembershipAccess access = membershipAccessService.resolve(
+                principal.userPublicId(), principal.membershipPublicId());
+        if (!Objects.equals(principal.tenantId(), access.tenantId())
+                || !Objects.equals(principal.tenantPublicId(), access.tenantPublicId())
+                || !Objects.equals(principal.membershipId(), access.membershipId())
+                || !Objects.equals(principal.membershipPublicId(), access.membershipPublicId())) {
+            throw new AccessDeniedException("Resolved tenant context is unavailable");
+        }
+        return access;
+    }
+
+    private TenantEntity requireTenant(WmsMembershipAccess access) {
+        TenantEntity tenant = tenantRepository.findById(access.tenantId())
                 .orElseThrow(() -> new AccessDeniedException("Resolved tenant context is unavailable"));
-        if (!tenant.getPublicId().equals(principal.tenantPublicId())
+        if (!tenant.getPublicId().equals(access.tenantPublicId())
                 || tenant.getStatus() != TenantStatus.ACTIVE) {
             throw new AccessDeniedException("Resolved tenant context is unavailable");
         }
@@ -105,7 +124,7 @@ public class WmsTenantProfileService {
     }
 
     private void writeAudit(
-            WmsAuthenticatedPrincipal principal,
+            WmsMembershipAccess access,
             TenantEntity tenant,
             Map<String, Object> before,
             Map<String, Object> after) {
@@ -129,7 +148,7 @@ public class WmsTenantProfileService {
                 WHERE t.id = ? AND t.public_id = ? AND t.status = 'ACTIVE'
                 """,
                 UUID.randomUUID().toString(), serialized,
-                principal.membershipId(), principal.userPublicId(),
+                access.membershipId(), access.userPublicId(),
                 tenant.getId(), tenant.getPublicId());
         if (inserted != 1) {
             throw new AccessDeniedException("Tenant audit actor is no longer active");
