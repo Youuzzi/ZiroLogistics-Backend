@@ -9,7 +9,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -20,8 +20,7 @@ import java.time.Instant;
 @RestController
 @Profile("wms")
 @RequestMapping("/api/wms/v1/invitations")
-@ConditionalOnProperty(prefix = "wms.security.jwt", name = "enabled", havingValue = "true")
-@ConditionalOnProperty(prefix = "wms.security.http", name = "auth-endpoints-enabled", havingValue = "true")
+@Conditional(WmsIdentityHttpEnabledCondition.class)
 public class WmsInvitationController {
 
     private final WmsTenantInvitationService tenantInvitationService;
