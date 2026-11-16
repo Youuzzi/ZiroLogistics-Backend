@@ -33,7 +33,7 @@ import java.util.UUID;
 @Service
 @Profile("wms")
 public class WmsInboundReceivingService {
-    private static final Set<String> RECEIPT_TYPES = Set.of("PURCHASE", "RETURN", "TRANSFER_IN", "OTHER");
+    private static final Set<String> RECEIPT_TYPES = Set.of("PURCHASE", "OTHER");
     private static final int MAX_POSTING_LEGS = 200;
 
     private final WmsMembershipAccessService accessService;
