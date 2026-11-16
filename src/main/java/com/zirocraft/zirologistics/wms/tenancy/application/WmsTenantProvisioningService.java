@@ -196,6 +196,7 @@ public class WmsTenantProvisioningService {
                 JOIN membership_roles mr ON mr.tenant_id = t.id AND mr.role_id = r.id
                 JOIN tenant_memberships m ON m.id = mr.membership_id AND m.tenant_id = t.id
                 JOIN users u ON u.id = m.user_id
+                  AND u.public_id = JSON_UNQUOTE(JSON_EXTRACT(a.change_payload, '$.ownerUserPublicId'))
                 WHERE t.public_id = ?
                 """, event.get("subject_public_id"));
         if (rows.isEmpty()) {
