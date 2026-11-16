@@ -238,7 +238,9 @@ public class WmsInventoryPostingService {
             if (leg.serialId() != null) {
                 String expectedSerialStatus = switch (type) {
                     case "RETURN" -> "SHIPPED";
-                    case "STATUS_CHANGE" -> serialStatusForStock(legs.getFirst().stockStatus());
+                    case "STATUS_CHANGE" -> "AVAILABLE".equals(legs.getFirst().stockStatus())
+                            && "RETURNED".equals(leg.serialStatus()) ? "RETURNED"
+                            : serialStatusForStock(legs.getFirst().stockStatus());
                     case "TRANSFER" -> serialStatusForStock(leg.stockStatus());
                     default -> "AVAILABLE";
                 };
@@ -372,7 +374,7 @@ public class WmsInventoryPostingService {
                     """, leg.serialId());
             if (changed != 1) throw new IllegalStateException("Serial damage transition failed");
         } else if ("STATUS_CHANGE".equals(movement) && leg.index() == 1) {
-            String sourceStatus = serialStatusForStock(legs.getFirst().stockStatus());
+            String sourceStatus = legs.getFirst().serialStatus();
             String targetStatus = serialStatusForStock(leg.stockStatus());
             if (sourceStatus == null || targetStatus == null) {
                 throw new IllegalArgumentException("Stock status cannot be represented by serial lifecycle state");
