@@ -37,7 +37,7 @@ The API does not allow clients to change `tenantCode`, `status`, `publicId`, `cr
 
 ## 3. Authorization
 
-Migration V7 seeds the global catalogue permission `WMS_TENANT_PROFILE_UPDATE`. The controlled bootstrap's tenant owner receives this permission alongside `WMS_IDENTITY_MEMBERSHIP_INVITE`; no wildcard or module-wide grant is introduced.
+Migration V7 seeds the global catalogue permission `WMS_TENANT_PROFILE_UPDATE` and backfills it only to existing ACTIVE system roles with `role_code = TENANT_OWNER`. The controlled bootstrap and repeatable tenant provisioning also grant it alongside `WMS_IDENTITY_MEMBERSHIP_INVITE`; custom roles and all other roles receive no automatic grant. No wildcard or module-wide grant is introduced.
 
 Before profile access, the service re-resolves the caller's user and membership through `WmsMembershipAccessService`. It compares tenant, membership, and public identifiers with the authenticated principal and uses the persisted effective permission set, not a caller-supplied permission list.
 
