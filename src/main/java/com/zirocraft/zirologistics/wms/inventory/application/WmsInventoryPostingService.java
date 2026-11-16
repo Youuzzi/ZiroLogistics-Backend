@@ -431,16 +431,20 @@ public class WmsInventoryPostingService {
 
     private void insertLedger(Access access, NormalizedCommand command, String groupId, int entryNo,
                               ResolvedLeg leg, BigDecimal delta, BigDecimal before, BigDecimal after) {
-        jdbc.update("""
-                INSERT INTO inventory_ledger
-                  (public_id, tenant_id, movement_group_id, request_id, entry_no, movement_type,
-                   warehouse_id, location_id, item_id, lot_id, serial_id, stock_status,
-                   quantity_delta, balance_before_qty, balance_after_qty, actor_membership_id, notes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, UUID.randomUUID().toString(), access.tenantId(), groupId, command.requestId().toString(),
-                entryNo, command.movementType(), leg.warehouseId(), leg.locationId(), leg.itemId(),
-                leg.lotId(), leg.serialId(), leg.stockStatus(), delta, before, after,
-                access.membershipId(), command.notes());
+        try {
+            jdbc.update("""
+                    INSERT INTO inventory_ledger
+                      (public_id, tenant_id, movement_group_id, request_id, entry_no, movement_type,
+                       warehouse_id, location_id, item_id, lot_id, serial_id, stock_status,
+                       quantity_delta, balance_before_qty, balance_after_qty, actor_membership_id, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, UUID.randomUUID().toString(), access.tenantId(), groupId, command.requestId().toString(),
+                    entryNo, command.movementType(), leg.warehouseId(), leg.locationId(), leg.itemId(),
+                    leg.lotId(), leg.serialId(), leg.stockStatus(), delta, before, after,
+                    access.membershipId(), command.notes());
+        } catch (DuplicateKeyException duplicate) {
+            throw new IllegalStateException("The inventory request ID has already been posted");
+        }
     }
 
     private void transitionSerial(String movement, List<ResolvedLeg> legs, ResolvedLeg leg) {
