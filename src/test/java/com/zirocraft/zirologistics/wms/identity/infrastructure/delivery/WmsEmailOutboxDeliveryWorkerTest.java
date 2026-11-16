@@ -68,7 +68,7 @@ class WmsEmailOutboxDeliveryWorkerTest {
         assertEquals(RECIPIENT, captor.getValue().getTo()[0]);
         assertEquals("Reset your WMS password", captor.getValue().getSubject());
         assertTrue(captor.getValue().getText().contains(
-                "https://wms.example.test/reset-password?token=opaque-action-token"));
+                "https://wms.example.test/reset-password#token=opaque-action-token"));
         verify(storage).markSent(id, 1, NOW);
         verify(storage, never()).scheduleRetry(any(), anyInt(), any(), anyString(), anyInt());
     }
@@ -81,7 +81,7 @@ class WmsEmailOutboxDeliveryWorkerTest {
                 {"purpose":"INVITATION","actionToken":"invite-token","tenantId":17,"targetEmail":"person@example.test","expiresAt":"2026-11-16T15:30:00Z"}
                 """));
         verify(mailSender).send(argThat(mail -> mail.getText().contains(
-                "https://wms.example.test/accept-invitation?token=invite-token")));
+                "https://wms.example.test/accept-invitation#token=invite-token")));
 
         reset(mailSender, storage);
         UUID verificationId = UUID.randomUUID();
@@ -90,7 +90,7 @@ class WmsEmailOutboxDeliveryWorkerTest {
                 {"purpose":"EMAIL_VERIFICATION","actionToken":"verify-token","targetEmail":"person@example.test","expiresAt":"2026-11-16T15:30:00Z"}
                 """));
         verify(mailSender).send(argThat(mail -> mail.getText().contains(
-                "https://wms.example.test/verify-email?token=verify-token")));
+                "https://wms.example.test/verify-email#token=verify-token")));
         verify(storage).markSent(verificationId, 1, NOW);
     }
 
