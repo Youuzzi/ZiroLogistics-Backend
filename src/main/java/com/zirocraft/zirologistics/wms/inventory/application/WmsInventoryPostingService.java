@@ -188,10 +188,7 @@ public class WmsInventoryPostingService {
                 throw new IllegalArgumentException("Only active stock items can be posted");
             }
             if (!STOCK_STATUSES.contains(leg.stockStatus())) throw new IllegalArgumentException("Stock status is invalid");
-            if ("ISSUE".equals(type) && !"AVAILABLE".equals(leg.stockStatus())) {
-                throw new IllegalArgumentException("Issue can only consume AVAILABLE stock");
-            }
-            if (!Set.of("ACTIVE").contains(leg.warehouseStatus()) || !"ACTIVE".equals(leg.locationStatus())) {
+            if (!"ACTIVE".equals(leg.warehouseStatus()) || !"ACTIVE".equals(leg.locationStatus())) {
                 throw new IllegalArgumentException("Warehouse and location must be active");
             }
             boolean lotTracked = Set.of("LOT", "LOT_AND_SERIAL").contains(leg.trackingMethod());
@@ -203,8 +200,7 @@ public class WmsInventoryPostingService {
             if (serialTracked && leg.quantity().compareTo(BigDecimal.ONE) != 0) {
                 throw new IllegalArgumentException("Serial-tracked posting quantity must equal one");
             }
-            String bucket = leg.warehouseId() + ":" + leg.locationId() + ":" + leg.itemId()
-                    + ":" + leg.lotId() + ":" + leg.stockStatus();
+            String bucket = balanceKey(leg);
             if (!buckets.add(bucket)) throw new IllegalArgumentException("Duplicate balance bucket in one posting");
         }
         if (paired) {
@@ -213,21 +209,18 @@ public class WmsInventoryPostingService {
             if (!source.itemId().equals(destination.itemId())
                     || !Objects.equals(source.lotId(), destination.lotId())
                     || source.quantity().compareTo(destination.quantity()) != 0
-                    || !Objects.equals(source.serialId(), destination.serialId())) {
+                    || !Objects.equals(source.serialId(), destination.serialId())
+                    || !Objects.equals(source.serialNumber(), destination.serialNumber())) {
                 throw new IllegalArgumentException("Paired movement legs must match item, lot, serial and quantity");
             }
-            if ("TRANSFER".equals(type)
-                    && source.warehouseId() == destination.warehouseId()
-                    && source.locationId() == destination.locationId()) {
-                throw new IllegalArgumentException("Transfer must change physical location");
-            }
-            if ("TRANSFER".equals(type) && !source.stockStatus().equals(destination.stockStatus())) {
-                throw new IllegalArgumentException("Transfer must preserve stock status");
-            }
-            if ("STATUS_CHANGE".equals(type)
-                    && (source.warehouseId() != destination.warehouseId()
-                    || source.locationId() != destination.locationId())) {
-                throw new IllegalArgumentException("Status change cannot change physical location");
+            if ("TRANSFER".equals(type)) {
+                if (source.warehouseId() == destination.warehouseId()
+                        && source.locationId() == destination.locationId()) {
+                    throw new IllegalArgumentException("Transfer must change physical location");
+                }
+                if (!source.stockStatus().equals(destination.stockStatus())) {
+                    throw new IllegalArgumentException("Transfer must preserve stock status");
+                }
             }
             if ("DAMAGE".equals(type)
                     && (!"AVAILABLE".equals(source.stockStatus()) || !"DAMAGED".equals(destination.stockStatus()))) {
@@ -237,19 +230,25 @@ public class WmsInventoryPostingService {
                 throw new IllegalArgumentException("Status change must change stock status");
             }
         }
+        if ("ISSUE".equals(type) && legs.stream().anyMatch(l -> !"AVAILABLE".equals(l.stockStatus()))) {
+            throw new IllegalArgumentException("Issue can only consume AVAILABLE stock");
+        }
+        if ("RETURN".equals(type) && legs.stream().anyMatch(l -> !"QUARANTINED".equals(l.stockStatus()))) {
+            throw new IllegalArgumentException("Returned stock must enter QUARANTINED status");
+        }
         for (ResolvedLeg leg : legs) {
             if (leg.serialId() != null) {
-                String expectedSerialStatus = switch (type) {
-                    case "RETURN" -> "SHIPPED";
-                    case "STATUS_CHANGE" -> "AVAILABLE".equals(legs.getFirst().stockStatus())
-                            && "RETURNED".equals(leg.serialStatus()) ? "RETURNED"
-                            : serialStatusForStock(legs.getFirst().stockStatus());
-                    case "TRANSFER" -> serialStatusForStock(leg.stockStatus());
-                    default -> "AVAILABLE";
+                boolean validState = switch (type) {
+                    case "RETURN" -> "SHIPPED".equals(leg.serialStatus());
+                    case "STATUS_CHANGE" -> {
+                        String expected = serialStatusForStock(legs.getFirst().stockStatus());
+                        yield Objects.equals(expected, leg.serialStatus())
+                                || ("AVAILABLE".equals(legs.getFirst().stockStatus())
+                                    && "RETURNED".equals(leg.serialStatus()));
+                    }
+                    default -> "AVAILABLE".equals(leg.serialStatus());
                 };
-                if (expectedSerialStatus == null || !expectedSerialStatus.equals(leg.serialStatus())) {
-                    throw new IllegalArgumentException("Serial is not in a state valid for this movement");
-                }
+                if (!validState) throw new IllegalArgumentException("Serial is not in a state valid for this movement");
             }
             if (leg.serialId() != null && !"RETURN".equals(type)
                     && (!"TRANSFER".equals(type) || leg.index() == 0)
@@ -258,13 +257,21 @@ public class WmsInventoryPostingService {
                 throw new IllegalArgumentException("Serial current location does not match posting source");
             }
         }
-        if (type.equals("RECEIPT") && legs.stream().anyMatch(l ->
-                Set.of("SERIAL", "LOT_AND_SERIAL").contains(l.trackingMethod())
-                        && (l.serialNumber() == null || l.serialPublicId() != null))) {
-            throw new IllegalArgumentException("Serial receipt requires a new serial number");
+        boolean inboundSerial = Set.of("RECEIPT", "OPENING_BALANCE", "ADJUSTMENT_IN").contains(type);
+        if (legs.stream().anyMatch(l -> l.serialNumber() != null && !inboundSerial)) {
+            throw new IllegalArgumentException("A new serial number is only valid for inbound stock");
         }
         if (legs.stream().anyMatch(l -> l.serialNumber() != null && l.serialPublicId() != null)) {
             throw new IllegalArgumentException("Provide either an existing serial ID or a new serial number, not both");
+        }
+        if (inboundSerial && legs.stream().anyMatch(l -> l.serialNumber() != null
+                && !"AVAILABLE".equals(l.stockStatus()))) {
+            throw new IllegalArgumentException("New serials must enter AVAILABLE stock");
+        }
+        if ("RECEIPT".equals(type) && legs.stream().anyMatch(l ->
+                Set.of("SERIAL", "LOT_AND_SERIAL").contains(l.trackingMethod())
+                        && (l.serialNumber() == null || l.serialPublicId() != null))) {
+            throw new IllegalArgumentException("Serial receipt requires a new serial number");
         }
     }
 
@@ -346,13 +353,15 @@ public class WmsInventoryPostingService {
     private void transitionSerial(String movement, List<ResolvedLeg> legs, ResolvedLeg leg) {
         if (leg.serialId() == null) return;
         if ("TRANSFER".equals(movement) && leg.index() == 1) {
-            ResolvedLeg destination = legs.get(1);
-            jdbc.update("""
+            int changed = jdbc.update("""
                     UPDATE inventory_serials
                     SET current_warehouse_id = ?, current_location_id = ?, version = version + 1,
                         updated_at = UTC_TIMESTAMP(6)
-                    WHERE id = ?
-                    """, destination.warehouseId(), destination.locationId(), leg.serialId());
+                    WHERE id = ? AND status = 'AVAILABLE'
+                      AND current_warehouse_id = ? AND current_location_id = ?
+                    """, leg.warehouseId(), leg.locationId(), leg.serialId(),
+                    legs.getFirst().warehouseId(), legs.getFirst().locationId());
+            if (changed != 1) throw new IllegalStateException("Serial transfer transition failed");
         } else if ("ISSUE".equals(movement)) {
             int changed = jdbc.update("""
                     UPDATE inventory_serials
@@ -360,21 +369,24 @@ public class WmsInventoryPostingService {
                         current_warehouse_id = NULL, current_location_id = NULL,
                         version = version + 1, updated_at = UTC_TIMESTAMP(6)
                     WHERE id = ? AND status = 'AVAILABLE'
-                    """, leg.serialId());
+                      AND current_warehouse_id = ? AND current_location_id = ?
+                    """, leg.serialId(), leg.warehouseId(), leg.locationId());
             if (changed != 1) throw new IllegalStateException("Serial shipment transition failed");
         } else if ("RETURN".equals(movement)) {
             int changed = jdbc.update("""
                     UPDATE inventory_serials
                     SET status = 'RETURNED', current_warehouse_id = ?, current_location_id = ?,
-                        version = version + 1, updated_at = UTC_TIMESTAMP(6)
+                        shipped_at = NULL, version = version + 1, updated_at = UTC_TIMESTAMP(6)
                     WHERE id = ? AND status = 'SHIPPED'
+                      AND current_warehouse_id IS NULL AND current_location_id IS NULL
                     """, leg.warehouseId(), leg.locationId(), leg.serialId());
             if (changed != 1) throw new IllegalStateException("Serial return transition failed");
         } else if ("DAMAGE".equals(movement) && leg.index() == 1) {
             int changed = jdbc.update("""
                     UPDATE inventory_serials SET status = 'DAMAGED', version = version + 1,
                         updated_at = UTC_TIMESTAMP(6) WHERE id = ? AND status = 'AVAILABLE'
-                    """, leg.serialId());
+                          AND current_warehouse_id = ? AND current_location_id = ?
+                    """, leg.serialId(), legs.getFirst().warehouseId(), legs.getFirst().locationId());
             if (changed != 1) throw new IllegalStateException("Serial damage transition failed");
         } else if ("STATUS_CHANGE".equals(movement) && leg.index() == 1) {
             String sourceStatus = legs.getFirst().serialStatus();
@@ -384,7 +396,8 @@ public class WmsInventoryPostingService {
             }
             int changed = jdbc.update("""
                     UPDATE inventory_serials SET status = ?, version = version + 1,
-                        updated_at = UTC_TIMESTAMP(6) WHERE id = ? AND status = ?
+                        updated_at = UTC_TIMESTAMP(6)
+                    WHERE id = ? AND status = ?
                     """, targetStatus, leg.serialId(), sourceStatus);
             if (changed != 1) throw new IllegalStateException("Serial status transition failed");
         }
