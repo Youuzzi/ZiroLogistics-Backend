@@ -96,6 +96,9 @@ class MySqlWmsEmailOutboxStorageAdapterIntegrationTest {
             for (Future<List<WmsEmailOutboxMessage>> future : futures) {
                 claimed.addAll(future.get(30, java.util.concurrent.TimeUnit.SECONDS));
             }
+            // SKIP LOCKED may return a short batch when the competing worker
+            // holds the first candidate rows; a subsequent poll must claim the rest.
+            claimed.addAll(adapter.claimAvailable(NOW, 10));
 
             Set<UUID> claimedIds = new HashSet<>();
             for (WmsEmailOutboxMessage message : claimed) {
