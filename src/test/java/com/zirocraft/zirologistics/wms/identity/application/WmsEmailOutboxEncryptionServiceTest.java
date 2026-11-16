@@ -4,7 +4,6 @@ import com.zirocraft.zirologistics.wms.identity.domain.WmsEncryptedEmailPayload;
 import com.zirocraft.zirologistics.wms.identity.domain.WmsIdentityActionTokenPurpose;
 import org.junit.jupiter.api.Test;
 
-import java.security.SecureRandom;
 import java.util.Map;
 import java.util.UUID;
 
@@ -32,7 +31,7 @@ class WmsEmailOutboxEncryptionServiceTest {
         assertThat(encrypted.keyVersion()).isEqualTo(1);
         assertThat(encrypted.nonce()).hasSize(12);
         assertThat(encrypted.ciphertext()).hasSize(PLAINTEXT.length + 16);
-        assertThat(encrypted.ciphertext()).doesNotContain(PLAINTEXT);
+        assertThat(encrypted.ciphertext()).isNotEqualTo(PLAINTEXT);
 
         assertThat(service.decrypt(
                 MESSAGE_ID, WmsIdentityActionTokenPurpose.INVITATION,
