@@ -91,14 +91,25 @@ public class WmsInventoryPostingService {
             updateBalance(balance.id(), delta);
             insertLedger(access, normalized, movementGroupId, entryNo++, leg, delta, before, after);
             transitionSerial(normalized.movementType(), legs, leg);
-            entries.add(Map.of(
-                    "entryNo", entryNo - 1,
-                    "itemPublicId", leg.itemPublicId(),
-                    "warehousePublicId", leg.warehousePublicId(),
-                    "locationPublicId", leg.locationPublicId(),
-                    "quantityDelta", delta,
-                    "balanceBeforeQty", before,
-                    "balanceAfterQty", after));
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("entryNo", entryNo - 1);
+            entry.put("itemPublicId", leg.itemPublicId());
+            entry.put("warehousePublicId", leg.warehousePublicId());
+            entry.put("locationPublicId", leg.locationPublicId());
+            entry.put("stockStatus", leg.stockStatus());
+            entry.put("quantityDelta", delta);
+            entry.put("balanceBeforeQty", before);
+            entry.put("balanceAfterQty", after);
+            if (leg.lotPublicId() != null) entry.put("lotPublicId", leg.lotPublicId());
+            if (leg.serialId() != null) {
+                String serialPublicId = leg.serialPublicId();
+                if (serialPublicId == null) {
+                    serialPublicId = jdbc.queryForObject("SELECT public_id FROM inventory_serials WHERE id = ?",
+                            String.class, leg.serialId());
+                }
+                entry.put("serialPublicId", serialPublicId);
+            }
+            entries.add(entry);
         }
 
         writeAudit(access, normalized, movementGroupId, entries.size());
