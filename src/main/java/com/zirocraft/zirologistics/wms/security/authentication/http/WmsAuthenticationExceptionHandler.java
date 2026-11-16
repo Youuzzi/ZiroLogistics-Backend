@@ -4,7 +4,7 @@ import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAc
 import com.zirocraft.zirologistics.wms.identity.application.WmsIdentityActionTokenRejectedException;
 import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationException;
 import jakarta.validation.ConstraintViolationException;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
         "com.zirocraft.zirologistics.wms.identity.http"
 })
 @Profile("wms")
-@ConditionalOnProperty(prefix = "wms.security.http", name = "auth-endpoints-enabled", havingValue = "true")
+@Conditional(WmsIdentityHttpEnabledCondition.class)
 public class WmsAuthenticationExceptionHandler {
 
     @ExceptionHandler({WmsCredentialAuthenticationException.class, BadCredentialsException.class, JwtException.class})
