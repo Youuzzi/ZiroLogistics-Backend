@@ -178,28 +178,6 @@ public class WmsInventoryMasterDataController {
                 request.status(), request.expectedVersion());
     }
 
-    @GetMapping("/items/{itemPublicId}/serials")
-    public List<Map<String, Object>> listSerials(
-            Authentication authentication, @PathVariable String itemPublicId,
-            @RequestParam(required = false) String status) {
-        return service.listSerials(principal(authentication), itemPublicId, status);
-    }
-
-    @PostMapping("/items/{itemPublicId}/serials")
-    public Map<String, Object> registerSerial(
-            Authentication authentication, @PathVariable String itemPublicId,
-            @Valid @RequestBody SerialRequest request) {
-        return service.registerSerial(principal(authentication), itemPublicId, request.toCommand());
-    }
-
-    @PostMapping("/items/{itemPublicId}/serials/{serialPublicId}/status")
-    public Map<String, Object> changeSerialStatus(
-            Authentication authentication, @PathVariable String itemPublicId,
-            @PathVariable String serialPublicId, @Valid @RequestBody VersionedStatusRequest request) {
-        return service.changeSerialStatus(principal(authentication), itemPublicId, serialPublicId,
-                request.status(), request.expectedVersion());
-    }
-
     private static WmsAuthenticatedPrincipal principal(Authentication authentication) {
         Object candidate = authentication == null ? null : authentication.getPrincipal();
         if (!(candidate instanceof WmsAuthenticatedPrincipal principal)) {
@@ -257,18 +235,6 @@ public class WmsInventoryMasterDataController {
         WmsInventoryMasterDataService.LotCommand toCommand() {
             return new WmsInventoryMasterDataService.LotCommand(
                     lotNumber, supplierLotNumber, manufactureDate, receivedDate, expiryDate, notes);
-        }
-    }
-
-    public record SerialRequest(
-            @NotBlank @Size(max = 150) String serialNumber,
-            @Size(max = 36) String lotPublicId,
-            @Size(max = 36) String warehousePublicId,
-            @Size(max = 36) String locationPublicId,
-            @Size(max = 1000) String notes) {
-        WmsInventoryMasterDataService.SerialCommand toCommand() {
-            return new WmsInventoryMasterDataService.SerialCommand(
-                    serialNumber, lotPublicId, warehousePublicId, locationPublicId, notes);
         }
     }
 
