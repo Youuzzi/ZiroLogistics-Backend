@@ -184,7 +184,9 @@ public class WmsTenantProfileService {
     private static String validateTimezone(String value) {
         String timezone = bounded(value, "timezone", 1, 60);
         try {
-            ZoneId.of(timezone);
+            if (!ZoneId.getAvailableZoneIds().contains(timezone) && !"UTC".equals(timezone)) {
+                throw new IllegalArgumentException();
+            }
             return timezone;
         } catch (RuntimeException invalid) {
             throw new IllegalArgumentException("Timezone is invalid");
