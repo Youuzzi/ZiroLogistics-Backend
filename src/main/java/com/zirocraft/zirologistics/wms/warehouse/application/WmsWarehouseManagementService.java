@@ -435,20 +435,9 @@ public class WmsWarehouseManagementService {
                 WHERE t.id = ? AND t.status = 'ACTIVE'
                 """,
                 UUID.randomUUID().toString(), UUID.randomUUID().toString(), eventType,
-                subjectPublicId, access.membershipId(), access.userPublicId(), access.tenantId());
+                subjectPublicId, serialized, access.membershipId(),
+                access.userPublicId(), access.tenantId());
         if (inserted != 1) throw new AccessDeniedException("Audit actor is no longer active");
-        // Persist the bounded before/after payload in a second statement so the actor predicate
-        // remains the single authorization boundary for all WMS tenant audit writes.
-        jdbc.update("""
-                UPDATE tenant_audit_events SET change_payload = ?
-                WHERE operation_ref = (
-                  SELECT operation_ref FROM (
-                    SELECT operation_ref FROM tenant_audit_events
-                    WHERE subject_public_id = ? AND event_type = ?
-                    ORDER BY id DESC LIMIT 1
-                  ) latest_event
-                )
-                """, serialized, subjectPublicId, eventType);
     }
 
     private static WarehouseCommand normalize(WarehouseCommand c) {
