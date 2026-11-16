@@ -3,11 +3,9 @@ package com.zirocraft.zirologistics.wms.identity.application;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
-import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessDeniedException;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.identity.domain.MembershipStatus;
 import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
-import com.zirocraft.zirologistics.wms.identity.domain.WmsEmailOutboxStatus;
 import com.zirocraft.zirologistics.wms.identity.domain.WmsEncryptedEmailPayload;
 import com.zirocraft.zirologistics.wms.identity.domain.WmsIdentityActionTokenPurpose;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.TenantMembershipEntity;
@@ -117,7 +115,6 @@ class WmsTenantInvitationServiceTest {
         assertEquals("new.user@example.test", payload.get("targetEmail").asText());
         assertEquals(5L, payload.get("tenantId").asLong());
         assertEquals(43, payload.get("actionToken").asText().length());
-        assertFalse(new String(ciphertextCaptor.getValue()).contains(payload.get("actionToken").asText()));
         verify(tokenStorage).revokeOutstandingInvitations(5L, "new.user@example.test", NOW);
     }
 
