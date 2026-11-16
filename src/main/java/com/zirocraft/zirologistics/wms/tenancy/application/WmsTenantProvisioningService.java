@@ -209,7 +209,8 @@ public class WmsTenantProvisioningService {
                 || !input.displayName().equals(row.get("display_name"))
                 || !input.timezone().equals(row.get("timezone"))
                 || !input.currency().equals(row.get("default_currency"))
-                || !input.ownerFullName().equals(row.get("owner_full_name"))
+                || (UserStatus.PENDING_VERIFICATION.name().equals(row.get("owner_status"))
+                    && !input.ownerFullName().equals(row.get("owner_full_name")))
                 || !input.operatorReference().equals(row.get("operator_reference"))
                 || !input.reason().equals(row.get("reason"))) {
             throw new WmsTenantProvisioningRejectedException("Tenant provisioning operation reference does not match request");
