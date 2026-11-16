@@ -1,6 +1,6 @@
 # WMS Tenant & Organization Management
 
-**Status:** Tenant profile API and transactional profile audit implemented in the current feature branch.  
+**Status:** Tenant profile API, repeatable operator provisioning, operator lifecycle transitions, and transactional audit implemented in the current feature branch.  
 **Schema baseline:** Frozen V1; additive migrations V7 and V8 only.  
 **HTTP activation:** Requires the existing explicit WMS JWT and HTTP identity endpoint switches. The routes remain deny-by-default when those switches are absent.
 
