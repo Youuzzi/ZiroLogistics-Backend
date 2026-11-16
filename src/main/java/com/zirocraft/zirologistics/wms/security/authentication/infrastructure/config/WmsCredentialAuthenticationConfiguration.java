@@ -5,7 +5,6 @@ import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.WmsLo
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtTokenService;
 import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationService;
 import com.zirocraft.zirologistics.wms.security.authentication.application.WmsUnknownUserPasswordVerifier;
-import com.zirocraft.zirologistics.wms.security.config.WmsPasswordEncoderConfiguration;
 import com.zirocraft.zirologistics.wms.security.throttling.application.WmsClientAddressResolver;
 import com.zirocraft.zirologistics.wms.security.throttling.application.WmsLoginThrottlePolicy;
 import com.zirocraft.zirologistics.wms.security.throttling.application.WmsLoginThrottleService;
