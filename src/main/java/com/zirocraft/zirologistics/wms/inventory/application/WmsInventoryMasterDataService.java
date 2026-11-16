@@ -644,114 +644,6 @@ public class WmsInventoryMasterDataService {
         return publicView(after);
     }
 
-    @Transactional(readOnly = true)
-    public List<Map<String, Object>> listSerials(WmsAuthenticatedPrincipal principal, String itemPublicId,
-                                                  String status) {
-        Access access = access(principal, "WMS_SERIAL_READ");
-        Map<String, Object> item = requireItem(access.tenantId(), itemPublicId);
-        if (!Set.of("SERIAL", "LOT_AND_SERIAL").contains(item.get("tracking_method"))) {
-            throw new IllegalArgumentException("Item is not configured for serial tracking");
-        }
-        if (status == null || status.isBlank()) {
-            return jdbc.queryForList("""
-                    SELECT s.public_id, s.serial_number, s.status, l.public_id AS lot_public_id,
-                           w.public_id AS warehouse_public_id, loc.public_id AS location_public_id,
-                           s.received_at, s.shipped_at, s.notes, s.version, s.created_at, s.updated_at
-                    FROM inventory_serials s
-                    LEFT JOIN inventory_lots l ON l.id = s.lot_id AND l.tenant_id = s.tenant_id
-                    LEFT JOIN warehouses w ON w.id = s.current_warehouse_id AND w.tenant_id = s.tenant_id
-                    LEFT JOIN warehouse_locations loc ON loc.id = s.current_location_id
-                      AND loc.warehouse_id = s.current_warehouse_id AND loc.tenant_id = s.tenant_id
-                    WHERE s.tenant_id = ? AND s.item_id = ?
-                    ORDER BY s.serial_number LIMIT 500
-                    """, access.tenantId(), number(item, "id"));
-        }
-        String normalized = enumValue(status, Set.of("AVAILABLE", "RESERVED", "PICKED", "SHIPPED",
-                "DAMAGED", "QUARANTINED", "RETURNED", "LOST"), "serial status");
-        return jdbc.queryForList("""
-                SELECT s.public_id, s.serial_number, s.status, l.public_id AS lot_public_id,
-                       w.public_id AS warehouse_public_id, loc.public_id AS location_public_id,
-                       s.received_at, s.shipped_at, s.notes, s.version, s.created_at, s.updated_at
-                FROM inventory_serials s
-                LEFT JOIN inventory_lots l ON l.id = s.lot_id AND l.tenant_id = s.tenant_id
-                LEFT JOIN warehouses w ON w.id = s.current_warehouse_id AND w.tenant_id = s.tenant_id
-                LEFT JOIN warehouse_locations loc ON loc.id = s.current_location_id
-                  AND loc.warehouse_id = s.current_warehouse_id AND loc.tenant_id = s.tenant_id
-                WHERE s.tenant_id = ? AND s.item_id = ? AND s.status = ?
-                ORDER BY s.serial_number LIMIT 500
-                """, access.tenantId(), number(item, "id"), normalized);
-    }
-
-    @Transactional
-    public Map<String, Object> registerSerial(WmsAuthenticatedPrincipal principal, String itemPublicId,
-                                              SerialCommand command) {
-        Access access = access(principal, "WMS_SERIAL_MANAGE");
-        Objects.requireNonNull(command, "serial command is required");
-        String serialNumber = bounded(command.serialNumber(), "serial number", 1, 150);
-        String notes = optional(command.notes(), 1000);
-        if ((command.warehousePublicId() == null) != (command.locationPublicId() == null)) {
-            throw new IllegalArgumentException("Warehouse and location must be supplied together");
-        }
-        lockTenant(access.tenantId());
-        Map<String, Object> item = requireItem(access.tenantId(), itemPublicId);
-        if (!Set.of("SERIAL", "LOT_AND_SERIAL").contains(item.get("tracking_method"))) {
-            throw new IllegalArgumentException("Item is not configured for serial tracking");
-        }
-        Long lotId = command.lotPublicId() == null || command.lotPublicId().isBlank()
-                ? null : requireActiveLotId(access.tenantId(), number(item, "id"), command.lotPublicId());
-        Long warehouseId = null;
-        Long locationId = null;
-        if (command.warehousePublicId() != null) {
-            long[] location = lockActiveLocation(access.tenantId(), command.warehousePublicId(),
-                    command.locationPublicId());
-            warehouseId = location[0];
-            locationId = location[1];
-        }
-        String publicId = UUID.randomUUID().toString();
-        try {
-            jdbc.update("""
-                    INSERT INTO inventory_serials
-                      (public_id, tenant_id, item_id, lot_id, current_warehouse_id, current_location_id,
-                       serial_number, status, received_at, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'AVAILABLE', UTC_TIMESTAMP(6), ?)
-                    """, publicId, access.tenantId(), number(item, "id"), lotId, warehouseId,
-                    locationId, serialNumber, notes);
-        } catch (DuplicateKeyException duplicate) {
-            throw new IllegalStateException("Serial number already exists in this tenant");
-        }
-        Map<String, Object> after = serialByPublicId(access.tenantId(), number(item, "id"), publicId);
-        audit(access, "INVENTORY_SERIAL_REGISTERED", publicId, Map.of(), after);
-        return publicView(after);
-    }
-
-    @Transactional
-    public Map<String, Object> changeSerialStatus(WmsAuthenticatedPrincipal principal, String itemPublicId,
-                                                   String serialPublicId, String requestedStatus,
-                                                   long expectedVersion) {
-        Access access = access(principal, "WMS_SERIAL_MANAGE");
-        String status = enumValue(requestedStatus, Set.of("AVAILABLE", "RESERVED", "PICKED", "SHIPPED",
-                "DAMAGED", "QUARANTINED", "RETURNED", "LOST"), "serial status");
-        lockTenant(access.tenantId());
-        Map<String, Object> item = requireItem(access.tenantId(), itemPublicId);
-        Map<String, Object> before = serialByPublicId(access.tenantId(), number(item, "id"), serialPublicId);
-        if (number(before, "version") != expectedVersion) throw new IllegalStateException("Serial version conflict");
-        String current = (String) before.get("status");
-        if (Objects.equals(current, status)) return publicView(before);
-        if (!allowedSerialTransition(current, status)) {
-            throw new IllegalStateException("Serial status transition is not allowed");
-        }
-        int changed = jdbc.update("""
-                UPDATE inventory_serials
-                SET status = ?, shipped_at = CASE WHEN ? = 'SHIPPED' THEN UTC_TIMESTAMP(6) ELSE shipped_at END,
-                    version = version + 1, updated_at = UTC_TIMESTAMP(6)
-                WHERE tenant_id = ? AND item_id = ? AND public_id = ? AND version = ?
-                """, status, status, access.tenantId(), number(item, "id"), serialPublicId, expectedVersion);
-        if (changed != 1) throw new IllegalStateException("Serial version conflict");
-        Map<String, Object> after = serialByPublicId(access.tenantId(), number(item, "id"), serialPublicId);
-        audit(access, "INVENTORY_SERIAL_STATUS_CHANGED", serialPublicId, before, after);
-        return publicView(after);
-    }
-
     private Map<String, Object> lotByPublicId(Long tenantId, long itemId, String publicId) {
         List<Map<String, Object>> rows = jdbc.queryForList("""
                 SELECT id, public_id, lot_number, supplier_lot_number, manufacture_date,
@@ -760,59 +652,6 @@ public class WmsInventoryMasterDataService {
                 """, tenantId, itemId, publicId);
         if (rows.isEmpty()) throw new IllegalArgumentException("Lot not found");
         return rows.getFirst();
-    }
-
-    private Map<String, Object> serialByPublicId(Long tenantId, long itemId, String publicId) {
-        List<Map<String, Object>> rows = jdbc.queryForList("""
-                SELECT s.id, s.public_id, s.serial_number, s.status, l.public_id AS lot_public_id,
-                       w.public_id AS warehouse_public_id, loc.public_id AS location_public_id,
-                       s.received_at, s.shipped_at, s.notes, s.version, s.created_at, s.updated_at
-                FROM inventory_serials s
-                LEFT JOIN inventory_lots l ON l.id = s.lot_id AND l.tenant_id = s.tenant_id
-                LEFT JOIN warehouses w ON w.id = s.current_warehouse_id AND w.tenant_id = s.tenant_id
-                LEFT JOIN warehouse_locations loc ON loc.id = s.current_location_id
-                  AND loc.warehouse_id = s.current_warehouse_id AND loc.tenant_id = s.tenant_id
-                WHERE s.tenant_id = ? AND s.item_id = ? AND s.public_id = ?
-                """, tenantId, itemId, publicId);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Serial not found");
-        return rows.getFirst();
-    }
-
-    private Long requireActiveLotId(Long tenantId, long itemId, String lotPublicId) {
-        List<Long> rows = jdbc.queryForList("""
-                SELECT id FROM inventory_lots
-                WHERE tenant_id = ? AND item_id = ? AND public_id = ? AND status = 'ACTIVE'
-                """, Long.class, tenantId, itemId, lotPublicId);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Active lot not found for this item");
-        return rows.getFirst();
-    }
-
-    private long[] lockActiveLocation(Long tenantId, String warehousePublicId, String locationPublicId) {
-        List<Long> warehouses = jdbc.queryForList("""
-                SELECT id FROM warehouses
-                WHERE tenant_id = ? AND public_id = ? AND status = 'ACTIVE'
-                FOR UPDATE
-                """, Long.class, tenantId, warehousePublicId);
-        if (warehouses.isEmpty()) throw new IllegalArgumentException("Active warehouse not found");
-        long warehouseId = warehouses.getFirst();
-        List<Long> locations = jdbc.queryForList("""
-                SELECT id FROM warehouse_locations
-                WHERE tenant_id = ? AND warehouse_id = ? AND public_id = ? AND status = 'ACTIVE'
-                FOR UPDATE
-                """, Long.class, tenantId, warehouseId, locationPublicId);
-        if (locations.isEmpty()) throw new IllegalArgumentException("Active warehouse location not found");
-        return new long[]{warehouseId, locations.getFirst()};
-    }
-
-    private static boolean allowedSerialTransition(String from, String to) {
-        // Stage 8 owns traceability and administrative disposition only.
-        // Reservation, picking, shipping and return transitions belong to their later workflows.
-        return switch (from) {
-            case "AVAILABLE" -> Set.of("DAMAGED", "QUARANTINED", "LOST").contains(to);
-            case "DAMAGED", "QUARANTINED" -> Set.of("AVAILABLE", "LOST").contains(to);
-            case "RESERVED", "PICKED", "SHIPPED", "RETURNED", "LOST" -> false;
-            default -> false;
-        };
     }
 
     private static void validateLotDates(java.time.LocalDate manufacture, java.time.LocalDate received,
@@ -1031,8 +870,6 @@ public class WmsInventoryMasterDataService {
     public record LotCommand(String lotNumber, String supplierLotNumber,
                              java.time.LocalDate manufactureDate, java.time.LocalDate receivedDate,
                              java.time.LocalDate expiryDate, String notes) {}
-    public record SerialCommand(String serialNumber, String lotPublicId,
-                                String warehousePublicId, String locationPublicId, String notes) {}
 
     public record CategoryCommand(String code, String name, String description, String parentCategoryPublicId) {}
     public record IdentifierCommand(String type, String value, Boolean primary) {}
