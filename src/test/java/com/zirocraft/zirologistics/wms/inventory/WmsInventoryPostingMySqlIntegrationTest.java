@@ -9,7 +9,6 @@ import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrin
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
@@ -29,8 +28,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
 
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(classes = WmsRuntimeApplication.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -56,7 +53,6 @@ class WmsInventoryPostingMySqlIntegrationTest {
     @Autowired private WmsInventoryPostingService postingService;
     @Autowired private WmsInventoryQueryService queryService;
     @Autowired private JdbcTemplate jdbc;
-    @MockBean private WmsMembershipAccessService accessService;
 
     @Test
     void receiptIssueAndLedgerAreCommittedAsOneAuditedMovementStream() {
@@ -279,10 +275,6 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 FROM units_of_measure WHERE uom_code = 'EA'
                 """, itemPublicId, tenantId, "SKU-" + itemPublicId.substring(0, 8), trackingMethod);
         long itemId = jdbc.queryForObject("SELECT id FROM items WHERE public_id = ?", Long.class, itemPublicId);
-        when(accessService.resolve(eq(userPublicId), eq(membershipPublicId))).thenReturn(
-                new WmsMembershipAccess(userId, userPublicId, tenantId, tenantPublicId,
-                        membershipId, membershipPublicId, Set.of(
-                        "WMS_INVENTORY_POST", "WMS_INVENTORY_READ", "WMS_INVENTORY_LEDGER_READ")));
         return new Fixture(tenantId, tenantPublicId, userId, userPublicId, membershipId, membershipPublicId,
                 warehouseId, warehousePublicId, locationAId, locationAPublicId, locationBPublicId, itemId, itemPublicId);
     }
