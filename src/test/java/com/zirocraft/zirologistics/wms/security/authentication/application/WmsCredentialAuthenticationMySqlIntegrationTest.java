@@ -75,6 +75,9 @@ class WmsCredentialAuthenticationMySqlIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
+    private WmsUserLookupService userLookupService;
+
+    @Autowired
     private TenantRepository tenantRepository;
 
     @Autowired
@@ -205,7 +208,7 @@ class WmsCredentialAuthenticationMySqlIntegrationTest {
         user.setStatus(UserStatus.SUSPENDED);
         userRepository.saveAndFlush(user);
 
-        boolean updated = new WmsUserLookupService(userRepository).recordSuccessfulLogin(user.getId());
+        boolean updated = userLookupService.recordSuccessfulLogin(user.getId());
 
         assertFalse(updated);
         assertNull(userRepository.findById(user.getId()).orElseThrow().getLastLoginAt());
@@ -214,7 +217,7 @@ class WmsCredentialAuthenticationMySqlIntegrationTest {
     private WmsCredentialAuthenticationService authenticationService() {
         return new WmsCredentialAuthenticationService(
                 throttleService,
-                new WmsUserLookupService(userRepository),
+                userLookupService,
                 passwordEncoder,
                 new WmsUnknownUserPasswordVerifier(passwordEncoder),
                 loginMembershipRepository,
