@@ -94,7 +94,7 @@ Required configuration:
 
 Provisioning creates the tenant, an active membership, a tenant-scoped `TENANT_OWNER` role, and only the explicit invitation/profile-update permission allowlist. A globally existing owner must already be ACTIVE and email-verified; the existing global identity is reused and never duplicated.
 
-For a new owner, the command creates a `PENDING_VERIFICATION` global identity with a random Argon2id hash that is never disclosed. The membership and role are prepared transactionally, but the pending global identity cannot authenticate. After the transaction commits, the command requests an email-verification message through the encrypted outbox. The owner verifies the address, then requests a password reset to establish their own password. If email encryption/outbox configuration is unavailable, the command reports failure after the tenant transaction; rerunning with the same operation reference safely reuses the tenant and retries the verification email.
+For a new owner, the command creates a `PENDING_VERIFICATION` global identity with a random Argon2id hash that is never disclosed. The membership and role are prepared transactionally, but the pending global identity cannot authenticate. After the transaction commits, the command requests an email-verification message through the encrypted outbox. The owner verifies the address, then requests a password reset to establish their own password. If email encryption/outbox configuration is unavailable, the command reports failure after the tenant transaction; rerunning with the same operation reference safely reuses the tenant and retries the verification email. Queueing is not delivery: the SMTP worker remains disabled by default and must be enabled with its explicit SMTP/TLS configuration before production email is sent.
 
 The operation reference is unique in the tenant audit table. A retry with the same operation reference, tenant code, and owner email returns the previously provisioned identifiers. Reuse with different input or for another operation is rejected. The owner email is not included in the audit payload or command output.
 
@@ -120,4 +120,4 @@ The operator reference is recorded in the audit event; it should identify the au
 
 Direct `ACTIVE -> CLOSED` is rejected. `CLOSED` is terminal. Hard deletion is not a tenant lifecycle operation; closed tenants retain historical records for audit and referential integrity. No tenant ID or status transition is accepted from a public HTTP caller.
 
-Repeatable tenant provisioning is still a separate controlled onboarding workflow and is not part of this profile/lifecycle slice.
+Tenant profile, repeatable onboarding, and operator lifecycle operations are all controlled separately; none exposes public tenant registration or client-directed tenant status changes.
