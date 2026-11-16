@@ -57,10 +57,10 @@ class WmsPasswordManagementServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(transactionManager.getTransaction(any(TransactionDefinition.class)))
+        lenient().when(transactionManager.getTransaction(any(TransactionDefinition.class)))
                 .thenReturn(new SimpleTransactionStatus());
-        doNothing().when(transactionManager).commit(any(TransactionStatus.class));
-        doNothing().when(transactionManager).rollback(any(TransactionStatus.class));
+        lenient().doNothing().when(transactionManager).commit(any(TransactionStatus.class));
+        lenient().doNothing().when(transactionManager).rollback(any(TransactionStatus.class));
         encryptionService = new WmsEmailOutboxEncryptionService(Map.of(1, new byte[32]), 1);
         service = new WmsPasswordManagementService(
                 userRepository,
