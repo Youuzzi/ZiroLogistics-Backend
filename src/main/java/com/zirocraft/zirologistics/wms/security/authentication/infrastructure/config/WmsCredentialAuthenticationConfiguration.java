@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.security.authentication.infrastructure.config;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import com.zirocraft.zirologistics.wms.identity.application.WmsUserLookupService;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.WmsLoginMembershipRepository;
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtTokenService;
@@ -32,6 +33,7 @@ import java.util.Base64;
 @Configuration(proxyBeanMethods = false)
 @Profile("wms")
 @Conditional(WmsIdentityHttpEnabledCondition.class)
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @EnableConfigurationProperties(WmsLoginThrottleProperties.class)
 public class WmsCredentialAuthenticationConfiguration {
 
