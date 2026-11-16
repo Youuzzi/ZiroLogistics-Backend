@@ -457,14 +457,15 @@ public class WmsInventoryMasterDataService {
         String fromCode = normalizeUomCode(fromUomCode);
         String toCode = normalizeUomCode(toUomCode);
         Map<String, Object> before = conversionByCodes(access.tenantId(), number(item, "id"), fromCode, toCode);
-        if (bool(before.get("is_active"))) {
-            jdbc.update("""
-                    UPDATE item_uom_conversions SET is_active = 0, updated_at = UTC_TIMESTAMP(6)
-                    WHERE tenant_id = ? AND item_id = ?
-                      AND from_uom_id = (SELECT id FROM units_of_measure WHERE uom_code = ?)
-                      AND to_uom_id = (SELECT id FROM units_of_measure WHERE uom_code = ?)
-                    """, access.tenantId(), number(item, "id"), fromCode, toCode);
-        }
+        if (!bool(before.get("is_active"))) return before;
+        int changed = jdbc.update("""
+                UPDATE item_uom_conversions SET is_active = 0, updated_at = UTC_TIMESTAMP(6)
+                WHERE tenant_id = ? AND item_id = ?
+                  AND from_uom_id = (SELECT id FROM units_of_measure WHERE uom_code = ?)
+                  AND to_uom_id = (SELECT id FROM units_of_measure WHERE uom_code = ?)
+                  AND is_active = 1
+                """, access.tenantId(), number(item, "id"), fromCode, toCode);
+        if (changed != 1) throw new IllegalStateException("UOM conversion changed concurrently");
         Map<String, Object> after = conversionByCodes(access.tenantId(), number(item, "id"), fromCode, toCode);
         audit(access, "ITEM_UOM_CONVERSION_DEACTIVATED",
                 itemPublicId + ":" + fromCode + ":" + toCode, before, after);
