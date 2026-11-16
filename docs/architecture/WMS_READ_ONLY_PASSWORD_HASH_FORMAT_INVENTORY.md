@@ -56,7 +56,7 @@ WITH classified_hashes AS (
             WHEN password_hash LIKE '$2a$%' THEN 'BCRYPT_2A'
             WHEN password_hash LIKE '$2b$%' THEN 'BCRYPT_2B'
             WHEN password_hash LIKE '$2y$%' THEN 'BCRYPT_2Y'
-            WHEN password_hash LIKE '{argon2}' THEN 'SPRING_ARGON2_PREFIX'
+            WHEN password_hash LIKE '{argon2}%' THEN 'SPRING_ARGON2_PREFIX'
             WHEN password_hash LIKE '{bcrypt}%' THEN 'SPRING_BCRYPT_PREFIX'
             WHEN password_hash LIKE '{pbkdf2}%' THEN 'SPRING_PBKDF2_PREFIX'
             WHEN password_hash LIKE '{scrypt}%' THEN 'SPRING_SCRYPT_PREFIX'
