@@ -2,12 +2,14 @@ package com.zirocraft.zirologistics.wms.security.config;
 
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtAuthenticationConverter;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -32,7 +34,8 @@ public class WmsSecurityConfiguration {
     SecurityFilterChain wmsAuthenticatedSecurityFilterChain(
             HttpSecurity http,
             @Qualifier("wmsAccessJwtDecoder") JwtDecoder accessJwtDecoder,
-            WmsJwtAuthenticationConverter authenticationConverter) throws Exception {
+            WmsJwtAuthenticationConverter authenticationConverter,
+            @Value("${wms.security.http.auth-endpoints-enabled:false}") boolean authEndpointsEnabled) throws Exception {
 
         http
                 .securityMatcher("/**")
@@ -42,7 +45,20 @@ public class WmsSecurityConfiguration {
                 .logout(AbstractHttpConfigurer::disable)
                 .requestCache(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
+                .authorizeHttpRequests(authorize -> {
+                    if (authEndpointsEnabled) {
+                        authorize.requestMatchers(HttpMethod.POST,
+                                "/api/wms/v1/auth/credentials",
+                                "/api/wms/v1/auth/tenant-selection",
+                                "/api/wms/v1/auth/password-reset-requests",
+                                "/api/wms/v1/auth/password-resets",
+                                "/api/wms/v1/auth/email-verification-requests",
+                                "/api/wms/v1/auth/email-verifications",
+                                "/api/wms/v1/invitations/acceptances"
+                        ).permitAll();
+                    }
+                    authorize.anyRequest().authenticated();
+                })
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .jwt(jwt -> jwt
                                 .decoder(accessJwtDecoder)
