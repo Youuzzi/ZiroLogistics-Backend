@@ -4,6 +4,7 @@ import com.zirocraft.zirologistics.wms.identity.application.WmsUserLookupService
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.WmsLoginMembershipRepository;
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtTokenService;
 import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationService;
+import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityHttpEnabledCondition;
 import com.zirocraft.zirologistics.wms.security.authentication.application.WmsUnknownUserPasswordVerifier;
 import com.zirocraft.zirologistics.wms.security.throttling.application.WmsClientAddressResolver;
 import com.zirocraft.zirologistics.wms.security.throttling.application.WmsLoginThrottlePolicy;
@@ -12,7 +13,7 @@ import com.zirocraft.zirologistics.wms.security.throttling.application.WmsThrott
 import com.zirocraft.zirologistics.wms.security.throttling.application.WmsThrottleStoragePort;
 import com.zirocraft.zirologistics.wms.security.throttling.infrastructure.config.WmsLoginThrottleProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,7 +31,7 @@ import java.util.Base64;
  */
 @Configuration(proxyBeanMethods = false)
 @Profile("wms")
-@ConditionalOnProperty(prefix = "wms.security.jwt", name = "enabled", havingValue = "true")
+@Conditional(WmsIdentityHttpEnabledCondition.class)
 @EnableConfigurationProperties(WmsLoginThrottleProperties.class)
 public class WmsCredentialAuthenticationConfiguration {
 
