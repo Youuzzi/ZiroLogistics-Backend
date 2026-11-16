@@ -297,7 +297,6 @@ class WmsInventoryPostingMySqlIntegrationTest {
                            long membershipId, String membershipPublicId, long warehouseId,
                            String warehousePublicId, long locationAId,
                            String locationA, String locationB, long itemId, String itemPublicId) {
-        String locationA() { return locationA; }
-        String locationB() { return locationB; }
+
     }
 }
