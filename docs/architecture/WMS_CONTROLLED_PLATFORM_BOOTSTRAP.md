@@ -4,7 +4,7 @@ Status: implementation contract — bootstrap remains disabled until an operator
 
 ## Purpose
 
-Create the first trusted WMS platform operator and initial tenant in a fresh WMS installation without exposing a public registration or "create first admin" HTTP endpoint. This is a deployment operation, not a tenant-facing API.
+Create the initial tenant and tenant-owner identity in a fresh WMS installation without exposing a public registration or "create first admin" HTTP endpoint. This is a deployment operation, not a tenant-facing API. The current schema has no global platform-operator identity model; this operation does not create a global superuser.
 
 ## Security invariants
 
@@ -21,9 +21,7 @@ Create the first trusted WMS platform operator and initial tenant in a fresh WMS
 
 ## Initial authorization
 
-The bootstrap-created tenant owner role must be explicit and tenant-scoped. Role grants are sourced from the current permission catalogue using a reviewed allowlist, not a wildcard query that silently grants future permissions. Platform-level privileges and tenant permissions are distinct concepts; tenant owner does not imply platform operator access.
-
-Before enabling bootstrap in a production environment, the allowlist and platform operator capability model must be reviewed. The bootstrap must not invent or silently assign future permission codes.
+The bootstrap-created `TENANT_OWNER` role is tenant-scoped. The current implementation grants exactly one existing permission: `WMS_IDENTITY_MEMBERSHIP_INVITE`. This is intentionally a minimum grant, not a complete warehouse-administration permission set. It does not automatically grant future permissions, and it does not create platform-wide privileges or a global superuser. Additional tenant capabilities must be provisioned through separately reviewed role/permission workflows.
 
 ## Required bootstrap state
 
@@ -34,14 +32,14 @@ Use an additive WMS migration to create a singleton state table with:
 - created/updated timestamps;
 - optional opaque operation reference (not an email, password, or token).
 
-The migration seeds exactly one NOT_COMPLETED row. The runtime must verify the row exists exactly once; missing or duplicate state is a hard failure.
+The migration seeds exactly one NOT_COMPLETED row. The primary key and CHECK constraint enforce the singleton ID. The runtime locks row ID 1; a missing row is a hard failure.
 
 ## Execution contract
 
 The implementation should expose an operator-only application command, not a controller:
-- command name: `wms-bootstrap`;
-- explicit enable flag defaults to false;
-- require tenant code, legal/display name, timezone, currency, operator email, operator full name, and password from secret-backed environment/configuration;
+- launch `WmsRuntimeApplication` with the explicit command-line switch `--wms.bootstrap.command-mode=true` (this switches Spring to non-web mode);
+- also require `--wms.bootstrap.enabled=true`; both switches are absent/false by default;
+- supply `wms.bootstrap.tenant-code`, `tenant-legal-name`, `tenant-display-name`, `timezone`, `currency`, `operator-email`, `operator-full-name`, and `operator-password` through environment variables or a secret manager (never command-line arguments);
 - validate and normalize all inputs before opening the write transaction;
 - perform expensive Argon2id encoding before acquiring database row locks;
 - lock bootstrap state first, then re-check completion and fresh-install invariants;
@@ -74,7 +72,7 @@ Use disposable MySQL 8.4 Testcontainers only. Required tests:
 - rollback leaves no partial bootstrap data;
 - concurrent bootstrap attempts result in exactly one completion;
 - repeated invocation cannot create another operator or tenant;
-- ordinary WMS HTTP runtime cannot trigger bootstrap;
+- ordinary WMS HTTP runtime does not trigger the command runner when the command-line switch is absent;
 - legacy runtime is unaffected.
 
 ## Rollout and operational procedure
@@ -82,7 +80,7 @@ Use disposable MySQL 8.4 Testcontainers only. Required tests:
 1. Provision an empty, dedicated WMS database and verify its target identity through deployment controls.
 2. Apply only the WMS Flyway migrations using the WMS migration location.
 3. Provide the bootstrap values through a secret manager or ephemeral deployment secret injection.
-4. Run the dedicated bootstrap command once.
+4. Run the WMS application in explicit non-web command mode once, with bootstrap enabled and all required values injected from the secret manager.
 5. Verify only non-sensitive counts/status and the returned public identifiers.
 6. Remove the bootstrap secret injection and disable the bootstrap execution path.
 7. Start the ordinary WMS runtime with bootstrap disabled.
