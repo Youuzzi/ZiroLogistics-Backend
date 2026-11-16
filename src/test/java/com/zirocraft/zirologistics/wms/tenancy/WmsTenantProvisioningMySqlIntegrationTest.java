@@ -122,6 +122,16 @@ class WmsTenantProvisioningMySqlIntegrationTest {
                 )
                 """, Integer.class, result.ownerMembershipPublicId()));
         assertEquals(1, jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM membership_roles mr
+                JOIN role_permissions rp ON rp.role_id = mr.role_id
+                JOIN permissions p ON p.id = rp.permission_id
+                WHERE mr.membership_id = (
+                  SELECT id FROM tenant_memberships WHERE public_id = ?
+                )
+                AND p.permission_code = 'WMS_INVENTORY_POST'
+                """, Integer.class, result.ownerMembershipPublicId()));
+        assertEquals(1, jdbc.queryForObject("""
                 SELECT COUNT(*) FROM tenant_audit_events
                 WHERE operation_ref = ? AND event_type = 'TENANT_PROVISIONED'
                   AND actor_type = 'PLATFORM_OPERATOR'
