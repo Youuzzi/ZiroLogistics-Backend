@@ -23,7 +23,13 @@ public class WmsRuntimeApplication {
         SpringApplication application = new SpringApplication(WmsRuntimeApplication.class);
         application.setAdditionalProfiles("wms");
         boolean bootstrapCommand = Arrays.asList(args).contains("--wms.bootstrap.command-mode=true");
-        if (bootstrapCommand) application.setWebApplicationType(WebApplicationType.NONE);
+        boolean tenantLifecycleCommand = Arrays.asList(args).contains("--wms.tenant.lifecycle.command-mode=true");
+        if (bootstrapCommand && tenantLifecycleCommand) {
+            throw new IllegalArgumentException("Only one WMS operator command may run at a time");
+        }
+        if (bootstrapCommand || tenantLifecycleCommand) {
+            application.setWebApplicationType(WebApplicationType.NONE);
+        }
         application.run(args);
     }
 }
