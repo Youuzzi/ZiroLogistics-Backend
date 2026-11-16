@@ -26,9 +26,8 @@ import java.util.Optional;
 /**
  * MySQL implementation of the WMS identity action token persistence port.
  *
- * All multi-step lifecycle operations are transactionally composed by the
- * application service; SELECT FOR UPDATE locks are meaningful only within
- * that caller-owned transaction.
+ * Multi-step operations use a consistent lock order: tenant then invitation
+ * token, or global user then account action token.
  */
 @Repository
 @Profile("wms")
@@ -89,6 +88,29 @@ public class MySqlWmsIdentityActionTokenStorageAdapter implements WmsIdentityAct
     }
 
     @Override
+    public int revokeOutstandingForUser(
+            long userId,
+            WmsIdentityActionTokenPurpose purpose,
+            Instant revokedAt) {
+        requireUserId(userId);
+        Objects.requireNonNull(purpose, "purpose must not be null");
+        if (purpose == WmsIdentityActionTokenPurpose.INVITATION) {
+            throw new IllegalArgumentException("Invitation tokens must be revoked by tenant and email");
+        }
+        Objects.requireNonNull(revokedAt, "revokedAt must not be null");
+
+        return jdbcTemplate.update("""
+                UPDATE wms_identity_action_tokens
+                SET revoked_at = ?
+                WHERE user_id = ?
+                  AND purpose = ?
+                  AND consumed_at IS NULL
+                  AND revoked_at IS NULL
+                  AND expires_at > ?
+                """, utcDateTime(revokedAt), userId, purpose.name(), utcDateTime(revokedAt));
+    }
+
+    @Override
     public long insert(
             byte[] tokenDigest,
             WmsIdentityActionTokenPurpose purpose,
@@ -131,6 +153,23 @@ public class MySqlWmsIdentityActionTokenStorageAdapter implements WmsIdentityAct
             throw new IllegalStateException("WMS identity action token insert returned no generated ID");
         }
         return key.longValue();
+    }
+
+    @Override
+    public Optional<WmsIdentityActionTokenRecord> findByDigest(
+            byte[] tokenDigest,
+            WmsIdentityActionTokenPurpose expectedPurpose) {
+        requireDigest(tokenDigest);
+        Objects.requireNonNull(expectedPurpose, "expectedPurpose must not be null");
+
+        List<WmsIdentityActionTokenRecord> rows = jdbcTemplate.query("""
+                SELECT id, token_digest, purpose, user_id, tenant_id, invited_by_user_id,
+                       target_email, expires_at, consumed_at, revoked_at, created_at
+                FROM wms_identity_action_tokens
+                WHERE token_digest = ?
+                  AND purpose = ?
+                """, TOKEN_ROW_MAPPER, tokenDigest.clone(), expectedPurpose.name());
+        return rows.stream().findFirst();
     }
 
     @Override
@@ -197,6 +236,12 @@ public class MySqlWmsIdentityActionTokenStorageAdapter implements WmsIdentityAct
     private static void requireTokenId(long tokenId) {
         if (tokenId < 1) {
             throw new IllegalArgumentException("tokenId must be positive");
+        }
+    }
+
+    private static void requireUserId(long userId) {
+        if (userId < 1) {
+            throw new IllegalArgumentException("userId must be positive");
         }
     }
 
