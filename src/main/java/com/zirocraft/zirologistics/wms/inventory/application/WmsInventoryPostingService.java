@@ -244,6 +244,8 @@ public class WmsInventoryPostingService {
                         String expected = serialStatusForStock(legs.getFirst().stockStatus());
                         yield Objects.equals(expected, leg.serialStatus())
                                 || ("AVAILABLE".equals(legs.getFirst().stockStatus())
+                                    && "RETURNED".equals(leg.serialStatus()))
+                                || ("QUARANTINED".equals(legs.getFirst().stockStatus())
                                     && "RETURNED".equals(leg.serialStatus()));
                     }
                     default -> "AVAILABLE".equals(leg.serialStatus());
@@ -376,7 +378,7 @@ public class WmsInventoryPostingService {
             int changed = jdbc.update("""
                     UPDATE inventory_serials
                     SET status = 'RETURNED', current_warehouse_id = ?, current_location_id = ?,
-                        shipped_at = NULL, version = version + 1, updated_at = UTC_TIMESTAMP(6)
+                        version = version + 1, updated_at = UTC_TIMESTAMP(6)
                     WHERE id = ? AND status = 'SHIPPED'
                       AND current_warehouse_id IS NULL AND current_location_id IS NULL
                     """, leg.warehouseId(), leg.locationId(), leg.serialId());
