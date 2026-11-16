@@ -82,7 +82,12 @@ class WmsV9RoleManagementMigrationIntegrationTest {
                     JOIN roles r ON r.id = rp.role_id
                     JOIN permissions p ON p.id = rp.permission_id
                     WHERE r.public_id = '""" + rolePublicId + """
-                    ' AND p.permission_code LIKE 'WMS\\_%' ESCAPE '\\'
+                    ' AND p.permission_code IN (
+                      'WMS_ROLE_READ', 'WMS_ROLE_CREATE', 'WMS_ROLE_UPDATE',
+                      'WMS_ROLE_DEACTIVATE', 'WMS_PERMISSION_CATALOG_READ',
+                      'WMS_ROLE_PERMISSION_MANAGE', 'WMS_MEMBERSHIP_ROLE_READ',
+                      'WMS_MEMBERSHIP_ROLE_MANAGE'
+                    )
                     """));
             String checkClause = text(statement, """
                     SELECT check_clause FROM information_schema.check_constraints
