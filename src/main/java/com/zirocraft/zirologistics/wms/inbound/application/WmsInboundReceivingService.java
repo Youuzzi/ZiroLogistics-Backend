@@ -387,7 +387,7 @@ public class WmsInboundReceivingService {
         payload.put("acceptedQty", updates.stream().map(LineUpdate::accepted).reduce(BigDecimal.ZERO, BigDecimal::add));
         payload.put("rejectedQty", updates.stream().map(LineUpdate::rejected).reduce(BigDecimal.ZERO, BigDecimal::add));
         audit(access, "INBOUND_RECEIPT_POSTED", receiptPublicId, Map.of("status", "DRAFT"), payload);
-        return get(principal, receiptPublicId);
+        return publicReceipt(posted);
     }
 
     private Map<String, Object> receipt(long tenantId, String publicId) {
