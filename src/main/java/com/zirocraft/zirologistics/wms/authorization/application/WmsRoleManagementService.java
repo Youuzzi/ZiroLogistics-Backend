@@ -126,7 +126,11 @@ public class WmsRoleManagementService {
         Access access = access(principal, "WMS_PERMISSION_CATALOG_READ");
         return jdbc.queryForList("""
                 SELECT permission_code, module, description
-                FROM permissions ORDER BY module, permission_code
+                FROM permissions WHERE permission_code IN (
+                  'WMS_ROLE_READ', 'WMS_ROLE_CREATE', 'WMS_ROLE_UPDATE',
+                  'WMS_ROLE_DEACTIVATE', 'WMS_PERMISSION_CATALOG_READ',
+                  'WMS_MEMBERSHIP_ROLE_READ'
+                ) ORDER BY module, permission_code
                 """);
     }
 
