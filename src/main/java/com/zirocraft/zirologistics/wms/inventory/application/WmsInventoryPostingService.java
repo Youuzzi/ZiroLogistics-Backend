@@ -2,7 +2,6 @@ package com.zirocraft.zirologistics.wms.inventory.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import org.springframework.context.annotation.Profile;
@@ -310,7 +309,7 @@ public class WmsInventoryPostingService {
         } catch (IllegalArgumentException invalid) {
             throw new IllegalArgumentException("Request ID must be a UUID");
         }
-        String movement = required(command.movementType(), "movement type").toUpperCase();
+        String movement = required(command.movementType(), "movement type").toUpperCase(java.util.Locale.ROOT);
         if (!POSITIVE_MOVEMENTS.contains(movement) && !NEGATIVE_MOVEMENTS.contains(movement)) {
             throw new IllegalArgumentException("Movement type is not supported by this posting operation");
         }
@@ -318,6 +317,12 @@ public class WmsInventoryPostingService {
             throw new IllegalArgumentException("Posting must contain between 1 and 100 legs");
         }
         String referenceType = optional(command.referenceType(), 50);
+        if (command.referenceId() != null && command.referenceId() <= 0) {
+            throw new IllegalArgumentException("Reference ID must be positive");
+        }
+        if ((referenceType == null) != (command.referenceId() == null)) {
+            throw new IllegalArgumentException("Reference type and reference ID must be supplied together");
+        }
         String notes = optional(command.notes(), 1000);
         Set<String> buckets = new HashSet<>();
         List<Leg> legs = new ArrayList<>();
@@ -328,7 +333,7 @@ public class WmsInventoryPostingService {
             String item = uuid(leg.itemPublicId(), "item public ID");
             String lot = leg.lotPublicId() == null || leg.lotPublicId().isBlank()
                     ? null : uuid(leg.lotPublicId(), "lot public ID");
-            String status = required(leg.stockStatus(), "stock status").toUpperCase();
+            String status = required(leg.stockStatus(), "stock status").toUpperCase(java.util.Locale.ROOT);
             if (!STOCK_STATUSES.contains(status)) throw new IllegalArgumentException("Stock status is invalid");
             BigDecimal quantity;
             try {
@@ -339,10 +344,6 @@ public class WmsInventoryPostingService {
             }
             if (quantity.signum() <= 0 || quantity.precision() > 19) {
                 throw new IllegalArgumentException("Quantity must be positive and fit DECIMAL(19,4)");
-            }
-            if (!"AVAILABLE".equals(status) && !"0.0000".equals(quantity.setScale(4).toPlainString())
-                    && NEGATIVE_MOVEMENTS.contains(movement)) {
-                // Non-AVAILABLE stock buckets cannot carry reserved quantity; they remain postable.
             }
             String bucket = warehouse + "|" + location + "|" + item + "|" + lot + "|" + status;
             if (!buckets.add(bucket)) throw new IllegalArgumentException("Duplicate inventory balance bucket in posting");
@@ -390,15 +391,11 @@ public class WmsInventoryPostingService {
         return null;
     }
 
-    private static List<Object> prepend(Object first, List<Long> values) {
-        List<Object> result = new ArrayList<>(values.size() + 1);
-        result.add(first);
-        result.addAll(values);
+    private static Object[] prepend(Object first, List<Long> values) {
+        Object[] result = new Object[values.size() + 1];
+        result[0] = first;
+        for (int i = 0; i < values.size(); i++) result[i + 1] = values.get(i);
         return result;
-    }
-
-    private static String required(String value, String field, int ignored) {
-        return required(value, field);
     }
 
     public record PostingCommand(
