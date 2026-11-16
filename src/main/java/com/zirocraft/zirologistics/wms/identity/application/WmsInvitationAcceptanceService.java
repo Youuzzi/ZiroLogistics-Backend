@@ -111,9 +111,10 @@ public class WmsInvitationAcceptanceService {
             throw new IllegalStateException("WMS password encoder returned an invalid result");
         }
 
-        Instant now = clock.instant();
         return Objects.requireNonNull(transactionTemplate.execute(status -> {
-            WmsIdentityActionTokenRecord token = lockAndValidateInvitation(preview, digest, now);
+            LockedInvitation locked = lockAndValidateInvitation(preview, digest);
+            WmsIdentityActionTokenRecord token = locked.token();
+            Instant now = locked.acceptedAt();
             if (token.userId() != null || userRepository.findByEmail(email).isPresent()) {
                 throw new WmsIdentityActionTokenRejectedException();
             }
@@ -147,10 +148,11 @@ public class WmsInvitationAcceptanceService {
         byte[] digest = tokenGenerator.digestPresentedToken(rawToken);
         WmsIdentityActionTokenRecord preview = loadUsableInvitation(digest);
         String email = preview.targetEmail();
-        Instant now = clock.instant();
 
         return Objects.requireNonNull(transactionTemplate.execute(status -> {
-            WmsIdentityActionTokenRecord token = lockAndValidateInvitation(preview, digest, now);
+            LockedInvitation locked = lockAndValidateInvitation(preview, digest);
+            WmsIdentityActionTokenRecord token = locked.token();
+            Instant now = locked.acceptedAt();
             UserEntity user = userRepository.findByPublicId(authenticatedUserPublicId)
                     .orElseThrow(WmsIdentityActionTokenRejectedException::new);
 
@@ -180,12 +182,13 @@ public class WmsInvitationAcceptanceService {
 
     /**
      * Maintains a single lock order for invitation issue and acceptance:
-     * tenant row first, then the identity action token row.
+     * tenant row first, then the identity action token row. Expiry is checked
+     * against the clock only after both locks are acquired, so waiting for a
+     * contended tenant lock cannot extend the token's effective lifetime.
      */
-    private WmsIdentityActionTokenRecord lockAndValidateInvitation(
+    private LockedInvitation lockAndValidateInvitation(
             WmsIdentityActionTokenRecord preview,
-            byte[] digest,
-            Instant now) {
+            byte[] digest) {
         TenantStatus tenantStatus = tokenStorage.lockTenantForInvitation(preview.tenantId())
                 .orElseThrow(WmsIdentityActionTokenRejectedException::new);
         if (tenantStatus != TenantStatus.ACTIVE) {
@@ -195,12 +198,13 @@ public class WmsInvitationAcceptanceService {
         WmsIdentityActionTokenRecord locked = tokenStorage.findByDigestForUpdate(
                         digest, WmsIdentityActionTokenPurpose.INVITATION)
                 .orElseThrow(WmsIdentityActionTokenRejectedException::new);
-        if (!locked.isUsableAt(now)
+        Instant acceptedAt = clock.instant();
+        if (!locked.isUsableAt(acceptedAt)
                 || !Objects.equals(locked.tenantId(), preview.tenantId())
                 || !Objects.equals(locked.targetEmail(), preview.targetEmail())) {
             throw new WmsIdentityActionTokenRejectedException();
         }
-        return locked;
+        return new LockedInvitation(locked, acceptedAt);
     }
 
     private void activateOrCreateMembership(long tenantId, long userId, Instant now) {
@@ -258,5 +262,8 @@ public class WmsInvitationAcceptanceService {
 
     private static LocalDateTime toUtcLocalDateTime(Instant instant) {
         return LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
+    }
+
+    private record LockedInvitation(WmsIdentityActionTokenRecord token, Instant acceptedAt) {
     }
 }
