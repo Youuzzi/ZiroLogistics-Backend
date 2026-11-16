@@ -133,8 +133,7 @@ public class WmsRoleManagementService {
                   'WMS_ROLE_DEACTIVATE', 'WMS_PERMISSION_CATALOG_READ',
                   'WMS_MEMBERSHIP_ROLE_READ',
                   'WMS_WAREHOUSE_READ', 'WMS_WAREHOUSE_CREATE', 'WMS_WAREHOUSE_UPDATE',
-                  'WMS_WAREHOUSE_STATUS_MANAGE', 'WMS_LOCATION_READ', 'WMS_LOCATION_CREATE',
-                  'WMS_LOCATION_UPDATE', 'WMS_LOCATION_STATUS_MANAGE'
+                  'WMS_LOCATION_READ', 'WMS_LOCATION_CREATE', 'WMS_LOCATION_UPDATE'
                 ) ORDER BY module, permission_code
                 """);
     }
