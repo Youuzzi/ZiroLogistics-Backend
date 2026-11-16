@@ -90,7 +90,7 @@ class WmsV3IdentityActionTokenMigrationIntegrationTest {
             assertCount(statement,
                     "SELECT COUNT(*) FROM information_schema.statistics " +
                     "WHERE table_schema = DATABASE() AND table_name = 'wms_identity_action_tokens'",
-                    12, "V3 must create the primary, unique, and three lookup/cleanup indexes");
+                    13, "V3 must create the primary, unique, and four explicit lookup/cleanup indexes");
             assertCount(statement,
                     "SELECT COUNT(*) FROM flyway_schema_history " +
                     "WHERE version IN ('1','2','3') AND success = 1",
