@@ -21,6 +21,17 @@ class WmsInventoryPostingServiceTest {
     }
 
     @Test
+    void quantityNormalizationAcceptsExactTrailingZerosAndRejectsRoundingOrOverflow() {
+        assertEquals(new BigDecimal("1.0000"),
+                WmsInventoryPostingService.normalizeQuantity(new BigDecimal("1.00000")));
+        assertEquals(new BigDecimal("0.0001"),
+                WmsInventoryPostingService.normalizeQuantity(new BigDecimal("0.00010")));
+        assertThrows(IllegalArgumentException.class, () ->
+                WmsInventoryPostingService.normalizeQuantity(new BigDecimal("0.00001")));
+        assertThrows(IllegalArgumentException.class, () ->
+                WmsInventoryPostingService.normalizeQuantity(new BigDecimal("1000000000000000")));
+    }
+    @Test
     void signedMovementDeltasPreserveSubUnitQuantitiesWithoutFloatingPointConversion() {
         BigDecimal quantity = new BigDecimal("0.0001");
         assertEquals(new BigDecimal("0.0001"), WmsInventoryPostingService.signedDelta("ADJUSTMENT_IN", 0, quantity));
