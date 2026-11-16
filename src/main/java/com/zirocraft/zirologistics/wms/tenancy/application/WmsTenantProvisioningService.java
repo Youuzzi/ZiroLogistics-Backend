@@ -67,7 +67,7 @@ public class WmsTenantProvisioningService {
 
     private WmsTenantProvisioningResult provisionInTransaction(Input input, String passwordHash) {
         WmsTenantProvisioningResult previous = findPrevious(
-                input.operationRef(), input.tenantCode(), input.ownerEmail());
+                input.operationRef(), input);
         if (previous != null) return previous;
 
         String tenantPublicId = UUID.randomUUID().toString();
@@ -172,7 +172,7 @@ public class WmsTenantProvisioningService {
         return new OwnerIdentity(userId, userPublicId, UserStatus.PENDING_VERIFICATION);
     }
 
-    private WmsTenantProvisioningResult findPrevious(String operationRef, String tenantCode, String ownerEmail) {
+    private WmsTenantProvisioningResult findPrevious(String operationRef, Input input) {
         List<Map<String, Object>> operation = jdbc.queryForList("""
                 SELECT event_type, subject_public_id
                 FROM tenant_audit_events
@@ -184,10 +184,14 @@ public class WmsTenantProvisioningService {
             throw new WmsTenantProvisioningRejectedException("Tenant provisioning operation reference was already used");
         }
         List<Map<String, Object>> rows = jdbc.queryForList("""
-                SELECT t.public_id AS tenant_public_id, t.tenant_code,
-                       u.public_id AS owner_user_public_id, u.email AS owner_email, u.status AS owner_status,
+                SELECT t.public_id AS tenant_public_id, t.tenant_code, t.legal_name, t.display_name,
+                       t.timezone, t.default_currency, a.actor_reference AS operator_reference,
+                       JSON_UNQUOTE(JSON_EXTRACT(a.change_payload, '$.reason')) AS reason,
+                       u.public_id AS owner_user_public_id, u.email AS owner_email,
+                       u.full_name AS owner_full_name, u.status AS owner_status,
                        m.public_id AS membership_public_id, r.public_id AS role_public_id
-                FROM tenants t
+                FROM tenant_audit_events a
+                JOIN tenants t ON t.public_id = a.subject_public_id
                 JOIN roles r ON r.tenant_id = t.id AND r.role_code = 'TENANT_OWNER'
                 JOIN membership_roles mr ON mr.tenant_id = t.id AND mr.role_id = r.id
                 JOIN tenant_memberships m ON m.id = mr.membership_id AND m.tenant_id = t.id
@@ -198,12 +202,21 @@ public class WmsTenantProvisioningService {
             throw new WmsTenantProvisioningRejectedException("Tenant provisioning operation reference is inconsistent");
         }
         Map<String, Object> row = rows.getFirst();
-        if (!tenantCode.equals(row.get("tenant_code")) || !ownerEmail.equals(row.get("owner_email"))) {
+        if (!input.tenantCode().equals(row.get("tenant_code"))
+                || !input.ownerEmail().equals(row.get("owner_email"))
+                || !input.legalName().equals(row.get("legal_name"))
+                || !input.displayName().equals(row.get("display_name"))
+                || !input.timezone().equals(row.get("timezone"))
+                || !input.currency().equals(row.get("default_currency"))
+                || !input.ownerFullName().equals(row.get("owner_full_name"))
+                || !input.operatorReference().equals(row.get("operator_reference"))
+                || !input.reason().equals(row.get("reason"))) {
+            // Full input comparison is performed below; tenant code/email mismatches are never reusable.
             throw new WmsTenantProvisioningRejectedException("Tenant provisioning operation reference does not match request");
         }
         UserStatus ownerStatus = UserStatus.valueOf((String) row.get("owner_status"));
         return new WmsTenantProvisioningResult(
-                operationRef, (String) row.get("tenant_public_id"), tenantCode,
+                input.operationRef(), (String) row.get("tenant_public_id"), input.tenantCode(),
                 (String) row.get("owner_user_public_id"), (String) row.get("membership_public_id"),
                 (String) row.get("role_public_id"), ownerStatus == UserStatus.PENDING_VERIFICATION, true);
     }
