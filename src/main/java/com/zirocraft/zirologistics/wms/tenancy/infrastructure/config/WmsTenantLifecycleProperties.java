@@ -11,6 +11,7 @@ public class WmsTenantLifecycleProperties {
     private String tenantPublicId;
     private String reason;
     private String operationRef;
+    private String operatorReference;
     private String confirmation;
 
     public boolean isEnabled() { return enabled; }
@@ -21,6 +22,8 @@ public class WmsTenantLifecycleProperties {
     public void setTenantPublicId(String tenantPublicId) { this.tenantPublicId = tenantPublicId; }
     public String getReason() { return reason; }
     public void setReason(String reason) { this.reason = reason; }
+    public String getOperatorReference() { return operatorReference; }
+    public void setOperatorReference(String operatorReference) { this.operatorReference = operatorReference; }
     public String getOperationRef() { return operationRef; }
     public void setOperationRef(String operationRef) { this.operationRef = operationRef; }
     public String getConfirmation() { return confirmation; }
