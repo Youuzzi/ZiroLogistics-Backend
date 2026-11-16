@@ -23,7 +23,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
         "com.zirocraft.zirologistics.wms.identity.http",
         "com.zirocraft.zirologistics.wms.tenancy.http",
         "com.zirocraft.zirologistics.wms.authorization.http",
-        "com.zirocraft.zirologistics.wms.warehouse.http"
+        "com.zirocraft.zirologistics.wms.warehouse.http",
+        "com.zirocraft.zirologistics.wms.inventory.http"
 })
 @Profile("wms")
 @Conditional(WmsIdentityHttpEnabledCondition.class)
