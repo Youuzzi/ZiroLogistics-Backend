@@ -123,6 +123,26 @@ class WmsInventoryPostingMySqlIntegrationTest {
     }
 
     @Test
+    void batchesMultipleSerialsIntoOneBalanceBucketWithSequentialLedgerSnapshots() {
+        Fixture serialFixture = fixture("SERIAL");
+        UUID requestId = UUID.randomUUID();
+        WmsInventoryPostingService.PostingLeg first = leg(serialFixture, null, "SN-BATCH-1", "AVAILABLE", "1.0000");
+        WmsInventoryPostingService.PostingLeg second = leg(serialFixture, null, "SN-BATCH-2", "AVAILABLE", "1.0000");
+        postingService.post(serialFixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                requestId, "RECEIPT", List.of(first, second), null));
+
+        assertEquals(new BigDecimal("2.0000"), balance(serialFixture));
+        List<Map<String, Object>> ledger = jdbc.queryForList("""
+                SELECT balance_before_qty, balance_after_qty FROM inventory_ledger
+                WHERE tenant_id = ? AND request_id = ? ORDER BY entry_no
+                """, serialFixture.tenantId(), requestId.toString());
+        assertEquals(2, ledger.size());
+        assertEquals(new BigDecimal("0.0000"), ledger.get(0).get("balance_before_qty"));
+        assertEquals(new BigDecimal("1.0000"), ledger.get(0).get("balance_after_qty"));
+        assertEquals(new BigDecimal("1.0000"), ledger.get(1).get("balance_before_qty"));
+        assertEquals(new BigDecimal("2.0000"), ledger.get(1).get("balance_after_qty"));
+    }
+    @Test
     void tenantLockSerializesCompetingIssuesSoStockCannotBecomeNegative() throws Exception {
         post(fixture, UUID.randomUUID(), "RECEIPT", leg(fixture, null, null, "AVAILABLE", "5.0000"));
         UUID first = UUID.randomUUID();
