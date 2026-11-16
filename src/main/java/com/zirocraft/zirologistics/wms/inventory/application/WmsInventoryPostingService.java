@@ -327,8 +327,11 @@ public class WmsInventoryPostingService {
             if (leg.serialId() != null) {
                 boolean validState = switch (type) {
                     case "RETURN" -> "SHIPPED".equals(leg.serialStatus());
-                    case "STATUS_CHANGE" -> "RETURNED".equals(leg.serialStatus())
-                            || Objects.equals(serialStatusForStock(legs.getFirst().stockStatus()), leg.serialStatus());
+                    case "ADJUSTMENT_IN", "OPENING_BALANCE" -> "LOST".equals(leg.serialStatus());
+                    case "STATUS_CHANGE" -> Objects.equals(
+                            serialStatusForStock(legs.getFirst().stockStatus()), leg.serialStatus())
+                            || ("QUARANTINED".equals(legs.getFirst().stockStatus())
+                                && "RETURNED".equals(leg.serialStatus()));
                     default -> "AVAILABLE".equals(leg.serialStatus());
                 };
                 if (!validState) throw new IllegalArgumentException("Serial is not in a state valid for this movement");
@@ -344,9 +347,6 @@ public class WmsInventoryPostingService {
             }
         }
         boolean inboundSerial = Set.of("RECEIPT", "OPENING_BALANCE", "ADJUSTMENT_IN").contains(type);
-        if (inboundSerial && legs.stream().anyMatch(l -> l.serialPublicId() != null)) {
-            throw new IllegalArgumentException("Inbound serial movements must register a new serial number");
-        }
         if (legs.stream().anyMatch(l -> l.serialNumber() != null && !inboundSerial)) {
             throw new IllegalArgumentException("A new serial number is only valid for inbound stock");
         }
