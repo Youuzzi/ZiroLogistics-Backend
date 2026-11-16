@@ -58,8 +58,8 @@ class WmsV8TenantAuditMigrationIntegrationTest {
 
             try (PreparedStatement insert = connection.prepareStatement("""
                     INSERT INTO tenant_audit_events
-                      (public_id, tenant_id, actor_membership_id, event_type, subject_public_id, change_payload)
-                    SELECT ?, t.id, m.id, 'TENANT_PROFILE_UPDATED', t.public_id,
+                      (public_id, tenant_id, actor_membership_id, actor_type, operation_ref, event_type, subject_public_id, change_payload)
+                    SELECT ?, t.id, m.id, 'TENANT_MEMBER', ?, 'TENANT_PROFILE_UPDATED', t.public_id,
                            JSON_OBJECT('before', JSON_OBJECT('displayName', 'Before'),
                                        'after', JSON_OBJECT('displayName', 'After'))
                     FROM tenants t
@@ -67,8 +67,9 @@ class WmsV8TenantAuditMigrationIntegrationTest {
                     WHERE t.public_id = ?
                     """)) {
                 insert.setString(1, event);
-                insert.setString(2, membership);
-                insert.setString(3, tenantA);
+                insert.setString(2, UUID.randomUUID().toString());
+                insert.setString(3, membership);
+                insert.setString(4, tenantA);
                 assertEquals(1, insert.executeUpdate());
             }
             assertEquals(1, scalar(statement,
@@ -77,15 +78,16 @@ class WmsV8TenantAuditMigrationIntegrationTest {
             assertThrows(SQLException.class, () -> {
                 try (PreparedStatement insert = connection.prepareStatement("""
                         INSERT INTO tenant_audit_events
-                          (public_id, tenant_id, actor_membership_id, event_type, subject_public_id, change_payload)
-                        SELECT ?, t.id, m.id, 'TENANT_PROFILE_UPDATED', t.public_id, JSON_OBJECT('test', true)
+                          (public_id, tenant_id, actor_membership_id, actor_type, operation_ref, event_type, subject_public_id, change_payload)
+                        SELECT ?, t.id, m.id, 'TENANT_MEMBER', ?, 'TENANT_PROFILE_UPDATED', t.public_id, JSON_OBJECT('test', true)
                         FROM tenants t
                         JOIN tenant_memberships m ON m.public_id = ?
                         WHERE t.public_id = ?
                         """)) {
                     insert.setString(1, UUID.randomUUID().toString());
-                    insert.setString(2, membership);
-                    insert.setString(3, tenantB);
+                    insert.setString(2, UUID.randomUUID().toString());
+                    insert.setString(3, membership);
+                    insert.setString(4, tenantB);
                     insert.executeUpdate();
                 }
             });
