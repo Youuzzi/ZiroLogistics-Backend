@@ -30,6 +30,7 @@ Status: API contract proposal. The current WMS security chain remains fail-close
 |---|---|---|
 | POST | `/api/wms/v1/auth/logout` | Access token; until revocation/session persistence exists, response must not claim server-side revocation |
 | POST | `/api/wms/v1/auth/password-changes` | Access token subject; current password required |
+| POST | `/api/wms/v1/invitations/existing-account-acceptances` | Access token subject must match the invited email |
 
 Invitation issuance is tenant-scoped and requires the authenticated membership to be active and hold the explicit `WMS_IDENTITY_MEMBERSHIP_INVITE` permission. The tenant ID is derived from the authenticated principal; it is never trusted from the request body. Existing global users accept an invitation through `POST /api/wms/v1/invitations/existing-account-acceptances`; that route is authenticated and the service verifies the invitation email matches the authenticated global user.
 
