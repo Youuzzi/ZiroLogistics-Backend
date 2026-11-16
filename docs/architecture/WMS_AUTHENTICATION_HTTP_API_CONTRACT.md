@@ -7,7 +7,7 @@ Status: API contract proposal. The current WMS security chain remains fail-close
 - WMS endpoints live under `/api/wms/v1` and are implemented in WMS-only packages scanned by `WmsRuntimeApplication`.
 - No legacy controller or legacy authentication service is reused.
 - Public routes are an explicit allowlist. Every route not listed below requires an authenticated WMS access token or is denied.
-- Passwords and raw action tokens are accepted only in request bodies over TLS. They must never appear in URLs, query strings, logs, traces, metrics, or exception messages.
+- Passwords and raw action tokens are submitted to API endpoints only in request bodies over TLS. Email action links carry tokens only in the URL fragment (never the query string or request path); the frontend must read the fragment and POST the token in the request body. Tokens must never appear in server access logs, traces, metrics, or exception messages.
 - All account-recovery request responses are generic to prevent account enumeration.
 - JSON errors use stable machine-readable codes but generic public messages.
 - Controllers are thin transport adapters; application services own policy and transactions.
@@ -119,7 +119,7 @@ The worker claims one row at a time from the encrypted outbox using the existing
 MySQL `FOR UPDATE SKIP LOCKED` adapter, decrypts only in memory, validates the
 payload purpose and recipient against the outbox envelope, and sends one of the
 three purpose-specific messages (invitation, email verification, password reset).
-Raw action tokens are placed only in the action link; they are never logged.
+Raw action tokens are placed only in the action link fragment (for example, `#token=...`), never in a request path or query string. The frontend must extract the fragment and submit the token in the POST body; fragments are not transmitted in HTTP requests.
 After successful SMTP submission the row is marked `SENT`. Failures receive an
 opaque `DELIVERY_FAILED` code and bounded exponential retry; exhausted or
 expired messages move to `DEAD_LETTER`. Expired processing leases are recovered
