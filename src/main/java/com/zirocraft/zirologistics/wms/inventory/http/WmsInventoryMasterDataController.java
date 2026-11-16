@@ -98,6 +98,63 @@ public class WmsInventoryMasterDataController {
                 request.status(), request.expectedVersion());
     }
 
+
+    @GetMapping("/items/lookup")
+    public Map<String, Object> lookupItem(
+            Authentication authentication, @RequestParam String identifierType,
+            @RequestParam String value) {
+        return service.lookupItemByIdentifier(principal(authentication), identifierType, value);
+    }
+
+    @GetMapping("/items/{itemPublicId}/identifiers")
+    public List<Map<String, Object>> listIdentifiers(
+            Authentication authentication, @PathVariable String itemPublicId) {
+        return service.listIdentifiers(principal(authentication), itemPublicId);
+    }
+
+    @PostMapping("/items/{itemPublicId}/identifiers")
+    public Map<String, Object> addIdentifier(
+            Authentication authentication, @PathVariable String itemPublicId,
+            @Valid @RequestBody IdentifierRequest request) {
+        return service.addIdentifier(principal(authentication), itemPublicId, request.toCommand());
+    }
+
+    @PutMapping("/items/{itemPublicId}/identifiers/{identifierPublicId}")
+    public Map<String, Object> updateIdentifier(
+            Authentication authentication, @PathVariable String itemPublicId,
+            @PathVariable String identifierPublicId, @Valid @RequestBody IdentifierRequest request) {
+        return service.updateIdentifier(principal(authentication), itemPublicId,
+                identifierPublicId, request.toCommand());
+    }
+
+    @DeleteMapping("/items/{itemPublicId}/identifiers/{identifierPublicId}")
+    public void removeIdentifier(
+            Authentication authentication, @PathVariable String itemPublicId,
+            @PathVariable String identifierPublicId) {
+        service.removeIdentifier(principal(authentication), itemPublicId, identifierPublicId);
+    }
+
+    @GetMapping("/items/{itemPublicId}/uom-conversions")
+    public List<Map<String, Object>> listUomConversions(
+            Authentication authentication, @PathVariable String itemPublicId) {
+        return service.listUomConversions(principal(authentication), itemPublicId);
+    }
+
+    @PostMapping("/items/{itemPublicId}/uom-conversions")
+    public Map<String, Object> addUomConversion(
+            Authentication authentication, @PathVariable String itemPublicId,
+            @Valid @RequestBody UomConversionRequest request) {
+        return service.addUomConversion(principal(authentication), itemPublicId, request.toCommand());
+    }
+
+    @PostMapping("/items/{itemPublicId}/uom-conversions/deactivate")
+    public Map<String, Object> deactivateUomConversion(
+            Authentication authentication, @PathVariable String itemPublicId,
+            @Valid @RequestBody UomConversionDeactivateRequest request) {
+        return service.deactivateUomConversion(principal(authentication), itemPublicId,
+                request.fromUomCode(), request.toUomCode());
+    }
+
     private static WmsAuthenticatedPrincipal principal(Authentication authentication) {
         Object candidate = authentication == null ? null : authentication.getPrincipal();
         if (!(candidate instanceof WmsAuthenticatedPrincipal principal)) {
@@ -142,6 +199,29 @@ public class WmsInventoryMasterDataController {
     public record ItemUpdateRequest(
             @NotNull @PositiveOrZero Long expectedVersion,
             @NotNull @Valid ItemRequest item) {}
+
+
+    public record IdentifierRequest(
+            @NotBlank @Size(max = 30) String type,
+            @NotBlank @Size(max = 150) String value,
+            @NotNull Boolean primary) {
+        WmsInventoryMasterDataService.IdentifierCommand toCommand() {
+            return new WmsInventoryMasterDataService.IdentifierCommand(type, value, primary);
+        }
+    }
+
+    public record UomConversionRequest(
+            @NotBlank @Size(max = 20) String fromUomCode,
+            @NotBlank @Size(max = 20) String toUomCode,
+            @NotNull @DecimalMin(value = "0.00000001") @Digits(integer = 11, fraction = 8) BigDecimal factor) {
+        WmsInventoryMasterDataService.UomConversionCommand toCommand() {
+            return new WmsInventoryMasterDataService.UomConversionCommand(fromUomCode, toUomCode, factor);
+        }
+    }
+
+    public record UomConversionDeactivateRequest(
+            @NotBlank @Size(max = 20) String fromUomCode,
+            @NotBlank @Size(max = 20) String toUomCode) {}
 
     public record StatusRequest(
             @NotBlank @Size(max = 30) String status,
