@@ -26,9 +26,8 @@ import java.util.Optional;
 /**
  * MySQL implementation of the WMS identity action token persistence port.
  *
- * All multi-step lifecycle operations are transactionally composed by the
- * application service; SELECT FOR UPDATE locks are meaningful only within
- * that caller-owned transaction.
+ * Multi-step operations use a consistent lock order: tenant then invitation
+ * token, or global user then account action token.
  */
 @Repository
 @Profile("wms")
@@ -46,7 +45,7 @@ public class MySqlWmsIdentityActionTokenStorageAdapter implements WmsIdentityAct
                     toInstant(resultSet.getObject("expires_at", LocalDateTime.class)),
                     toInstant(resultSet.getObject("consumed_at", LocalDateTime.class)),
                     toInstant(resultSet.getObject("revoked_at", LocalDateTime.class)),
-                    toInstant(resultSet.getObject("created_at", LocalDateTime.class));
+                    toInstant(resultSet.getObject("created_at", LocalDateTime.class)));
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -86,6 +85,29 @@ public class MySqlWmsIdentityActionTokenStorageAdapter implements WmsIdentityAct
                   AND revoked_at IS NULL
                   AND expires_at > ?
                 """, utcDateTime(revokedAt), tenantId, normalizedEmail, utcDateTime(revokedAt));
+    }
+
+    @Override
+    public int revokeOutstandingForUser(
+            long userId,
+            WmsIdentityActionTokenPurpose purpose,
+            Instant revokedAt) {
+        requireUserId(userId);
+        Objects.requireNonNull(purpose, "purpose must not be null");
+        if (purpose == WmsIdentityActionTokenPurpose.INVITATION) {
+            throw new IllegalArgumentException("Invitation tokens must be revoked by tenant and email");
+        }
+        Objects.requireNonNull(revokedAt, "revokedAt must not be null");
+
+        return jdbcTemplate.update("""
+                UPDATE wms_identity_action_tokens
+                SET revoked_at = ?
+                WHERE user_id = ?
+                  AND purpose = ?
+                  AND consumed_at IS NULL
+                  AND revoked_at IS NULL
+                  AND expires_at > ?
+                """, utcDateTime(revokedAt), userId, purpose.name(), utcDateTime(revokedAt));
     }
 
     @Override
@@ -214,6 +236,12 @@ public class MySqlWmsIdentityActionTokenStorageAdapter implements WmsIdentityAct
     private static void requireTokenId(long tokenId) {
         if (tokenId < 1) {
             throw new IllegalArgumentException("tokenId must be positive");
+        }
+    }
+
+    private static void requireUserId(long userId) {
+        if (userId < 1) {
+            throw new IllegalArgumentException("userId must be positive");
         }
     }
 
