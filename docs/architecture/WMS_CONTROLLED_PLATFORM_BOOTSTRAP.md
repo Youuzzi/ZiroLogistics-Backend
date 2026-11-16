@@ -39,7 +39,7 @@ The migration seeds exactly one NOT_COMPLETED row. The primary key and CHECK con
 The implementation should expose an operator-only application command, not a controller:
 - launch `WmsRuntimeApplication` with the explicit command-line switch `--wms.bootstrap.command-mode=true` (this switches Spring to non-web mode);
 - also require `--wms.bootstrap.enabled=true`; both switches are absent/false by default;
-- supply `wms.bootstrap.tenant-code`, `tenant-legal-name`, `tenant-display-name`, `timezone`, `currency`, `operator-email`, `operator-full-name`, and `operator-password` through environment variables or a secret manager (never command-line arguments);
+- set `WMS_BOOTSTRAP_ENABLED=true`; inject `WMS_BOOTSTRAP_TENANT_CODE`, `WMS_BOOTSTRAP_TENANT_LEGAL_NAME`, `WMS_BOOTSTRAP_TENANT_DISPLAY_NAME`, `WMS_BOOTSTRAP_TIMEZONE`, `WMS_BOOTSTRAP_CURRENCY`, `WMS_BOOTSTRAP_OPERATOR_EMAIL`, `WMS_BOOTSTRAP_OPERATOR_FULL_NAME`, and `WMS_BOOTSTRAP_OPERATOR_PASSWORD` through a secret manager/environment (never command-line arguments);
 - validate and normalize all inputs before opening the write transaction;
 - perform expensive Argon2id encoding before acquiring database row locks;
 - lock bootstrap state first, then re-check completion and fresh-install invariants;
