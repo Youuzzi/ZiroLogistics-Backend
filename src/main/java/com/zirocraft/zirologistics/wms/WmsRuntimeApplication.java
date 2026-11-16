@@ -24,10 +24,14 @@ public class WmsRuntimeApplication {
         application.setAdditionalProfiles("wms");
         boolean bootstrapCommand = Arrays.asList(args).contains("--wms.bootstrap.command-mode=true");
         boolean tenantLifecycleCommand = Arrays.asList(args).contains("--wms.tenant.lifecycle.command-mode=true");
-        if (bootstrapCommand && tenantLifecycleCommand) {
+        boolean tenantProvisioningCommand = Arrays.asList(args).contains("--wms.tenant.provisioning.command-mode=true");
+        int operatorCommandCount = (bootstrapCommand ? 1 : 0)
+                + (tenantLifecycleCommand ? 1 : 0)
+                + (tenantProvisioningCommand ? 1 : 0);
+        if (operatorCommandCount > 1) {
             throw new IllegalArgumentException("Only one WMS operator command may run at a time");
         }
-        if (bootstrapCommand || tenantLifecycleCommand) {
+        if (operatorCommandCount == 1) {
             application.setWebApplicationType(WebApplicationType.NONE);
         }
         application.run(args);
