@@ -8,6 +8,7 @@ import com.zirocraft.zirologistics.wms.tenancy.infrastructure.config.WmsTenantPr
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -52,9 +53,14 @@ public class WmsTenantProvisioningService {
         if (passwordHash == null || passwordHash.isBlank()) {
             throw new WmsTenantProvisioningRejectedException("Tenant owner credential initialization failed");
         }
-        return Objects.requireNonNull(
-                transaction.execute(status -> provisionInTransaction(input, passwordHash)),
-                "Tenant provisioning transaction returned no result");
+        try {
+            return Objects.requireNonNull(
+                    transaction.execute(status -> provisionInTransaction(input, passwordHash)),
+                    "Tenant provisioning transaction returned no result");
+        } catch (DataIntegrityViolationException conflict) {
+            throw new WmsTenantProvisioningRejectedException(
+                    "Tenant provisioning conflicted with an existing identity or operation");
+        }
     }
 
     private WmsTenantProvisioningResult provisionInTransaction(Input input, String passwordHash) {
