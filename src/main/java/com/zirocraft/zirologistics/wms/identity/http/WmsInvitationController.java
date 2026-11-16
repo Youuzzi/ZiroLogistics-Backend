@@ -59,8 +59,14 @@ public class WmsInvitationController {
 
     @PostMapping("/existing-account-acceptances")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void acceptForExistingUser(@Valid @RequestBody ExistingUserAcceptanceRequest request) {
-        acceptanceService.acceptForExistingUser(request.actionToken());
+    public void acceptForExistingUser(
+            Authentication authentication,
+            @Valid @RequestBody ExistingUserAcceptanceRequest request) {
+        Object principal = authentication == null ? null : authentication.getPrincipal();
+        if (!(principal instanceof WmsAuthenticatedPrincipal wmsPrincipal)) {
+            throw new IllegalStateException("Authenticated WMS principal is unavailable");
+        }
+        acceptanceService.acceptForExistingUser(request.actionToken(), wmsPrincipal.userPublicId());
     }
 
     public record InvitationRequest(@NotBlank @Email @Size(max = 254) String email) {}
