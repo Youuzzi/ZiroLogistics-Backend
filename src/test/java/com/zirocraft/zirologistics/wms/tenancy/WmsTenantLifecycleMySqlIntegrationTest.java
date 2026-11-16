@@ -49,7 +49,7 @@ class WmsTenantLifecycleMySqlIntegrationTest {
 
         WmsTenantLifecycleResult suspended = lifecycleService.transition(
                 WmsTenantLifecycleAction.SUSPEND, tenantPublicId,
-                "Operator suspension after verified billing review", suspendRef, null);
+                "Operator suspension after verified billing review", suspendRef, "operator-console:production", null);
         assertEquals("ACTIVE", suspended.previousStatus());
         assertEquals("SUSPENDED", suspended.currentStatus());
         assertFalse(suspended.alreadyApplied());
@@ -58,24 +58,24 @@ class WmsTenantLifecycleMySqlIntegrationTest {
 
         WmsTenantLifecycleResult repeated = lifecycleService.transition(
                 WmsTenantLifecycleAction.SUSPEND, tenantPublicId,
-                "Operator suspension after verified billing review", suspendRef, null);
+                "Operator suspension after verified billing review", suspendRef, "operator-console:production", null);
         assertTrue(repeated.alreadyApplied());
         assertEquals(1L, tenantVersion(tenantPublicId));
 
         WmsTenantLifecycleResult reactivated = lifecycleService.transition(
                 WmsTenantLifecycleAction.REACTIVATE, tenantPublicId,
-                "Operator reactivation after issue resolution", UUID.randomUUID().toString(), null);
+                "Operator reactivation after issue resolution", UUID.randomUUID().toString(), "operator-console:production", null);
         assertEquals("ACTIVE", reactivated.currentStatus());
         assertEquals(2L, tenantVersion(tenantPublicId));
 
         assertThrows(WmsTenantLifecycleRejectedException.class, () ->
                 lifecycleService.transition(WmsTenantLifecycleAction.CLOSE, tenantPublicId,
                         "Operator closure after tenant requested closure", UUID.randomUUID().toString(),
-                        "CLOSE:wrong-code"));
+                        "operator-console:production", "CLOSE:wrong-code"));
         assertEquals("ACTIVE", tenantStatus(tenantPublicId));
 
         lifecycleService.transition(WmsTenantLifecycleAction.SUSPEND, tenantPublicId,
-                "Operator suspension before approved tenant closure", UUID.randomUUID().toString(), null);
+                "Operator suspension before approved tenant closure", UUID.randomUUID().toString(), "operator-console:production", null);
         WmsTenantLifecycleResult closed = lifecycleService.transition(
                 WmsTenantLifecycleAction.CLOSE, tenantPublicId,
                 "Operator closure after tenant requested closure", UUID.randomUUID().toString(),
@@ -93,6 +93,10 @@ class WmsTenantLifecycleMySqlIntegrationTest {
                 SELECT COUNT(*) FROM tenant_audit_events
                 WHERE subject_public_id = ? AND operation_ref IS NOT NULL
                 """, Integer.class, tenantPublicId));
+        assertEquals(4, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE subject_public_id = ? AND actor_reference = 'operator-console:production'
+                """, Integer.class, tenantPublicId));
         assertTrue(jdbc.queryForObject("""
                 SELECT COUNT(*) FROM tenant_audit_events
                 WHERE subject_public_id = ? AND actor_membership_id IS NULL
@@ -100,7 +104,7 @@ class WmsTenantLifecycleMySqlIntegrationTest {
                 """, Integer.class, tenantPublicId) == 1);
         assertThrows(WmsTenantLifecycleRejectedException.class, () ->
                 lifecycleService.transition(WmsTenantLifecycleAction.REACTIVATE, tenantPublicId,
-                        "Attempt to reopen a closed tenant is forbidden", UUID.randomUUID().toString(), null));
+                        "Attempt to reopen a closed tenant is forbidden", UUID.randomUUID().toString(), "operator-console:production", null));
     }
 
     @Test
@@ -109,10 +113,10 @@ class WmsTenantLifecycleMySqlIntegrationTest {
         assertThrows(WmsTenantLifecycleRejectedException.class, () ->
                 lifecycleService.transition(WmsTenantLifecycleAction.CLOSE, tenantPublicId,
                         "Direct closure from active state is forbidden", UUID.randomUUID().toString(),
-                        "CLOSE:" + tenantCode(tenantPublicId)));
+                        "operator-console:production", "CLOSE:" + tenantCode(tenantPublicId)));
         assertThrows(WmsTenantLifecycleRejectedException.class, () ->
                 lifecycleService.transition(WmsTenantLifecycleAction.SUSPEND, tenantPublicId,
-                        "Valid operator reason for state change", "not-a-uuid", null));
+                        "Valid operator reason for state change", "not-a-uuid", "operator-console:production", null));
         assertEquals("ACTIVE", tenantStatus(tenantPublicId));
         assertEquals(0, jdbc.queryForObject("""
                 SELECT COUNT(*) FROM tenant_audit_events WHERE subject_public_id = ?
