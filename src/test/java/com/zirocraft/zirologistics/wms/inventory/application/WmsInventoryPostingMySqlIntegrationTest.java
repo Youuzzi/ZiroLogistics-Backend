@@ -27,6 +27,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -103,6 +107,49 @@ class WmsInventoryPostingMySqlIntegrationTest {
         assertBalance(fixture, "6.5000");
         assertEquals(2, countLedger(fixture), "Ledger insert must roll back when audit fails");
         assertEquals(2, countAudit(fixture), "Failed posting must not leave an audit event");
+    }
+
+    @Test
+    void concurrentIssuesCannotOversellTheSameInventoryBucket() throws Exception {
+        Fixture fixture = fixture();
+        postingService.post(fixture.principal(), command(
+                UUID.randomUUID().toString(), "RECEIPT", fixture, "10.0000"));
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> issueAfterBarrier(fixture, ready, start));
+            var second = executor.submit(() -> issueAfterBarrier(fixture, ready, start));
+            assertTrue(ready.await(5, TimeUnit.SECONDS), "Both posting attempts should be ready");
+            start.countDown();
+            boolean firstSucceeded = first.get(15, TimeUnit.SECONDS);
+            boolean secondSucceeded = second.get(15, TimeUnit.SECONDS);
+
+            assertEquals(1, (firstSucceeded ? 1 : 0) + (secondSucceeded ? 1 : 0),
+                    "Exactly one issue of seven units may succeed from ten units");
+            assertBalance(fixture, "3.0000");
+            assertEquals(2, countLedger(fixture));
+            assertEquals(2, countAudit(fixture));
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    private boolean issueAfterBarrier(
+            Fixture fixture, CountDownLatch ready, CountDownLatch start) throws InterruptedException {
+        ready.countDown();
+        if (!start.await(5, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out waiting to start inventory posting");
+        }
+        try {
+            postingService.post(fixture.principal(), command(
+                    UUID.randomUUID().toString(), "ISSUE", fixture, "7.0000"));
+            return true;
+        } catch (IllegalStateException expectedInsufficientStock) {
+            return false;
+        }
     }
 
     private Fixture fixture() {
