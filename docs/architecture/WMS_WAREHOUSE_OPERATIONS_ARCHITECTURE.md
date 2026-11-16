@@ -39,7 +39,8 @@ The first API delivery uses a single atomic receive-and-post command rather than
 - `POST /api/wms/v1/tenants/current/inbound-receipts` creates a DRAFT receipt.
 - `POST /{receiptPublicId}/lines` adds a base-UOM stock item line while the receipt remains DRAFT.
 - `POST /{receiptPublicId}/post` supplies received/accepted/rejected quantities and required lot/serial traceability for every line. The service validates the complete receipt, moves the header through COMPLETED to POSTED inside one transaction, and delegates accepted stock to `WmsInventoryPostingService`. A failure rolls back receipt quantities, traceability links, inventory ledger/balances and audit together.
-- A fully rejected receipt is allowed and creates no inventory movement. A receipt with accepted quantities must have no more than 200 posting legs in this first delivery, matching the posting service's current command limit.
+- A fully rejected receipt is allowed and creates no inventory movement.
+- The first delivery supports PURCHASE and OTHER receipt types. RETURN requires a separate inspection/quarantine policy, and TRANSFER_IN is reserved for the inter-warehouse transfer workflow; both are deliberately rejected here rather than being incorrectly posted as ordinary available stock. A receipt with accepted quantities must have no more than 200 posting legs in this first delivery, matching the posting service's current command limit.
 - The command's request UUID is passed unchanged to the inventory ledger's tenant-scoped uniqueness guard. Broader payload-hash replay semantics remain Stage 11.
 - Permissions introduced by V13 are `WMS_INBOUND_RECEIPT_READ`, `WMS_INBOUND_RECEIPT_CREATE`, `WMS_INBOUND_RECEIPT_UPDATE`, and `WMS_INBOUND_RECEIPT_POST`. Inventory posting additionally enforces `WMS_INVENTORY_POST`.
 
