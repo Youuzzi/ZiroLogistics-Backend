@@ -200,13 +200,16 @@ public class WmsRoleManagementService {
         Long membershipId = activeMembership(access.tenantId(), membershipPublicId);
         Map<String, Object> role = requireRole(access.tenantId(), rolePublicId);
         if (!"ACTIVE".equals(role.get("status"))) throw new IllegalArgumentException("Role is not active");
-        int inserted = jdbc.update("""
+        Integer existing = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM membership_roles
+                WHERE tenant_id = ? AND membership_id = ? AND role_id = ?
+                """, Integer.class, access.tenantId(), membershipId, number(role, "id"));
+        if (existing != null && existing > 0) return;
+        jdbc.update("""
                 INSERT INTO membership_roles (tenant_id, membership_id, role_id)
                 VALUES (?, ?, ?)
-                ON DUPLICATE KEY UPDATE tenant_id = VALUES(tenant_id)
                 """, access.tenantId(), membershipId, number(role, "id"));
-        if (inserted > 0) audit(access, "ASSIGN", membershipPublicId,
-                Map.of(), Map.of("rolePublicId", rolePublicId));
+        audit(access, "ASSIGN", membershipPublicId, Map.of(), Map.of("rolePublicId", rolePublicId));
     }
 
     @Transactional
@@ -217,6 +220,11 @@ public class WmsRoleManagementService {
         Long membershipId = activeMembership(access.tenantId(), membershipPublicId);
         Map<String, Object> role = requireRole(access.tenantId(), rolePublicId);
         Long roleId = number(role, "id");
+        Integer assigned = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM membership_roles
+                WHERE tenant_id = ? AND membership_id = ? AND role_id = ?
+                """, Integer.class, access.tenantId(), membershipId, roleId);
+        if (assigned == null || assigned == 0) return;
         if ("TENANT_OWNER".equals(role.get("role_code"))) {
             Integer owners = jdbc.queryForObject("""
                     SELECT COUNT(*) FROM membership_roles mr
