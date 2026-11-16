@@ -11,7 +11,7 @@ Create the initial tenant and tenant-owner identity in a fresh WMS installation 
 1. Bootstrap is disabled by default and is never enabled by the ordinary `wms` runtime profile alone.
 2. Bootstrap credentials and tenant details are supplied through a one-time deployment secret channel. They must not be committed, placed in application logs, command history, container image layers, or a checked-in properties file.
 3. The bootstrap operation runs only in a dedicated, short-lived operator process with the WMS datasource and Flyway location. It must not run in the legacy application.
-4. The operation is atomic: platform operator, initial tenant, active membership, initial tenant role, role grants, and bootstrap completion marker commit together or not at all.
+4. The operation is atomic: platform operator, initial tenant, active membership, initial tenant role, reviewed role grants, and bootstrap completion marker commit together or not at all.
 5. A database-backed singleton bootstrap marker is locked with `SELECT ... FOR UPDATE`. Concurrent attempts serialize; exactly one can complete.
 6. A completed marker permanently prevents re-running the bootstrap. There is no HTTP reset or "force" switch. Recovery requires a separately reviewed, audited operator procedure.
 7. Bootstrap must fail closed if the database is not an expected fresh WMS installation, if required migrations are absent, or if any identity/tenant uniqueness conflict exists.
@@ -21,7 +21,7 @@ Create the initial tenant and tenant-owner identity in a fresh WMS installation 
 
 ## Initial authorization
 
-The bootstrap-created `TENANT_OWNER` role is tenant-scoped. The current implementation grants exactly one existing permission: `WMS_IDENTITY_MEMBERSHIP_INVITE`. This is intentionally a minimum grant, not a complete warehouse-administration permission set. It does not automatically grant future permissions, and it does not create platform-wide privileges or a global superuser. Additional tenant capabilities must be provisioned through separately reviewed role/permission workflows.
+The bootstrap-created `TENANT_OWNER` role is tenant-scoped. The current implementation grants only the explicit allowlist `WMS_IDENTITY_MEMBERSHIP_INVITE` and `WMS_TENANT_PROFILE_UPDATE`. This is intentionally a minimum grant, not a complete warehouse-administration permission set. It does not automatically grant future permissions, and it does not create platform-wide privileges or a global superuser. Additional tenant capabilities must be provisioned through separately reviewed role/permission workflows.
 
 ## Required bootstrap state
 
