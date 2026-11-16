@@ -92,6 +92,7 @@ class WmsLoginMembershipRepositoryIntegrationTest {
         tenantMembershipRepository.saveAndFlush(suspendedMembership);
         tenantMembershipRepository.saveAndFlush(inactiveMembership);
 
+        String suspendedTenantPublicId = suspendedTenant.getPublicId();
         List<WmsLoginMembershipProjection> result =
                 loginMembershipRepository.findSelectableMemberships(user.getId());
 
@@ -108,7 +109,7 @@ class WmsLoginMembershipRepositoryIntegrationTest {
         assertEquals(activeTenantB.getTenantCode(), result.get(1).getTenantCode());
 
         assertFalse(result.stream().anyMatch(item ->
-                item.getTenantPublicId().equals(suspendedTenant.getPublicId())));
+                item.getTenantPublicId().equals(suspendedTenantPublicId)));
         assertNotNull(result.get(0).getMembershipPublicId());
     }
 
