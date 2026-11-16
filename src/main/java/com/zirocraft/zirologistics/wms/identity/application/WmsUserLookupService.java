@@ -31,4 +31,16 @@ public class WmsUserLookupService {
     public boolean existsByEmail(String email) {
         return userRepository.existsByEmail(WmsEmailNormalizer.normalize(email));
     }
+
+    /**
+     * Updates login metadata only if the user is still ACTIVE at write time.
+     * A false result must prevent authentication token issuance.
+     */
+    @Transactional
+    public boolean recordSuccessfulLogin(Long userId) {
+        if (userId == null || userId < 1) {
+            throw new IllegalArgumentException("userId must be positive");
+        }
+        return userRepository.recordSuccessfulLogin(userId) == 1;
+    }
 }
