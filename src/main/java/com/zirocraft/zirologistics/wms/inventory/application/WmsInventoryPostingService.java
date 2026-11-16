@@ -473,7 +473,7 @@ public class WmsInventoryPostingService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
-    private static BigDecimal signedDelta(String movement, int index, BigDecimal quantity) {
+    static BigDecimal signedDelta(String movement, int index, BigDecimal quantity) {
         return switch (movement) {
             case "RECEIPT", "RETURN", "OPENING_BALANCE", "ADJUSTMENT_IN" -> quantity;
             case "ISSUE", "ADJUSTMENT_OUT" -> quantity.negate();
