@@ -32,6 +32,9 @@ public class WmsEmailOutboxEncryptionConfiguration {
             WmsEmailOutboxEncryptionProperties properties) {
         Map<Integer, byte[]> keyRing = new HashMap<>();
         properties.getKeys().forEach((version, encodedKey) -> {
+            if (version == null || version < 1) {
+                throw new IllegalStateException("WMS email outbox encryption key versions must be positive");
+            }
             if (encodedKey == null || encodedKey.isBlank()) {
                 throw new IllegalStateException("WMS email outbox encryption key material is missing");
             }
@@ -42,6 +45,12 @@ public class WmsEmailOutboxEncryptionConfiguration {
             }
         });
 
-        return new WmsEmailOutboxEncryptionService(keyRing, properties.getCurrentKeyVersion());
+        int currentKeyVersion = properties.getCurrentKeyVersion();
+        if (currentKeyVersion < 1 || !keyRing.containsKey(currentKeyVersion)) {
+            throw new IllegalStateException(
+                    "WMS email outbox encryption current key version must exist in configured key ring");
+        }
+
+        return new WmsEmailOutboxEncryptionService(keyRing, currentKeyVersion);
     }
 }
