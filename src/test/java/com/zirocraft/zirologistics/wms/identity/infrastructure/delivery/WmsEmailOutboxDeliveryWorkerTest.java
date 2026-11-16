@@ -80,8 +80,10 @@ class WmsEmailOutboxDeliveryWorkerTest {
                 """
                 {"purpose":"INVITATION","actionToken":"invite-token","tenantId":17,"targetEmail":"person@example.test","expiresAt":"2026-11-16T15:30:00Z"}
                 """));
-        verify(mailSender).send(argThat(mail -> mail.getText().contains(
-                "https://wms.example.test/accept-invitation#token=invite-token")));
+        var invitationCaptor = org.mockito.ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(invitationCaptor.capture());
+        assertTrue(invitationCaptor.getValue().getText().contains(
+                "https://wms.example.test/accept-invitation#token=invite-token"));
 
         reset(mailSender, storage);
         UUID verificationId = UUID.randomUUID();
@@ -89,8 +91,10 @@ class WmsEmailOutboxDeliveryWorkerTest {
                 """
                 {"purpose":"EMAIL_VERIFICATION","actionToken":"verify-token","targetEmail":"person@example.test","expiresAt":"2026-11-16T15:30:00Z"}
                 """));
-        verify(mailSender).send(argThat(mail -> mail.getText().contains(
-                "https://wms.example.test/verify-email#token=verify-token")));
+        var verificationCaptor = org.mockito.ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(verificationCaptor.capture());
+        assertTrue(verificationCaptor.getValue().getText().contains(
+                "https://wms.example.test/verify-email#token=verify-token"));
         verify(storage).markSent(verificationId, 1, NOW);
     }
 
