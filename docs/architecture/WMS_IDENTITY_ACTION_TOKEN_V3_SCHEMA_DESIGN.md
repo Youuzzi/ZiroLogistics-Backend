@@ -1,7 +1,7 @@
 # WMS Identity Action Token V3 Schema Design
 
-**Status:** Proposed schema design; not an approved migration.  
-**Target migration:** WMS V3 (version number reserved for this proposal; confirm current migration sequence before implementation).  
+**Status:** Implemented as WMS V3 and verified by MySQL 8.4 Testcontainers CI.  
+**Migration:** `src/main/resources/db/wms-migration/V3__create_wms_identity_action_tokens.sql`.  
 **Runtime:** WMS-only.  
 **V1:** Frozen; no edits.  
 **Database safety:** Design is based on repository source files only. No user database was accessed or modified.
@@ -21,9 +21,9 @@ The new development database `zirowms_v1` was confirmed by its owner to contain 
 - Existing WMS Argon2id encoder is configured separately; this proposal does not change it.
 - V1 must not be edited. The existing V2 login throttle migration is additive and remains unchanged.
 
-## 3. Proposed single table
+## 3. Implemented single table
 
-Propose one table, `wms_identity_action_tokens`, for durable purpose-bound actions.
+WMS V3 creates one table, `wms_identity_action_tokens`, for durable purpose-bound actions.
 
 Rationale:
 - One common token lifecycle avoids three slightly different implementations of expiry, one-time consumption, revocation, and cleanup.
@@ -31,9 +31,9 @@ Rationale:
 - Nullable relationships are governed by purpose-specific CHECK constraints.
 - Only a SHA-256 digest of a cryptographically random, high-entropy bearer token is persisted. The raw secret is shown to the recipient once and never stored or logged.
 
-### 3.1 Proposed columns
+### 3.1 Implemented columns
 
-| Column | Proposed type | Rules |
+| Column | Implemented type | Rules |
 |---|---|---|
 | `id` | BIGINT AUTO_INCREMENT | Primary key |
 | `token_digest` | BINARY(32) | NOT NULL, unique; SHA-256 digest of 256-bit random secret |
@@ -46,11 +46,12 @@ Rationale:
 | `consumed_at` | DATETIME(6) | Nullable, UTC; set exactly once on successful atomic consumption |
 | `revoked_at` | DATETIME(6) | Nullable, UTC; set when superseded or administratively revoked |
 | `created_at` | DATETIME(6) | NOT NULL, UTC |
-| `created_by_request_id` | VARCHAR(64) | Optional opaque correlation identifier; no raw IP/email/credential data |
+
+`created_by_request_id` was deliberately omitted from V3. It can be added additively if a concrete audit/correlation requirement is approved.
 
 All timestamps use UTC consistently with the WMS migration convention.
 
-### 3.2 Proposed constraints and indexes
+### 3.2 Implemented constraints and indexes
 
 - Primary key on `id`.
 - Unique key on `token_digest`.
@@ -65,10 +66,12 @@ All timestamps use UTC consistently with the WMS migration convention.
 - CHECK that `consumed_at` and `revoked_at` cannot both be non-NULL.
 - CHECK that `expires_at > created_at`.
 - Index `(user_id, purpose, created_at)` for per-user action history and revocation.
+- Index `(invited_by_user_id, purpose, created_at)` for inviter action history.
 - Index `(tenant_id, target_email, purpose, created_at)` for tenant invitation lookup/resend serialization.
 - Index `(expires_at, consumed_at, revoked_at)` for bounded cleanup.
+- The table has six index objects in total: primary key, unique digest, and four explicit secondary indexes.
 
-Do not add a partial/conditional unique index for active invitations; MySQL does not provide the required general partial unique-index semantics. Serialize invitation creation/resend by locking a stable tenant row (or another reviewed lock key) inside a short transaction, then revoke previous outstanding invitation records for the same tenant and normalized target email before inserting the new one. The exact locking strategy must be proven by concurrent Testcontainers tests.
+Do not add a partial/conditional unique index for active invitations; MySQL does not provide the required general partial unique-index semantics. The V3 persistence contract therefore requires invitation creation/resend to lock the stable tenant row inside a short transaction, revoke previous outstanding invitation records for the same tenant and normalized target email, then insert the new digest. The MySQL adapter and concurrent resend proof are tracked separately from this migration.
 
 ### 3.3 Foreign-key delete behavior
 
@@ -136,38 +139,39 @@ Ambiguous commit outcomes must fail closed: do not blindly retry consumption or 
 - Retention and deletion must be consistent with audit/privacy requirements.
 - Do not put a scheduler into the application until retention and operational ownership are approved.
 
-## 8. Migration implementation requirements
+## 8. Migration implementation and verification
 
-When this design is approved and converted into a migration:
-- Use WMS migration location only.
-- Name the next migration version after verifying the current highest version; V3 is expected given current V1 and V2.
-- Never modify V1 or V2.
-- Use InnoDB, utf8mb4, and the established MySQL 8.4 migration conventions.
-- Add a Testcontainers MySQL 8.4 migration test that proves V1 + V2 + new migration apply cleanly from an empty disposable schema.
-- Assert table/column/index/FK/CHECK metadata.
-- Test valid purpose combinations and rejection of invalid purpose/binding combinations, duplicate digests, invalid consumed/revoked state, and FK violations.
-- Test migration compatibility with existing V1+V2 state as well as a fresh empty schema.
-- Never run Flyway, integration tests, or schema-changing commands against `zirowms_v1` or `zirologistics_db`.
+WMS V3 is implemented and merged. The migration uses the WMS-only migration location and leaves V1 and V2 unchanged.
 
-## 9. Open decisions before DDL
+The MySQL 8.4 Testcontainers migration gate verifies:
+- V1 and V2 are applied first, then V3 is applied incrementally to the existing V1+V2 schema.
+- V3 adds exactly one table, producing 65 WMS tables in total.
+- The schema contains 168 foreign keys and 138 CHECK constraints after V3.
+- The new table uses InnoDB and `utf8mb4_0900_ai_ci`, with 11 columns, three restrictive foreign keys, four CHECK constraints, and six index objects.
+- Valid invitation (new and existing user), email-verification, and password-reset bindings are accepted.
+- Invalid purpose/binding combinations, simultaneous consumed/revoked state, expiry ordering violations, duplicate digests, and orphaned foreign keys are rejected.
+- Existing V2 migration tests are pinned to version 2 so future additive migrations do not change their intended scope.
 
-The following require explicit review before writing V3 SQL:
+The PR #53 CI and the post-merge main CI passed. These checks use disposable Testcontainers databases only. Never run Flyway, integration tests, or schema-changing commands against `zirowms_v1` or `zirologistics_db`.
+
+## 9. Open decisions for application-level implementation
+
+The migration is complete; the following policy and runtime decisions remain before the full account-provisioning workflow is production-ready:
 1. Whether email verification is required before first login, and how invitation acceptance satisfies it.
 2. Exact invitation, verification, and reset token lifetimes.
-3. Whether invitations can target only existing tenants and which tenant statuses permit invitations.
-4. Exact authorization permission for inviting users and which role assignments an inviter may grant.
-5. Whether pending invitations for the same tenant/email are superseded or can coexist.
-6. Retention duration for consumed/revoked/expired tokens.
-7. Whether `created_by_request_id` is useful enough to retain or should be omitted.
-8. Whether an invitation to an existing user should store the user FK at creation or resolve it only at acceptance.
-9. Email delivery provider and outbox/retry design. Sending mail must not happen inside the token-consumption transaction.
-10. Bootstrap of the first platform operator/tenant owner remains a separate operational workflow.
+3. Which tenant statuses permit invitations and acceptance.
+4. Exact permission code for inviting users and which role assignments an inviter may grant.
+5. Retention duration for consumed/revoked/expired tokens and bounded cleanup ownership.
+6. Email provider, encrypted outbox payload, delivery retries, and operational key rotation. Sending mail must not happen inside the token-consumption transaction.
+7. Bootstrap of the first platform operator/tenant owner remains a separate controlled operational workflow.
 
-## 10. Explicit non-goals
+V3 stores `user_id` on an invitation when the global user already exists at creation; otherwise it remains NULL and acceptance resolves the current user by the verified normalized email. Outstanding invitation tokens for the same tenant/email are designed to be superseded on resend.
 
-- This proposal is not a migration and creates no database objects.
-- No endpoint, Spring bean, repository, or service is implemented.
-- No user, membership, or role is created.
-- No token, password, email, or personal data is generated.
+## 10. Current implementation boundary
+
+- V3 migration and its MySQL 8.4 Testcontainers verification are complete.
+- Token generation is implemented separately: 256-bit SecureRandom secret, unpadded URL-safe Base64, and SHA-256 digest-only persistence contract.
+- The MySQL token storage adapter, invitation domain/application service, password lifecycle, invitation acceptance, email verification, controlled bootstrap, and HTTP endpoints are separate implementation workstreams.
+- No user, membership, or role is created by the migration itself.
 - No production database is accessed.
 - No Redis or refresh-token/session-revocation functionality is added.
