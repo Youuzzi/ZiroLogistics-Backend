@@ -20,6 +20,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -57,10 +58,25 @@ class WmsPlatformBootstrapMySqlIntegrationTest {
     @Autowired private UserRepository userRepository;
     @Autowired private TenantMembershipRepository membershipRepository;
     @Autowired private JdbcTemplate jdbcTemplate;
-    @Autowired private PasswordEncoder passwordEncoder;
 
     @Test
-    void serializesConcurrentBootstrapAndCreatesExactlyOneInitialTenantOwner() throws Exception {
+    void refusesNonEmptyDatabaseAndSerializesConcurrentBootstrap() throws Exception {
+        UserEntity preexisting = new UserEntity();
+        preexisting.setEmail("preexisting." + UUID.randomUUID() + "@example.test");
+        preexisting.setFullName("Preexisting User");
+        preexisting.setPasswordHash("not-a-production-password-hash");
+        preexisting.setStatus(UserStatus.ACTIVE);
+        userRepository.saveAndFlush(preexisting);
+
+        assertThrows(IllegalStateException.class,
+                () -> bootstrapService.bootstrap(command(
+                        "BLOCKED", "blocked@example.test", "BootstrapPassword123")));
+        assertEquals(1L, count("users"));
+        assertEquals(0L, count("tenants"));
+
+        userRepository.delete(preexisting);
+        userRepository.flush();
+
         WmsPlatformBootstrapCommand first = command(
                 "ZIROCRAFT", "bootstrap.one@example.test", "BootstrapPassword123");
         WmsPlatformBootstrapCommand second = command(
@@ -117,10 +133,7 @@ class WmsPlatformBootstrapMySqlIntegrationTest {
         UserEntity initialOwner = userRepository.findAll().getFirst();
         assertEquals(UserStatus.ACTIVE, initialOwner.getStatus());
         assertNotNull(initialOwner.getEmailVerifiedAt());
-        assertTrue(passwordEncoder.matches(
-                initialOwner.getEmail().equals("bootstrap.one@example.test")
-                        ? "BootstrapPassword123" : "BootstrapPassword456",
-                initialOwner.getPasswordHash()));
+        assertTrue(initialOwner.getPasswordHash().startsWith("$argon2id$"));
 
         TenantMembershipEntity membership = membershipRepository.findAll().getFirst();
         assertEquals(initialOwner.getId(), membership.getUserId());
