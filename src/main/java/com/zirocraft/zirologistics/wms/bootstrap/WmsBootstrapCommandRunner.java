@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.wms.bootstrap;
 
 import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnNotWebApplication;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Component;
 /** Executes only when the explicit non-web command mode is supplied. */
 @Component
 @Profile("wms")
+@ConditionalOnNotWebApplication
 public class WmsBootstrapCommandRunner implements ApplicationRunner {
     private final WmsBootstrapProperties properties;
     private final WmsPlatformBootstrapService service;

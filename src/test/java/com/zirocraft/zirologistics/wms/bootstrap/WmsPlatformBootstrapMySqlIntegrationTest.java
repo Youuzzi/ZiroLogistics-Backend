@@ -91,7 +91,7 @@ class WmsPlatformBootstrapMySqlIntegrationTest {
         assertEquals(1, count("tenant_memberships"));
         assertEquals(1, count("roles"));
         assertEquals(1, count("membership_roles"));
-        assertEquals(1, count("role_permissions"));
+        assertEquals(2, count("role_permissions"));
         assertEquals(1, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM wms_platform_bootstrap_state WHERE status='COMPLETED' AND operation_ref=?",
                 Integer.class, result.operationRef()));
@@ -102,11 +102,15 @@ class WmsPlatformBootstrapMySqlIntegrationTest {
         assertTrue(passwordHash.startsWith("$argon2"));
         assertTrue(passwordEncoder.matches(RAW_PASSWORD, passwordHash));
 
-        assertEquals("WMS_IDENTITY_MEMBERSHIP_INVITE", jdbc.queryForObject("""
-                SELECT p.permission_code
+        assertEquals(2, jdbc.queryForObject("""
+                SELECT COUNT(*)
                 FROM role_permissions rp
                 INNER JOIN permissions p ON p.id=rp.permission_id
-                """, String.class));
+                WHERE p.permission_code IN (
+                  'WMS_IDENTITY_MEMBERSHIP_INVITE',
+                  'WMS_TENANT_PROFILE_UPDATE'
+                )
+                """, Integer.class));
         assertEquals(1, jdbc.queryForObject("""
                 SELECT COUNT(*) FROM users
                 WHERE public_id=? AND status='ACTIVE' AND email_verified_at IS NOT NULL

@@ -1,6 +1,6 @@
 # WMS Tenant Context and Authorization Resolution
 
-**Status:** Implemented foundation; authentication/token issuance and HTTP enforcement remain out of scope.  
+**Status:** Membership resolution and effective-permission evaluation are implemented and integrated into the WMS authentication request pipeline. The original scope of this document is the persistence-backed resolver.  
 **Runtime:** WMS-only runtime (wms profile)  
 **Schema:** Frozen WMS V1; no schema changes in this slice.
 
@@ -36,9 +36,9 @@ Inactive roles do not contribute permissions. A valid active membership with no 
 
 The resolver returns an immutable WmsMembershipAccess value with the internal user, tenant, and membership IDs, public identifiers, and a set of effective permission codes.
 
-## 4. Request lifecycle integration (next security slice)
+## 4. Request lifecycle integration (implemented)
 
-The intended request pipeline is:
+The WMS request pipeline is:
 
 1. Validate the access token's cryptographic integrity and required claims.
 2. Validate issuer, audience, expiry, not-before, and token type/profile.
@@ -52,7 +52,7 @@ The WMS tenant context must be derived from the database-verified membership, no
 
 ## 5. Token and session decisions still pending
 
-The frozen V1 schema has no dedicated refresh-token/session-revocation or login-attempt persistence tables. This slice therefore does not invent persistence in application memory or claim immediate revocation support.
+The frozen V1 schema has no dedicated refresh-token/session-revocation or login-attempt persistence tables. The frozen V1 schema has no dedicated refresh-token/session-revocation or login-attempt persistence tables. The current access-token and authentication implementation therefore does not claim persisted refresh-token rotation, logout revocation, or immediate revocation of already-issued access tokens.
 
 Before exposing login or refresh endpoints, a separate design/implementation must decide:
 

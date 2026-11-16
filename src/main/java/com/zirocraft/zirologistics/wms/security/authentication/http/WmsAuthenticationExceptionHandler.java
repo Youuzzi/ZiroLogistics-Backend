@@ -3,6 +3,7 @@ package com.zirocraft.zirologistics.wms.security.authentication.http;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessDeniedException;
 import com.zirocraft.zirologistics.wms.identity.application.WmsIdentityActionTokenRejectedException;
+import com.zirocraft.zirologistics.wms.tenancy.application.WmsTenantProfileConflictException;
 import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.context.annotation.Conditional;
@@ -18,7 +19,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(basePackages = {
         "com.zirocraft.zirologistics.wms.security.authentication.http",
-        "com.zirocraft.zirologistics.wms.identity.http"
+        "com.zirocraft.zirologistics.wms.identity.http",
+        "com.zirocraft.zirologistics.wms.tenancy.http"
 })
 @Profile("wms")
 @Conditional(WmsIdentityHttpEnabledCondition.class)
@@ -50,7 +52,7 @@ public class WmsAuthenticationExceptionHandler {
                 .body(new ApiError("INVALID_REQUEST", "The request is invalid"));
     }
 
-    @ExceptionHandler(IllegalStateException.class)
+    @ExceptionHandler({IllegalStateException.class, WmsTenantProfileConflictException.class})
     public ResponseEntity<ApiError> conflict(Exception ignored) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError("REQUEST_CONFLICT", "The requested operation cannot be completed"));
