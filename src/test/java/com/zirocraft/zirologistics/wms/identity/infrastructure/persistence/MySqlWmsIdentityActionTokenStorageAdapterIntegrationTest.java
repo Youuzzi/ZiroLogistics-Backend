@@ -1,6 +1,6 @@
 package com.zirocraft.zirologistics.wms.identity.infrastructure.persistence;
 
-import com.zirocraft.zirologistics.wms.identity.domain.TenantStatus;
+import com.zirocraft.zirologistics.wms.tenancy.domain.TenantStatus;
 import com.zirocraft.zirologistics.wms.identity.domain.WmsIdentityActionTokenPurpose;
 import com.zirocraft.zirologistics.wms.identity.domain.WmsIdentityActionTokenRecord;
 import org.flywaydb.core.Flyway;
