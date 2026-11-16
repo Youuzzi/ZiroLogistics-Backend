@@ -160,8 +160,8 @@ public class WmsInventoryPostingService {
                 Map<String, Object> serial = requiredRow("""
                         SELECT id, status, current_warehouse_id, current_location_id
                         FROM inventory_serials
-                        WHERE tenant_id = ? AND item_id = ? AND public_id = ?
-                        """, tenantId, leg.itemId(), leg.serialPublicId(), "Serial not found");
+                        WHERE tenant_id = ? AND item_id = ? AND public_id = ? AND lot_id <=> ?
+                        """, tenantId, leg.itemId(), leg.serialPublicId(), leg.lotId());
                 serialId = number(serial, "id");
                 serialStatus = string(serial, "status");
                 serialWarehouse = nullableNumber(serial.get("current_warehouse_id"));
