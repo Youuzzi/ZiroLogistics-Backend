@@ -10,7 +10,8 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.ZoneId;
 import java.util.Currency;
@@ -32,20 +33,33 @@ public class WmsTenantProvisioningService {
     private final JdbcTemplate jdbc;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate transaction;
 
     public WmsTenantProvisioningService(
             JdbcTemplate jdbc,
             @Qualifier("wmsPasswordEncoder") PasswordEncoder passwordEncoder,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PlatformTransactionManager transactionManager) {
         this.jdbc = Objects.requireNonNull(jdbc);
         this.passwordEncoder = Objects.requireNonNull(passwordEncoder);
         this.objectMapper = Objects.requireNonNull(objectMapper);
+        this.transaction = new TransactionTemplate(Objects.requireNonNull(transactionManager));
     }
 
-    @Transactional
     public WmsTenantProvisioningResult provision(WmsTenantProvisioningProperties properties) {
         Input input = validate(properties);
-        WmsTenantProvisioningResult previous = findPrevious(input.operationRef(), input.tenantCode(), input.ownerEmail());
+        // Argon2id work is performed before opening the provisioning transaction.
+        if (passwordHash == null || passwordHash.isBlank()) {
+            throw new WmsTenantProvisioningRejectedException("Tenant owner credential initialization failed");
+        }
+        return Objects.requireNonNull(
+                transaction.execute(status -> provisionInTransaction(input, passwordHash)),
+                "Tenant provisioning transaction returned no result");
+    }
+
+    private WmsTenantProvisioningResult provisionInTransaction(Input input, String passwordHash) {
+        WmsTenantProvisioningResult previous = findPrevious(
+                input.operationRef(), input.tenantCode(), input.ownerEmail());
         if (previous != null) return previous;
 
         String tenantPublicId = UUID.randomUUID().toString();
@@ -61,7 +75,7 @@ public class WmsTenantProvisioningService {
         Long tenantId = jdbc.queryForObject(
                 "SELECT id FROM tenants WHERE public_id = ?", Long.class, tenantPublicId);
 
-        OwnerIdentity owner = findOrCreateOwner(input);
+        OwnerIdentity owner = findOrCreateOwner(input, passwordHash);
         Integer existingMembership = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM tenant_memberships WHERE tenant_id = ? AND user_id = ?
                 """, Integer.class, tenantId, owner.userId());
@@ -120,7 +134,7 @@ public class WmsTenantProvisioningService {
                 owner.status() == UserStatus.PENDING_VERIFICATION, false);
     }
 
-    private OwnerIdentity findOrCreateOwner(Input input) {
+    private OwnerIdentity findOrCreateOwner(Input input, String passwordHash) {
         List<Map<String, Object>> existing = jdbc.queryForList("""
                 SELECT id, public_id, status, email_verified_at
                 FROM users
