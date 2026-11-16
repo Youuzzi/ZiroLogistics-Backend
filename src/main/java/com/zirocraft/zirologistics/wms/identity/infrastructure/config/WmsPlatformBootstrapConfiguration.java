@@ -15,11 +15,11 @@ import org.springframework.context.annotation.Profile;
 /**
  * Explicitly opt-in, non-HTTP bootstrap entry point.
  *
- * It is loaded only when both the WMS runtime and the wms-bootstrap profile are
+ * It is loaded only when both the WMS runtime and wms-bootstrap profiles are
  * active and wms.bootstrap.enabled=true.
  */
 @Configuration(proxyBeanMethods = false)
-@Profile("wms-bootstrap")
+@Profile("wms-bootstrap & wms")
 @ConditionalOnProperty(prefix = "wms.bootstrap", name = "enabled", havingValue = "true")
 @EnableConfigurationProperties(WmsPlatformBootstrapProperties.class)
 public class WmsPlatformBootstrapConfiguration {
