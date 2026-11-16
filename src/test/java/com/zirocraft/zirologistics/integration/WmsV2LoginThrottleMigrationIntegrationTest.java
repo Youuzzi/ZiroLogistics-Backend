@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.integration;
 
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -31,6 +32,7 @@ class WmsV2LoginThrottleMigrationIntegrationTest {
         Flyway flyway = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/wms-migration")
+                .target(MigrationVersion.fromVersion("2"))
                 .load();
         flyway.migrate();
         flyway.validate();
