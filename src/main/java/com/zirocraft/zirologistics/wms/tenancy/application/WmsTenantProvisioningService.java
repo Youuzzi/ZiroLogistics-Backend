@@ -163,8 +163,6 @@ public class WmsTenantProvisioningService {
         String userPublicId = UUID.randomUUID().toString();
         // A high-entropy random secret is hashed and discarded; the owner sets a real password
         // after email verification through the existing password-reset lifecycle.
-        String unreachablePassword = UUID.randomUUID() + UUID.randomUUID().toString();
-        String passwordHash = passwordEncoder.encode(unreachablePassword);
         jdbc.update("""
                 INSERT INTO users (public_id, email, password_hash, full_name, status, email_verified_at)
                 VALUES (?, ?, ?, ?, 'PENDING_VERIFICATION', NULL)
@@ -222,7 +220,9 @@ public class WmsTenantProvisioningService {
         String displayName = bounded(p.getDisplayName(), "display name", 2, 150);
         String timezone = bounded(p.getTimezone(), "timezone", 1, 60);
         try {
-            ZoneId.of(timezone);
+            if (!ZoneId.getAvailableZoneIds().contains(timezone) && !"UTC".equals(timezone)) {
+                throw new IllegalArgumentException();
+            }
         } catch (RuntimeException invalid) {
             throw new WmsTenantProvisioningRejectedException("Tenant timezone is invalid");
         }
