@@ -101,7 +101,11 @@ public class WmsInventoryPostingService {
             }
             updateBalance(balance.id(), delta);
             runningOnHand.put(key, after);
-            insertLedger(access, normalized, movementGroupId, entryNo++, leg, delta, before, after);
+            try {
+                insertLedger(access, normalized, movementGroupId, entryNo++, leg, delta, before, after);
+            } catch (DuplicateKeyException duplicateRequest) {
+                throw new IllegalStateException("Inventory request ID has already been used", duplicateRequest);
+            }
             transitionSerial(normalized.movementType(), legs, leg);
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("entryNo", entryNo - 1);
