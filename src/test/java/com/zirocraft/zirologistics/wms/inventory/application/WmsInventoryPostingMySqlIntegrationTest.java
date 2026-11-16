@@ -71,24 +71,42 @@ class WmsInventoryPostingMySqlIntegrationTest {
     }
 
     @Test
-    void rollsBackBalanceAndLedgerWhenAuditAppendFails() {
+    void rollsBackAllPairedBalanceAndLedgerChangesWhenSecondEntryConflicts() {
+        String secondLocation = createLocation(fixture);
+        post(fixture, UUID.randomUUID(), "RECEIPT", leg(fixture, null, null, "AVAILABLE", "5.0000"));
         UUID requestId = UUID.randomUUID();
+        long warehouseId = jdbc.queryForObject("SELECT id FROM warehouses WHERE public_id = ?",
+                Long.class, fixture.warehousePublicId());
+        long itemId = jdbc.queryForObject("SELECT id FROM items WHERE public_id = ?",
+                Long.class, fixture.itemPublicId());
+        long membershipId = fixture.membershipId();
+        long destinationLocationId = jdbc.queryForObject("SELECT id FROM warehouse_locations WHERE public_id = ?",
+                Long.class, secondLocation);
         jdbc.update("""
-                INSERT INTO tenant_audit_events
-                  (public_id, tenant_id, actor_type, actor_reference, operation_ref,
-                   event_type, subject_public_id, change_payload)
-                VALUES (?, ?, 'PLATFORM_OPERATOR', 'integration-test', ?,
-                        'TENANT_PROVISIONED', ?, JSON_OBJECT())
-                """, UUID.randomUUID().toString(), fixture.tenantId(), requestId.toString(), fixture.tenantPublicId());
+                INSERT INTO inventory_ledger
+                  (public_id, tenant_id, movement_group_id, request_id, entry_no, movement_type,
+                   warehouse_id, location_id, item_id, stock_status, quantity_delta,
+                   balance_before_qty, balance_after_qty, actor_membership_id)
+                VALUES (?, ?, ?, ?, 2, 'TRANSFER', ?, ?, ?, 'AVAILABLE', 1.0000, 0.0000, 1.0000, ?)
+                """, UUID.randomUUID().toString(), fixture.tenantId(), UUID.randomUUID().toString(),
+                requestId.toString(), warehouseId, destinationLocationId, itemId, membershipId);
 
-        assertThrows(RuntimeException.class, () -> post(fixture, requestId, "RECEIPT",
-                leg(fixture, null, null, "AVAILABLE", "4.0000")));
-        assertEquals(BigDecimal.ZERO.setScale(4), balance(fixture));
-        assertEquals(0, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ? AND request_id = ?",
+        WmsInventoryPostingService.PostingLeg source = new WmsInventoryPostingService.PostingLeg(
+                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                null, null, null, "AVAILABLE", new BigDecimal("2.0000"));
+        WmsInventoryPostingService.PostingLeg destination = new WmsInventoryPostingService.PostingLeg(
+                fixture.warehousePublicId(), secondLocation, fixture.itemPublicId(),
+                null, null, null, "AVAILABLE", new BigDecimal("2.0000"));
+        assertThrows(RuntimeException.class, () -> postingService.post(fixture.principal(),
+                new WmsInventoryPostingService.PostingCommand(requestId, "TRANSFER", List.of(source, destination), null)));
+
+        assertEquals(new BigDecimal("5.0000"), bucketBalance(fixture, fixture.locationPublicId(), "AVAILABLE"));
+        assertEquals(new BigDecimal("0.0000"), bucketBalance(fixture, secondLocation, "AVAILABLE"));
+        assertEquals(1, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ? AND request_id = ?",
                 fixture.tenantId(), requestId.toString()));
-        assertEquals(1, count("SELECT COUNT(*) FROM tenant_audit_events WHERE operation_ref = ?", requestId.toString()));
+        assertEquals(1, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'",
+                fixture.tenantId()));
     }
-
     @Test
     void serialReceiptIssueAndReturnKeepSerialStateAndStockAtomic() {
         Fixture serialFixture = fixture("SERIAL");
