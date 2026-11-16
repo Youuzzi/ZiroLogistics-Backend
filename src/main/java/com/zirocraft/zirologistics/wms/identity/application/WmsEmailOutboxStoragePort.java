@@ -48,5 +48,5 @@ public interface WmsEmailOutboxStoragePort {
      * Recovers expired worker leases. A stale worker is fenced by the incremented
      * attemptCount on the next claim.
      */
-    int recoverStaleProcessing(Instant lockedBefore, Instant availableAt, int maxAttempts);
+    int recoverStaleProcessing(Instant lockedBefore, Instant availableAt, int maxAttempts, int batchSize);
 }
