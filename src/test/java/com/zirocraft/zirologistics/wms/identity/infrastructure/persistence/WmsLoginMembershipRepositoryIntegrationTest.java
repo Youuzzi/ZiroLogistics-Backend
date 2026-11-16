@@ -75,15 +75,17 @@ class WmsLoginMembershipRepositoryIntegrationTest {
 
         TenantEntity activeTenantB = tenant("TENANT-B-" + suffix, "Beta Warehouse", TenantStatus.ACTIVE);
         TenantEntity activeTenantA = tenant("TENANT-A-" + suffix, "Alpha Warehouse", TenantStatus.ACTIVE);
+        TenantEntity activeTenantC = tenant("TENANT-C-" + suffix, "Gamma Warehouse", TenantStatus.ACTIVE);
         TenantEntity suspendedTenant = tenant("TENANT-S-" + suffix, "Suspended Warehouse", TenantStatus.SUSPENDED);
         activeTenantB = tenantRepository.saveAndFlush(activeTenantB);
         activeTenantA = tenantRepository.saveAndFlush(activeTenantA);
+        activeTenantC = tenantRepository.saveAndFlush(activeTenantC);
         suspendedTenant = tenantRepository.saveAndFlush(suspendedTenant);
 
         TenantMembershipEntity activeMembershipB = membership(activeTenantB.getId(), user.getId(), MembershipStatus.ACTIVE);
         TenantMembershipEntity activeMembershipA = membership(activeTenantA.getId(), user.getId(), MembershipStatus.ACTIVE);
         TenantMembershipEntity suspendedMembership = membership(suspendedTenant.getId(), user.getId(), MembershipStatus.ACTIVE);
-        TenantMembershipEntity inactiveMembership = membership(activeTenantA.getId(), user.getId(), MembershipStatus.SUSPENDED);
+        TenantMembershipEntity inactiveMembership = membership(activeTenantC.getId(), user.getId(), MembershipStatus.SUSPENDED);
 
         activeMembershipB = tenantMembershipRepository.saveAndFlush(activeMembershipB);
         activeMembershipA = tenantMembershipRepository.saveAndFlush(activeMembershipA);
