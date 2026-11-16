@@ -4,6 +4,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessDeniedException;
 import com.zirocraft.zirologistics.wms.identity.application.WmsIdentityActionTokenRejectedException;
 import com.zirocraft.zirologistics.wms.tenancy.application.WmsTenantProfileConflictException;
+import com.zirocraft.zirologistics.wms.warehouse.application.WmsWarehouseNotFoundException;
 import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.context.annotation.Conditional;
@@ -21,7 +22,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
         "com.zirocraft.zirologistics.wms.security.authentication.http",
         "com.zirocraft.zirologistics.wms.identity.http",
         "com.zirocraft.zirologistics.wms.tenancy.http",
-        "com.zirocraft.zirologistics.wms.authorization.http"
+        "com.zirocraft.zirologistics.wms.authorization.http",
+        "com.zirocraft.zirologistics.wms.warehouse.http"
 })
 @Profile("wms")
 @Conditional(WmsIdentityHttpEnabledCondition.class)
@@ -38,6 +40,12 @@ public class WmsAuthenticationExceptionHandler {
     public ResponseEntity<ApiError> forbidden(Exception ignored) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiError("ACCESS_DENIED", "Access denied"));
+    }
+
+    @ExceptionHandler(WmsWarehouseNotFoundException.class)
+    public ResponseEntity<ApiError> notFound() {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiError("RESOURCE_NOT_FOUND", "The requested resource was not found"));
     }
 
     @ExceptionHandler(WmsIdentityActionTokenRejectedException.class)
