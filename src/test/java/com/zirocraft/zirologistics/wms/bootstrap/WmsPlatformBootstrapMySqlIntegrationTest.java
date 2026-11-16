@@ -62,6 +62,12 @@ class WmsPlatformBootstrapMySqlIntegrationTest {
         jdbc.update("DELETE FROM users");
         jdbc.update("DELETE FROM tenants");
         jdbc.update("""
+                INSERT INTO permissions (permission_code, module, description)
+                VALUES ('WMS_IDENTITY_MEMBERSHIP_INVITE', 'IDENTITY',
+                        'Allows an active tenant membership with this permission to invite a user into the same tenant.')
+                ON DUPLICATE KEY UPDATE permission_code = VALUES(permission_code)
+                """);
+        jdbc.update("""
                 UPDATE wms_platform_bootstrap_state
                 SET status='NOT_COMPLETED', operation_ref=NULL, completed_at=NULL
                 WHERE id=1
