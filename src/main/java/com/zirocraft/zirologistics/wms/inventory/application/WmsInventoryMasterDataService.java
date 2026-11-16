@@ -805,14 +805,12 @@ public class WmsInventoryMasterDataService {
     }
 
     private static boolean allowedSerialTransition(String from, String to) {
+        // Stage 8 owns traceability and administrative disposition only.
+        // Reservation, picking, shipping and return transitions belong to their later workflows.
         return switch (from) {
-            case "AVAILABLE" -> Set.of("RESERVED", "DAMAGED", "QUARANTINED", "LOST").contains(to);
-            case "RESERVED" -> Set.of("AVAILABLE", "PICKED", "DAMAGED", "QUARANTINED", "LOST").contains(to);
-            case "PICKED" -> Set.of("AVAILABLE", "SHIPPED", "DAMAGED", "QUARANTINED").contains(to);
-            case "SHIPPED" -> Set.of("RETURNED", "LOST").contains(to);
+            case "AVAILABLE" -> Set.of("DAMAGED", "QUARANTINED", "LOST").contains(to);
             case "DAMAGED", "QUARANTINED" -> Set.of("AVAILABLE", "LOST").contains(to);
-            case "RETURNED" -> Set.of("AVAILABLE", "DAMAGED", "QUARANTINED", "LOST").contains(to);
-            case "LOST" -> false;
+            case "RESERVED", "PICKED", "SHIPPED", "RETURNED", "LOST" -> false;
             default -> false;
         };
     }
