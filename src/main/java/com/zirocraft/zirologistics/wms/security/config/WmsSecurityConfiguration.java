@@ -54,8 +54,7 @@ public class WmsSecurityConfiguration {
                                 "/api/wms/v1/auth/password-resets",
                                 "/api/wms/v1/auth/email-verification-requests",
                                 "/api/wms/v1/auth/email-verifications",
-                                "/api/wms/v1/invitations/acceptances",
-                                "/api/wms/v1/invitations/existing-account-acceptances"
+                                "/api/wms/v1/invitations/acceptances"
                         ).permitAll();
                     }
                     authorize.anyRequest().authenticated();
