@@ -92,6 +92,21 @@ class WmsTenantProvisioningMySqlIntegrationTest {
                   'WMS_TENANT_PROFILE_UPDATE'
                 )
                 """, Integer.class, result.ownerMembershipPublicId()));
+        assertEquals(8, jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM membership_roles mr
+                JOIN role_permissions rp ON rp.role_id = mr.role_id
+                JOIN permissions p ON p.id = rp.permission_id
+                WHERE mr.membership_id = (
+                  SELECT id FROM tenant_memberships WHERE public_id = ?
+                )
+                AND p.permission_code IN (
+                  'WMS_ROLE_READ', 'WMS_ROLE_CREATE', 'WMS_ROLE_UPDATE',
+                  'WMS_ROLE_DEACTIVATE', 'WMS_PERMISSION_CATALOG_READ',
+                  'WMS_ROLE_PERMISSION_MANAGE', 'WMS_MEMBERSHIP_ROLE_READ',
+                  'WMS_MEMBERSHIP_ROLE_MANAGE'
+                )
+                """, Integer.class, result.ownerMembershipPublicId()));
         assertEquals(1, jdbc.queryForObject("""
                 SELECT COUNT(*) FROM tenant_audit_events
                 WHERE operation_ref = ? AND event_type = 'TENANT_PROVISIONED'

@@ -20,7 +20,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice(basePackages = {
         "com.zirocraft.zirologistics.wms.security.authentication.http",
         "com.zirocraft.zirologistics.wms.identity.http",
-        "com.zirocraft.zirologistics.wms.tenancy.http"
+        "com.zirocraft.zirologistics.wms.tenancy.http",
+        "com.zirocraft.zirologistics.wms.authorization.http"
 })
 @Profile("wms")
 @Conditional(WmsIdentityHttpEnabledCondition.class)
