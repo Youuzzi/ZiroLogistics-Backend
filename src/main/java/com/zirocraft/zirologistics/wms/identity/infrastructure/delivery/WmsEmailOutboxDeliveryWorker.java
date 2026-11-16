@@ -175,7 +175,7 @@ public class WmsEmailOutboxDeliveryWorker {
         URI base = URI.create(properties.getActionBaseUrl());
         URI target = base.resolve(path);
         return UriComponentsBuilder.fromUri(target)
-                .queryParam("token", token)
+                .fragment("token=" + token)
                 .encode(StandardCharsets.UTF_8)
                 .build()
                 .toUriString();
