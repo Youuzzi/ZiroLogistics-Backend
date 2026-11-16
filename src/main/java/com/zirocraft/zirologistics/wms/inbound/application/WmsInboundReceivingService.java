@@ -92,9 +92,9 @@ public class WmsInboundReceivingService {
     @Transactional
     public Map<String, Object> create(
             WmsAuthenticatedPrincipal principal, ReceiptCommand command) {
-        Access access = access(principal, "WMS_INBOUND_RECEIPT_CREATE");
         Objects.requireNonNull(command, "Receipt request is required");
-        lockTenant(access.tenantId());
+        lockTenantForPrincipal(principal);
+        Access access = access(principal, "WMS_INBOUND_RECEIPT_CREATE");
 
         String documentNumber = required(command.documentNumber(), "document number", 60).toUpperCase(Locale.ROOT);
         String receiptType = enumValue(command.receiptType(), RECEIPT_TYPES, "receipt type");
@@ -157,9 +157,9 @@ public class WmsInboundReceivingService {
     @Transactional
     public Map<String, Object> addLine(
             WmsAuthenticatedPrincipal principal, String receiptPublicId, ReceiptLineCommand command) {
-        Access access = access(principal, "WMS_INBOUND_RECEIPT_UPDATE");
         Objects.requireNonNull(command, "Receipt line request is required");
-        lockTenant(access.tenantId());
+        lockTenantForPrincipal(principal);
+        Access access = access(principal, "WMS_INBOUND_RECEIPT_UPDATE");
         Map<String, Object> receipt = receipt(access.tenantId(), receiptPublicId);
         if (!"DRAFT".equals(receipt.get("status"))) {
             throw new IllegalStateException("Only draft receipts can be changed");
@@ -208,13 +208,13 @@ public class WmsInboundReceivingService {
     @Transactional
     public Map<String, Object> post(
             WmsAuthenticatedPrincipal principal, String receiptPublicId, PostReceiptCommand command) {
-        Access access = access(principal, "WMS_INBOUND_RECEIPT_POST");
         Objects.requireNonNull(command, "Receipt posting request is required");
+        lockTenantForPrincipal(principal);
+        Access access = access(principal, "WMS_INBOUND_RECEIPT_POST");
         if (command.requestId() == null) throw new IllegalArgumentException("Request ID is required");
         if (command.lines() == null || command.lines().isEmpty()) {
             throw new IllegalArgumentException("At least one receipt line is required");
         }
-        lockTenant(access.tenantId());
         Map<String, Object> receipt = receipt(access.tenantId(), receiptPublicId);
         if (!"DRAFT".equals(receipt.get("status")) && !"IN_PROGRESS".equals(receipt.get("status"))) {
             throw new IllegalStateException("Receipt is not eligible for posting");
@@ -438,6 +438,11 @@ public class WmsInboundReceivingService {
         }
         if (!resolved.hasPermission(permission)) throw new AccessDeniedException("Required inbound receiving permission is missing");
         return new Access(resolved.tenantId(), resolved.membershipId(), resolved.userPublicId());
+    }
+
+    private void lockTenantForPrincipal(WmsAuthenticatedPrincipal principal) {
+        if (principal == null) throw new AccessDeniedException("Tenant context is required");
+        lockTenant(principal.tenantId());
     }
 
     private void lockTenant(long tenantId) {
