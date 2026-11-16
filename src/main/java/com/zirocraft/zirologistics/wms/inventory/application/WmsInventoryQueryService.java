@@ -39,7 +39,8 @@ public class WmsInventoryQueryService {
         addFilter(where, args, "i.public_id", itemPublicId);
         addFilter(where, args, "w.public_id", warehousePublicId);
         addFilter(where, args, "l.public_id", locationPublicId);
-        addFilter(where, args, "b.stock_status", stockStatus == null ? null : stockStatus.toUpperCase());
+        addFilter(where, args, "b.stock_status", normalizeFilter(stockStatus,
+                List.of("AVAILABLE", "QUARANTINED", "DAMAGED", "EXPIRED", "BLOCKED")));
         Integer total = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM inventory_balances b
                 JOIN items i ON i.id = b.item_id AND i.tenant_id = b.tenant_id
@@ -78,7 +79,9 @@ public class WmsInventoryQueryService {
         addFilter(where, args, "i.public_id", itemPublicId);
         addFilter(where, args, "w.public_id", warehousePublicId);
         addFilter(where, args, "l.public_id", locationPublicId);
-        addFilter(where, args, "g.movement_type", movementType == null ? null : movementType.toUpperCase());
+        addFilter(where, args, "g.movement_type", normalizeFilter(movementType,
+                List.of("RECEIPT", "ISSUE", "TRANSFER", "ADJUSTMENT_IN", "ADJUSTMENT_OUT",
+                        "RETURN", "DAMAGE", "STATUS_CHANGE", "OPENING_BALANCE")));
         Integer total = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM inventory_ledger g
                 JOIN items i ON i.id = g.item_id AND i.tenant_id = g.tenant_id
