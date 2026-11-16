@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.identity.infrastructure.persistence;
 
+import com.zirocraft.zirologistics.wms.identity.application.WmsEmailNormalizer;
 import com.zirocraft.zirologistics.wms.identity.application.WmsIdentityActionTokenStoragePort;
 import com.zirocraft.zirologistics.wms.tenancy.domain.TenantStatus;
 import com.zirocraft.zirologistics.wms.identity.domain.WmsIdentityActionTokenPurpose;
@@ -72,10 +73,7 @@ public class MySqlWmsIdentityActionTokenStorageAdapter implements WmsIdentityAct
         if (tenantId < 1) {
             throw new IllegalArgumentException("tenantId must be positive");
         }
-        if (normalizedEmail == null || normalizedEmail.isBlank()
-                || !normalizedEmail.equals(normalizedEmail.strip())) {
-            throw new IllegalArgumentException("normalizedEmail must be non-blank and canonical");
-        }
+        requireCanonicalEmail(normalizedEmail);
         Objects.requireNonNull(revokedAt, "revokedAt must not be null");
 
         return jdbcTemplate.update("""
@@ -102,6 +100,7 @@ public class MySqlWmsIdentityActionTokenStorageAdapter implements WmsIdentityAct
             Instant createdAt) {
         requireDigest(tokenDigest);
         Objects.requireNonNull(purpose, "purpose must not be null");
+        requireCanonicalEmail(normalizedTargetEmail);
         Objects.requireNonNull(expiresAt, "expiresAt must not be null");
         Objects.requireNonNull(createdAt, "createdAt must not be null");
         if (!expiresAt.isAfter(createdAt)) {
@@ -179,6 +178,13 @@ public class MySqlWmsIdentityActionTokenStorageAdapter implements WmsIdentityAct
                   AND consumed_at IS NULL
                   AND revoked_at IS NULL
                 """, utcDateTime(revokedAt), tokenId);
+    }
+
+    private static void requireCanonicalEmail(String email) {
+        String normalized = WmsEmailNormalizer.normalize(email);
+        if (!normalized.equals(email)) {
+            throw new IllegalArgumentException("target email must already be normalized");
+        }
     }
 
     private static void requireDigest(byte[] digest) {
