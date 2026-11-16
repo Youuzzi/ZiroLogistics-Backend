@@ -117,20 +117,13 @@ public class WmsPlatformBootstrapService {
         }
 
         return Objects.requireNonNull(transactionTemplate.execute(status -> {
-            Integer stateId = jdbcTemplate.queryForObject("""
-                    SELECT id
-                    FROM wms_platform_bootstrap_state
-                    WHERE id = 1
-                    FOR UPDATE
-                    """, Integer.class);
-            if (stateId == null || stateId != 1) {
-                throw new IllegalStateException("WMS bootstrap state is unavailable");
-            }
-
+            // A current locking read both proves the singleton row exists and
+            // serializes every bootstrap attempt before checking completion.
             LocalDateTime completedAt = jdbcTemplate.queryForObject("""
                     SELECT completed_at
                     FROM wms_platform_bootstrap_state
                     WHERE id = 1
+                    FOR UPDATE
                     """, LocalDateTime.class);
             if (completedAt != null) {
                 throw new IllegalStateException("WMS platform bootstrap has already completed");
