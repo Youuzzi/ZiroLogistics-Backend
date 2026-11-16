@@ -127,6 +127,13 @@ public class WmsInventoryQueryService {
         return new Access(resolved.tenantId());
     }
 
+    private static String normalizeFilter(String value, List<String> allowed) {
+        if (value == null || value.isBlank()) return null;
+        String normalized = value.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!allowed.contains(normalized)) throw new IllegalArgumentException("Inventory filter is invalid");
+        return normalized;
+    }
+
     private static void addFilter(StringBuilder where, List<Object> args, String column, String value) {
         if (value != null && !value.isBlank()) {
             where.append(" AND ").append(column).append(" = ?");
