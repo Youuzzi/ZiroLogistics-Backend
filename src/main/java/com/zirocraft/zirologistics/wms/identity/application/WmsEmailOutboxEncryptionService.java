@@ -82,16 +82,18 @@ public final class WmsEmailOutboxEncryptionService {
         byte[] nonce = new byte[NONCE_LENGTH_BYTES];
         secureRandom.nextBytes(nonce);
 
+        byte[] plaintextCopy = plaintext.clone();
         try {
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.ENCRYPT_MODE, keysByVersion.get(currentKeyVersion),
                     new GCMParameterSpec(TAG_LENGTH_BITS, nonce));
             cipher.updateAAD(associatedData(messageId, purpose, normalizedEmail, currentKeyVersion));
-            byte[] ciphertext = cipher.doFinal(plaintext.clone());
+            byte[] ciphertext = cipher.doFinal(plaintextCopy);
             return new WmsEncryptedEmailPayload(currentKeyVersion, nonce, ciphertext);
         } catch (GeneralSecurityException unavailableOrInvalidCrypto) {
             throw new IllegalStateException("Unable to encrypt WMS identity email payload", unavailableOrInvalidCrypto);
         } finally {
+            java.util.Arrays.fill(plaintextCopy, (byte) 0);
             java.util.Arrays.fill(nonce, (byte) 0);
         }
     }
