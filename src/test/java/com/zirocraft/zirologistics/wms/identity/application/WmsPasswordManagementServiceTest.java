@@ -46,12 +46,12 @@ class WmsPasswordManagementServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private WmsUserLookupService userLookupService;
     @Mock private WmsIdentityActionTokenStoragePort tokenStorage;
-    @Mock private WmsIdentityActionTokenGenerator tokenGenerator;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private ObjectProvider<WmsEmailOutboxEncryptionService> encryptionProvider;
     @Mock private WmsEmailOutboxStoragePort outboxStorage;
     @Mock private PlatformTransactionManager transactionManager;
 
+    private final WmsIdentityActionTokenGenerator tokenGenerator = new WmsIdentityActionTokenGenerator();
     private WmsEmailOutboxEncryptionService encryptionService;
     private WmsPasswordManagementService service;
 
@@ -126,16 +126,10 @@ class WmsPasswordManagementServiceTest {
     void passwordResetRequestStoresDigestAndEncryptedPayloadForActiveUser() throws Exception {
         when(encryptionProvider.getIfAvailable()).thenReturn(encryptionService);
         UserEntity candidate = activeUser(42L, "account-public-42", "old-argon2-hash", 7L);
-        candidate.setEmail(EMAIL);
         when(userLookupService.findByEmail(EMAIL)).thenReturn(Optional.of(candidate));
         when(userRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(candidate));
-        when(tokenGenerator.generate()).thenReturn(new WmsGeneratedIdentityActionToken(
-                "A".repeat(43), new byte[32]));
         when(tokenStorage.revokeOutstandingForUser(
                 42L, WmsIdentityActionTokenPurpose.PASSWORD_RESET, NOW)).thenReturn(0);
-        when(tokenStorage.insert(any(byte[].class), eq(WmsIdentityActionTokenPurpose.PASSWORD_RESET),
-                eq(42L), isNull(), isNull(), eq(EMAIL),
-                eq(NOW.plus(Duration.ofMinutes(30))), eq(NOW))).thenReturn(101L);
 
         PasswordResetRequestResult result = service.requestPasswordReset(EMAIL);
 
@@ -172,16 +166,13 @@ class WmsPasswordManagementServiceTest {
 
     @Test
     void completesPasswordResetAndRevokesOtherOutstandingResetTokens() {
-        WmsGeneratedIdentityActionToken generated = new WmsGeneratedIdentityActionToken(
-                "B".repeat(43), new byte[32]);
+        WmsGeneratedIdentityActionToken generated = tokenGenerator.generate();
         WmsIdentityActionTokenRecord token = new WmsIdentityActionTokenRecord(
                 101L, generated.digest(), WmsIdentityActionTokenPurpose.PASSWORD_RESET,
                 42L, null, null, EMAIL, NOW.plusSeconds(1_800), null, null, NOW.minusSeconds(60));
-        when(tokenGenerator.digestPresentedToken(generated.rawToken())).thenReturn(generated.digest());
         when(tokenStorage.findByDigest(generated.digest(), WmsIdentityActionTokenPurpose.PASSWORD_RESET))
                 .thenReturn(Optional.of(token));
         UserEntity user = activeUser(42L, "account-public-42", "old-argon2-hash", 7L);
-        user.setEmail(EMAIL);
         when(userRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(user));
         when(tokenStorage.findByDigestForUpdate(generated.digest(), WmsIdentityActionTokenPurpose.PASSWORD_RESET))
                 .thenReturn(Optional.of(token));
@@ -201,12 +192,10 @@ class WmsPasswordManagementServiceTest {
 
     @Test
     void rejectsExpiredPasswordResetBeforeOpeningWriteTransaction() {
-        WmsGeneratedIdentityActionToken generated = new WmsGeneratedIdentityActionToken(
-                "C".repeat(43), new byte[32]);
+        WmsGeneratedIdentityActionToken generated = tokenGenerator.generate();
         WmsIdentityActionTokenRecord expired = new WmsIdentityActionTokenRecord(
                 101L, generated.digest(), WmsIdentityActionTokenPurpose.PASSWORD_RESET,
                 42L, null, null, EMAIL, NOW.minusSeconds(1), null, null, NOW.minusSeconds(60));
-        when(tokenGenerator.digestPresentedToken(generated.rawToken())).thenReturn(generated.digest());
         when(tokenStorage.findByDigest(generated.digest(), WmsIdentityActionTokenPurpose.PASSWORD_RESET))
                 .thenReturn(Optional.of(expired));
 
