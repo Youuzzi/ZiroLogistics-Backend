@@ -29,7 +29,10 @@ import java.util.regex.Pattern;
 public class WmsTenantProvisioningService {
     private static final Pattern TENANT_CODE = Pattern.compile("[A-Z0-9][A-Z0-9_-]{2,63}");
     private static final List<String> OWNER_PERMISSIONS = List.of(
-            "WMS_IDENTITY_MEMBERSHIP_INVITE", "WMS_TENANT_PROFILE_UPDATE");
+            "WMS_IDENTITY_MEMBERSHIP_INVITE", "WMS_TENANT_PROFILE_UPDATE",
+            "WMS_ROLE_READ", "WMS_ROLE_CREATE", "WMS_ROLE_UPDATE", "WMS_ROLE_DEACTIVATE",
+            "WMS_PERMISSION_CATALOG_READ", "WMS_ROLE_PERMISSION_MANAGE",
+            "WMS_MEMBERSHIP_ROLE_READ", "WMS_MEMBERSHIP_ROLE_MANAGE");
 
     private final JdbcTemplate jdbc;
     private final PasswordEncoder passwordEncoder;
