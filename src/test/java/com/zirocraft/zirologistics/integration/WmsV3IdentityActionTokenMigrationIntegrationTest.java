@@ -58,6 +58,7 @@ class WmsV3IdentityActionTokenMigrationIntegrationTest {
         Flyway throughV3 = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/wms-migration")
+                .target(MigrationVersion.fromVersion("3"))
                 .load();
         throughV3.migrate();
         throughV3.validate();
