@@ -155,6 +155,51 @@ public class WmsInventoryMasterDataController {
                 request.fromUomCode(), request.toUomCode());
     }
 
+
+    @GetMapping("/items/{itemPublicId}/lots")
+    public List<Map<String, Object>> listLots(
+            Authentication authentication, @PathVariable String itemPublicId,
+            @RequestParam(required = false) String status) {
+        return service.listLots(principal(authentication), itemPublicId, status);
+    }
+
+    @PostMapping("/items/{itemPublicId}/lots")
+    public Map<String, Object> createLot(
+            Authentication authentication, @PathVariable String itemPublicId,
+            @Valid @RequestBody LotRequest request) {
+        return service.createLot(principal(authentication), itemPublicId, request.toCommand());
+    }
+
+    @PostMapping("/items/{itemPublicId}/lots/{lotPublicId}/status")
+    public Map<String, Object> changeLotStatus(
+            Authentication authentication, @PathVariable String itemPublicId,
+            @PathVariable String lotPublicId, @Valid @RequestBody VersionedStatusRequest request) {
+        return service.changeLotStatus(principal(authentication), itemPublicId, lotPublicId,
+                request.status(), request.expectedVersion());
+    }
+
+    @GetMapping("/items/{itemPublicId}/serials")
+    public List<Map<String, Object>> listSerials(
+            Authentication authentication, @PathVariable String itemPublicId,
+            @RequestParam(required = false) String status) {
+        return service.listSerials(principal(authentication), itemPublicId, status);
+    }
+
+    @PostMapping("/items/{itemPublicId}/serials")
+    public Map<String, Object> registerSerial(
+            Authentication authentication, @PathVariable String itemPublicId,
+            @Valid @RequestBody SerialRequest request) {
+        return service.registerSerial(principal(authentication), itemPublicId, request.toCommand());
+    }
+
+    @PostMapping("/items/{itemPublicId}/serials/{serialPublicId}/status")
+    public Map<String, Object> changeSerialStatus(
+            Authentication authentication, @PathVariable String itemPublicId,
+            @PathVariable String serialPublicId, @Valid @RequestBody VersionedStatusRequest request) {
+        return service.changeSerialStatus(principal(authentication), itemPublicId, serialPublicId,
+                request.status(), request.expectedVersion());
+    }
+
     private static WmsAuthenticatedPrincipal principal(Authentication authentication) {
         Object candidate = authentication == null ? null : authentication.getPrincipal();
         if (!(candidate instanceof WmsAuthenticatedPrincipal principal)) {
@@ -200,6 +245,36 @@ public class WmsInventoryMasterDataController {
             @NotNull @PositiveOrZero Long expectedVersion,
             @NotNull @Valid ItemRequest item) {}
 
+
+
+    public record LotRequest(
+            @NotBlank @Size(max = 120) String lotNumber,
+            @Size(max = 120) String supplierLotNumber,
+            java.time.LocalDate manufactureDate,
+            java.time.LocalDate receivedDate,
+            java.time.LocalDate expiryDate,
+            @Size(max = 1000) String notes) {
+        WmsInventoryMasterDataService.LotCommand toCommand() {
+            return new WmsInventoryMasterDataService.LotCommand(
+                    lotNumber, supplierLotNumber, manufactureDate, receivedDate, expiryDate, notes);
+        }
+    }
+
+    public record SerialRequest(
+            @NotBlank @Size(max = 150) String serialNumber,
+            @Size(max = 36) String lotPublicId,
+            @Size(max = 36) String warehousePublicId,
+            @Size(max = 36) String locationPublicId,
+            @Size(max = 1000) String notes) {
+        WmsInventoryMasterDataService.SerialCommand toCommand() {
+            return new WmsInventoryMasterDataService.SerialCommand(
+                    serialNumber, lotPublicId, warehousePublicId, locationPublicId, notes);
+        }
+    }
+
+    public record VersionedStatusRequest(
+            @NotBlank @Size(max = 30) String status,
+            @NotNull @PositiveOrZero Long expectedVersion) {}
 
     public record IdentifierRequest(
             @NotBlank @Size(max = 30) String type,
