@@ -560,6 +560,25 @@ public class WmsInventoryPostingService {
         if (ids.isEmpty()) throw new AccessDeniedException("Active tenant is unavailable");
     }
 
+    private void requireCurrentPostingPermission(Access access) {
+        List<String> permissions = jdbc.queryForList("""
+                SELECT p.permission_code
+                FROM tenant_memberships m
+                JOIN users u ON u.id = m.user_id AND u.public_id = ? AND u.status = 'ACTIVE'
+                JOIN tenants t ON t.id = m.tenant_id AND t.id = ? AND t.status = 'ACTIVE'
+                JOIN membership_roles mr ON mr.membership_id = m.id AND mr.tenant_id = m.tenant_id
+                JOIN roles r ON r.id = mr.role_id AND r.tenant_id = m.tenant_id AND r.status = 'ACTIVE'
+                JOIN role_permissions rp ON rp.role_id = r.id
+                JOIN permissions p ON p.id = rp.permission_id AND p.permission_code = ?
+                WHERE m.id = ? AND m.tenant_id = ? AND m.status = 'ACTIVE'
+                FOR UPDATE
+                """, String.class, access.userPublicId(), access.tenantId(),
+                "WMS_INVENTORY_POST", access.membershipId(), access.tenantId());
+        if (permissions.isEmpty()) {
+            throw new AccessDeniedException("Inventory posting permission is no longer active");
+        }
+    }
+
     private void lockIds(String table, List<Long> ids, long tenantId, String label) {
         ids.stream().filter(Objects::nonNull).distinct().sorted().forEach(id -> {
             List<Long> rows = jdbc.queryForList(
