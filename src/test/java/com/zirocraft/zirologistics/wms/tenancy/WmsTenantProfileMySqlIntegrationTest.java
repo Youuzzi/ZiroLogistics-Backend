@@ -86,12 +86,12 @@ class WmsTenantProfileMySqlIntegrationTest {
                 WHERE tenant_id = ? AND event_type = 'TENANT_PROFILE_UPDATED'
                   AND subject_public_id = ?
                 """, Integer.class, fixture.tenant().getId(), fixture.tenant().getPublicId()));
-        String changes = jdbc.queryForObject("""
-                SELECT CAST(changes AS CHAR) FROM tenant_audit_events
+        String change_payload = jdbc.queryForObject("""
+                SELECT CAST(change_payload AS CHAR) FROM tenant_audit_events
                 WHERE tenant_id = ? AND subject_public_id = ?
                 """, String.class, fixture.tenant().getId(), fixture.tenant().getPublicId());
-        assertTrue(changes.contains("ORIGINAL-" + fixture.suffix()));
-        assertTrue(changes.contains("Updated Display " + fixture.suffix()));
+        assertTrue(change_payload.contains("ORIGINAL-" + fixture.suffix()));
+        assertTrue(change_payload.contains("Updated Display " + fixture.suffix()));
 
         assertThrows(WmsTenantProfileConflictException.class, () ->
                 profileService.updateCurrent(fixture.principal(),
