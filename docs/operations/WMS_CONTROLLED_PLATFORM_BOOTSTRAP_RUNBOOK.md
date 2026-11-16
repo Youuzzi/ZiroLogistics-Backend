@@ -35,8 +35,9 @@ $env:WMS_DB_PASSWORD = "<wms-db-password>"
 $env:WMS_BOOTSTRAP_ADMIN_PASSWORD = "<inject-from-secret-store>"
 
 .\mvnw.cmd spring-boot:run `
+  "-Dspring-boot.run.main-class=com.zirocraft.zirologistics.wms.WmsRuntimeApplication" `
   "-Dspring-boot.run.profiles=wms,wms-bootstrap" `
-  "-Dspring-boot.run.arguments=--wms.bootstrap.enabled=true,--wms.bootstrap.tenant-code=ZIROCRAFT,--wms.bootstrap.tenant-legal-name=Zirocraft,--wms.bootstrap.tenant-display-name=Zirocraft,--wms.bootstrap.admin-email=admin@example.com,--wms.bootstrap.admin-full-name=Initial Administrator"
+  "-Dspring-boot.run.arguments=--wms.bootstrap.enabled=true,--wms.bootstrap.tenant-code=ZIROCRAFT,--wms.bootstrap.tenant-legal-name=Zirocraft,--wms.bootstrap.tenant-display-name=Zirocraft,--wms.bootstrap.admin-email=admin@example.com,--wms.bootstrap.admin-full-name=Initial-Administrator"
 ```
 
 The password is bound from `WMS_BOOTSTRAP_ADMIN_PASSWORD` to `wms.bootstrap.admin-password`; it is deliberately not included in the command arguments.
@@ -46,6 +47,9 @@ After the application logs the tenant and administrator public IDs, stop the boo
 ```powershell
 Remove-Item Env:SPRING_PROFILES_ACTIVE
 Remove-Item Env:WMS_BOOTSTRAP_ADMIN_PASSWORD
+Remove-Item Env:WMS_DB_URL
+Remove-Item Env:WMS_DB_USERNAME
+Remove-Item Env:WMS_DB_PASSWORD
 ```
 
 Do not rerun the bootstrap process after completion. The V6 state row will reject subsequent attempts.
