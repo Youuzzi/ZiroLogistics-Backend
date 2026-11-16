@@ -109,6 +109,27 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 leg(serialFixture, serialPublicId, null, "AVAILABLE", "1.0000"));
         assertEquals("RETURNED", serialStatus(serialFixture, serialPublicId));
         assertEquals(BigDecimal.ONE.setScale(4), balance(serialFixture));
+
+        WmsInventoryPostingService.PostingLeg returnedSource = new WmsInventoryPostingService.PostingLeg(
+                serialFixture.warehousePublicId(), serialFixture.locationPublicId(), serialFixture.itemPublicId(),
+                null, serialPublicId, null, "AVAILABLE", new BigDecimal("1.0000"));
+        WmsInventoryPostingService.PostingLeg quarantineDestination = new WmsInventoryPostingService.PostingLeg(
+                serialFixture.warehousePublicId(), serialFixture.locationPublicId(), serialFixture.itemPublicId(),
+                null, serialPublicId, null, "QUARANTINED", new BigDecimal("1.0000"));
+        postingService.post(serialFixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                UUID.randomUUID(), "STATUS_CHANGE", List.of(returnedSource, quarantineDestination), null));
+        assertEquals("QUARANTINED", serialStatus(serialFixture, serialPublicId));
+
+        WmsInventoryPostingService.PostingLeg quarantineSource = new WmsInventoryPostingService.PostingLeg(
+                serialFixture.warehousePublicId(), serialFixture.locationPublicId(), serialFixture.itemPublicId(),
+                null, serialPublicId, null, "QUARANTINED", new BigDecimal("1.0000"));
+        WmsInventoryPostingService.PostingLeg availableDestination = new WmsInventoryPostingService.PostingLeg(
+                serialFixture.warehousePublicId(), serialFixture.locationPublicId(), serialFixture.itemPublicId(),
+                null, serialPublicId, null, "AVAILABLE", new BigDecimal("1.0000"));
+        postingService.post(serialFixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                UUID.randomUUID(), "STATUS_CHANGE", List.of(quarantineSource, availableDestination), null));
+        assertEquals("AVAILABLE", serialStatus(serialFixture, serialPublicId));
+        assertEquals(BigDecimal.ONE.setScale(4), balance(serialFixture));
     }
 
     @Test
