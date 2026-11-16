@@ -180,10 +180,13 @@ public class MySqlWmsEmailOutboxStorageAdapter implements WmsEmailOutboxStorageP
     }
 
     @Override
-    public int recoverStaleProcessing(Instant lockedBefore, Instant availableAt, int maxAttempts) {
+    public int recoverStaleProcessing(Instant lockedBefore, Instant availableAt, int maxAttempts, int batchSize) {
         Objects.requireNonNull(lockedBefore, "lockedBefore must not be null");
         Objects.requireNonNull(availableAt, "availableAt must not be null");
         requireMaxAttempts(maxAttempts);
+        if (batchSize < 1 || batchSize > 500) {
+            throw new IllegalArgumentException("batchSize must be between 1 and 500");
+        }
 
         return jdbcTemplate.update("""
                 UPDATE wms_identity_action_email_outbox
@@ -193,7 +196,9 @@ public class MySqlWmsEmailOutboxStorageAdapter implements WmsEmailOutboxStorageP
                     last_error_code = 'WORKER_LEASE_EXPIRED'
                 WHERE status = 'PROCESSING'
                   AND locked_at < ?
-                """, maxAttempts, utcDateTime(availableAt), utcDateTime(lockedBefore));
+                ORDER BY locked_at, id
+                LIMIT ?
+                """, maxAttempts, utcDateTime(availableAt), utcDateTime(lockedBefore), batchSize);
     }
 
     private static WmsEmailOutboxMessage mapMessage(java.sql.ResultSet resultSet) throws java.sql.SQLException {
