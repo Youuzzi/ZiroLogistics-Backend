@@ -5,6 +5,7 @@ import com.zirocraft.zirologistics.wms.identity.domain.WmsEmailOutboxStatus;
 import com.zirocraft.zirologistics.wms.identity.domain.WmsIdentityActionTokenPurpose;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -56,6 +57,11 @@ class MySqlWmsEmailOutboxStorageAdapterIntegrationTest {
         jdbcTemplate = new JdbcTemplate(dataSource);
         adapter = new MySqlWmsEmailOutboxStorageAdapter(
                 jdbcTemplate, new DataSourceTransactionManager(dataSource));
+    }
+
+    @BeforeEach
+    void clearOutboxRowsBetweenTests() {
+        jdbcTemplate.update("DELETE FROM wms_identity_action_email_outbox");
     }
 
     @Test
@@ -111,7 +117,7 @@ class MySqlWmsEmailOutboxStorageAdapterIntegrationTest {
         WmsEmailOutboxMessage firstClaim = adapter.claimAvailable(NOW, 1).getFirst();
 
         assertEquals(1, adapter.recoverStaleProcessing(
-                NOW.plusSeconds(1), NOW.plusSeconds(2), 3));
+                NOW.plusSeconds(1), NOW.plusSeconds(2), 3, 100));
 
         WmsEmailOutboxMessage secondClaim = adapter.claimAvailable(NOW.plusSeconds(2), 1).getFirst();
         assertEquals(2, secondClaim.attemptCount());
@@ -145,6 +151,8 @@ class MySqlWmsEmailOutboxStorageAdapterIntegrationTest {
     void validatesOpaqueErrorCodesAndClaimLimitsBeforeDatabaseAccess() {
         assertThrows(IllegalArgumentException.class, () -> adapter.claimAvailable(NOW, 0));
         assertThrows(IllegalArgumentException.class, () -> adapter.claimAvailable(NOW, 101));
+        assertThrows(IllegalArgumentException.class, () -> adapter.recoverStaleProcessing(
+                NOW, NOW, 3, 0));
         assertThrows(IllegalArgumentException.class, () -> adapter.scheduleRetry(
                 UUID.randomUUID(), 1, NOW, "raw exception with PII", 3));
         assertThrows(IllegalArgumentException.class, () -> adapter.enqueue(
