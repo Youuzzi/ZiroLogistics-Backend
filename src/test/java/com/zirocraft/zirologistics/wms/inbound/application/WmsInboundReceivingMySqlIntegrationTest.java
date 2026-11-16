@@ -106,7 +106,7 @@ class WmsInboundReceivingMySqlIntegrationTest {
 
     @Test
     void duplicateSerialInputFailsWithoutChangingReceiptOrStock() {
-        String serialItem = createItem(fixture, "SERIAL");
+        String serialItem = createItem(fixture.tenantId(), "SERIAL");
         String receiptId = createReceipt(fixture);
         String lineId = addLine(fixture, receiptId, serialItem, "2.0000");
         String duplicate = "DUP-" + UUID.randomUUID();
