@@ -232,8 +232,7 @@ class WmsInboundReceivingMySqlIntegrationTest {
                 VALUES (?, ?, 'SUPPLIER')
                 """, tenantId, supplierId);
 
-        String itemPublicId = createItem(new Fixture(tenantId, warehousePublicId, locationPublicId,
-                supplierPublicId, null), tracking);
+        String itemPublicId = createItem(tenantId, tracking);
         WmsAuthenticatedPrincipal principal = new WmsAuthenticatedPrincipal(userPublicId, tenantId,
                 tenantPublicId, membershipId, membershipPublicId, Set.of());
         return new Fixture(tenantId, warehousePublicId, locationPublicId, supplierPublicId,
