@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.identity.application.WmsEmailNormalizer;
 import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
 import com.zirocraft.zirologistics.wms.tenancy.infrastructure.config.WmsTenantProvisioningProperties;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,7 +35,7 @@ public class WmsTenantProvisioningService {
 
     public WmsTenantProvisioningService(
             JdbcTemplate jdbc,
-            PasswordEncoder passwordEncoder,
+            @Qualifier("wmsPasswordEncoder") PasswordEncoder passwordEncoder,
             ObjectMapper objectMapper) {
         this.jdbc = Objects.requireNonNull(jdbc);
         this.passwordEncoder = Objects.requireNonNull(passwordEncoder);
