@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.security.authentication.application;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -26,6 +27,7 @@ public final class WmsUnknownUserPasswordVerifier {
     private final PasswordEncoder passwordEncoder;
     private final String dummyPasswordHash;
 
+    @Autowired
     public WmsUnknownUserPasswordVerifier(
             @Qualifier("wmsPasswordEncoder") PasswordEncoder passwordEncoder) {
         this(passwordEncoder, new SecureRandom());
