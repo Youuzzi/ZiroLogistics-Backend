@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.identity.http;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import com.zirocraft.zirologistics.wms.identity.application.WmsEmailOutboxEncryptionService;
 import com.zirocraft.zirologistics.wms.identity.application.WmsInvitationAcceptanceService;
 import com.zirocraft.zirologistics.wms.identity.application.WmsInvitationIssueResult;
@@ -22,6 +23,7 @@ import java.time.Instant;
 @Profile("wms")
 @RequestMapping("/api/wms/v1/invitations")
 @Conditional(WmsIdentityHttpEnabledCondition.class)
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class WmsInvitationController {
 
     private final WmsTenantInvitationService tenantInvitationService;
