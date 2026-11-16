@@ -417,8 +417,6 @@ public class WmsInventoryMasterDataService {
                                                  UomConversionCommand command) {
         Access access = access(principal, "WMS_ITEM_UOM_CONVERSION_MANAGE");
         Objects.requireNonNull(command, "UOM conversion command is required");
-        lockTenant(access.tenantId());
-        Map<String, Object> item = requireItem(access.tenantId(), itemPublicId);
         String fromCode = normalizeUomCode(command.fromUomCode());
         String toCode = normalizeUomCode(command.toUomCode());
         if (fromCode.equals(toCode)) throw new IllegalArgumentException("Conversion UOMs must be different");
@@ -426,6 +424,8 @@ public class WmsInventoryMasterDataService {
         if (factor == null || factor.signum() <= 0 || factor.scale() > 8 || factor.precision() > 19) {
             throw new IllegalArgumentException("Conversion factor must be positive and fit DECIMAL(19,8)");
         }
+        lockTenant(access.tenantId());
+        Map<String, Object> item = requireItem(access.tenantId(), itemPublicId);
         Map<String, Object> from = activeUom(fromCode);
         Map<String, Object> to = activeUom(toCode);
         Map<String, Object> base = activeUom((String) item.get("base_uom_code"));
@@ -440,7 +440,7 @@ public class WmsInventoryMasterDataService {
                     VALUES (?, ?, ?, ?, ?, 1)
                     """, access.tenantId(), number(item, "id"), number(from, "id"), number(to, "id"), factor);
         } catch (DuplicateKeyException duplicate) {
-            throw new IllegalStateException("UOM conversion pair already exists; deactivate it before replacement");
+            throw new IllegalStateException("UOM conversion pair already exists and cannot be duplicated");
         }
         Map<String, Object> after = conversionByCodes(access.tenantId(), number(item, "id"), fromCode, toCode);
         audit(access, "ITEM_UOM_CONVERSION_CREATED",
