@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.security.authentication.http;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessDeniedException;
 import com.zirocraft.zirologistics.wms.identity.application.WmsIdentityActionTokenRejectedException;
 import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationException;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 })
 @Profile("wms")
 @Conditional(WmsIdentityHttpEnabledCondition.class)
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class WmsAuthenticationExceptionHandler {
 
     @ExceptionHandler({WmsCredentialAuthenticationException.class, BadCredentialsException.class, JwtException.class})
