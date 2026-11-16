@@ -506,11 +506,13 @@ public class WmsInventoryPostingService {
         List<PostingLeg> legs = command.legs().stream().map(leg -> {
             if (leg == null) throw new IllegalArgumentException("Posting leg is required");
             BigDecimal quantity = leg.quantity();
-            if (quantity == null || quantity.signum() <= 0 || quantity.scale() > 4
-                    || quantity.precision() > 19) {
+            if (quantity == null || quantity.signum() <= 0 || quantity.scale() > 4) {
                 throw new IllegalArgumentException("Quantity must be positive and fit DECIMAL(19,4)");
             }
             quantity = quantity.setScale(4, RoundingMode.UNNECESSARY);
+            if (quantity.precision() > 19) {
+                throw new IllegalArgumentException("Quantity must fit DECIMAL(19,4)");
+            }
             return new PostingLeg(
                     required(leg.warehousePublicId(), "warehouse public ID"),
                     required(leg.locationPublicId(), "location public ID"),
