@@ -101,6 +101,25 @@ class WmsStockCountMySqlIntegrationTest {
     }
 
     @Test
+    void transferIsBlockedWhenEitherSourceOrDestinationLocationIsFrozen() {
+        receive(fixture, "9.0000");
+        String destinationLocation = createLocation(fixture);
+
+        String destinationCount = createAndPlan(fixture, destinationLocation);
+        stockCountService.start(fixture.principal(), destinationCount);
+        assertThrows(IllegalStateException.class, () -> transfer(fixture, destinationLocation));
+        stockCountService.cancel(fixture.principal(), destinationCount);
+
+        String sourceCount = createAndPlan(fixture, fixture.locationPublicId());
+        stockCountService.start(fixture.principal(), sourceCount);
+        assertThrows(IllegalStateException.class, () -> transfer(fixture, destinationLocation));
+        stockCountService.cancel(fixture.principal(), sourceCount);
+
+        assertEquals(1, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(new BigDecimal("9.0000"), onHand(fixture));
+    }
+
+    @Test
     void countCannotUseForeignTenantWarehouseOrLocation() {
         Fixture other = fixture();
         assertThrows(IllegalArgumentException.class, () -> stockCountService.create(fixture.principal(),
@@ -111,14 +130,45 @@ class WmsStockCountMySqlIntegrationTest {
     }
 
     private String createAndPlan(Fixture f) {
+        return createAndPlan(f, f.locationPublicId());
+    }
+
+    private String createAndPlan(Fixture f, String locationPublicId) {
         Map<String, Object> created = stockCountService.create(f.principal(), new WmsStockCountManagementService.CreateCountCommand(
                 f.warehousePublicId(), "SC-" + UUID.randomUUID().toString().substring(0, 12),
-                "CYCLE_COUNT", "BLIND", List.of(f.locationPublicId()), "Stage 10 integration test"));
+                "CYCLE_COUNT", "BLIND", List.of(locationPublicId), "Stage 10 integration test"));
         String publicId = (String) created.get("publicId");
         assertEquals("DRAFT", created.get("status"));
         Map<String, Object> planned = stockCountService.plan(f.principal(), publicId);
         assertEquals("PLANNED", planned.get("status"));
         return publicId;
+    }
+
+    private String createLocation(Fixture f) {
+        String publicId = UUID.randomUUID().toString();
+        Long warehouseId = jdbc.queryForObject(
+                "SELECT id FROM warehouses WHERE tenant_id = ? AND public_id = ?",
+                Long.class, f.tenantId(), f.warehousePublicId());
+        jdbc.update("""
+                INSERT INTO warehouse_locations
+                  (public_id, tenant_id, warehouse_id, location_code, location_name, location_type, status)
+                VALUES (?, ?, ?, ?, 'Stock Count Transfer Destination', 'STORAGE', 'ACTIVE')
+                """, publicId, f.tenantId(), warehouseId,
+                "DEST_" + UUID.randomUUID().toString().substring(0, 8));
+        return publicId;
+    }
+
+    private void transfer(Fixture f, String destinationLocationPublicId) {
+        postingService.post(f.principal(), new WmsInventoryPostingService.PostingCommand(
+                UUID.randomUUID(), "TRANSFER",
+                List.of(
+                        new WmsInventoryPostingService.PostingLeg(
+                                f.warehousePublicId(), f.locationPublicId(), f.itemPublicId(),
+                                null, null, null, "AVAILABLE", BigDecimal.ONE),
+                        new WmsInventoryPostingService.PostingLeg(
+                                f.warehousePublicId(), destinationLocationPublicId, f.itemPublicId(),
+                                null, null, null, "AVAILABLE", BigDecimal.ONE)),
+                "Frozen count transfer protection test"));
     }
 
     private void receive(Fixture f, String quantity) {
