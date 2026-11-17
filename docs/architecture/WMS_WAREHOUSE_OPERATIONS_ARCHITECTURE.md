@@ -86,6 +86,18 @@ Shipment lifecycle:
 
 Shipment statuses are constrained by V1: DRAFT, RELEASED, PICKING, PICKED, PACKED, SHIPPED, CANCELLED. Picking task, packing session and package states must follow their exact V1 CHECK allowlists. Legal transitions are explicit and server-controlled.
 
+#### Outbound Shipment implementation boundary (first delivery)
+
+- `GET /api/wms/v1/tenants/current/outbound-shipments` and `GET /{shipmentPublicId}` provide tenant-scoped shipment and allocation reads.
+- `POST /api/wms/v1/tenants/current/outbound-shipments` creates a DRAFT shipment for an active tenant customer and warehouse. The first delivery accepts SALES and OTHER only; TRANSFER_OUT and RETURN_TO_SUPPLIER remain reserved for their dedicated workflows.
+- `POST /{shipmentPublicId}/lines` adds active sellable stock items in their base UOM. UOM conversion is deliberately not inferred or silently applied.
+- `POST /{shipmentPublicId}/lines/{linePublicId}/allocations` assigns quantities to explicit source locations and optional lots/serials. Each allocation reserves available quantity through the dedicated `WmsInventoryReservationService`; workflow code does not update inventory balance rows.
+- Reservation locks the tenant, warehouse, location, item, lot, serials and balance bucket; it checks generated available quantity and serial location/state. Serial identities cannot be allocated to another active outbound allocation.
+- Repeated allocations to the same line/location/lot bucket accumulate into the existing allocation row, respecting V1's unique allocation-bucket constraint. Total allocation cannot exceed requested quantity.
+- `POST /{shipmentPublicId}/release` requires at least one line and exact full allocation for every line, then atomically transitions DRAFT → RELEASED.
+- V15 adds the outbound shipment permissions, `WMS_INVENTORY_RESERVE`, and outbound audit event allowlist. V1–V14 remain immutable.
+- This first delivery does not pick, pack, issue stock, or mark shipments SHIPPED. Reservation release and the picked-stock transfer are implemented with Picking Management; final ISSUE remains Shipping Management. Payload-hash replay semantics remain Stage 11.
+
 ### 2.4 Inter-warehouse transfer
 
 Tables: `stock_transfers`, `stock_transfer_lines`, `stock_transfer_allocations`, `stock_transfer_line_serials`.
