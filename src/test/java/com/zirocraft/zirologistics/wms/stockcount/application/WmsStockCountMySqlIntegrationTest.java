@@ -903,6 +903,56 @@ class WmsStockCountMySqlIntegrationTest {
         assertEquals(new BigDecimal("5.0000"), onHand(fixture));
     }
 
+    @Test
+    void manualAdjustmentCreationRequiresDedicatedCreatePermission() {
+        jdbc.update("""
+                DELETE rp FROM role_permissions rp
+                JOIN membership_roles mr ON mr.role_id = rp.role_id AND mr.tenant_id = ?
+                JOIN tenant_memberships tm ON tm.id = mr.membership_id AND tm.tenant_id = mr.tenant_id
+                WHERE tm.public_id = ?
+                  AND rp.permission_id = (SELECT id FROM permissions
+                                          WHERE permission_code = 'WMS_INVENTORY_ADJUSTMENT_CREATE')
+                """, fixture.tenantId(), fixture.principal().membershipPublicId());
+
+        assertThrows(AccessDeniedException.class, () -> adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-NO-CREATE-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Permission denial test", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", BigDecimal.ONE)))));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_adjustments WHERE tenant_id = ?", fixture.tenantId()));
+    }
+
+    @Test
+    void manualAdjustmentPublicIdCannotBePostedAcrossTenants() {
+        receive(fixture, "5.0000");
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-TENANT-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Tenant boundary test", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("7.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        adjustmentService.approve(secondCounter(fixture), adjustmentId, "Independent approval");
+
+        Fixture otherTenant = fixture();
+        assertThrows(IllegalArgumentException.class,
+                () -> adjustmentService.post(otherTenant.principal(), adjustmentId));
+        assertEquals("APPROVED", jdbc.queryForObject("""
+                SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), adjustmentId));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?",
+                otherTenant.tenantId(), adjustmentId));
+    }
+
     private String createAndPlan(Fixture f) {
         return createAndPlan(f, f.locationPublicId());
     }
