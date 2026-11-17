@@ -2,6 +2,8 @@ package com.zirocraft.zirologistics.wms.stockcount.application;
 
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.inventory.application.WmsInventoryPostingService;
+import com.zirocraft.zirologistics.wms.inventory.application.WmsInventoryReservationService;
+import com.zirocraft.zirologistics.wms.adjustment.application.WmsInventoryAdjustmentService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +50,8 @@ class WmsStockCountMySqlIntegrationTest {
 
     @Autowired private WmsStockCountManagementService stockCountService;
     @Autowired private WmsInventoryPostingService postingService;
+    @Autowired private WmsInventoryReservationService reservationService;
+    @Autowired private WmsInventoryAdjustmentService adjustmentService;
     @Autowired private JdbcTemplate jdbc;
 
     private Fixture fixture;
@@ -97,6 +101,74 @@ class WmsStockCountMySqlIntegrationTest {
 
         receive(fixture, "1.0000");
         assertEquals(new BigDecimal("13.5000"), onHand(fixture));
+    }
+
+    @Test
+    void stockCountCannotStartWhileScopedInventoryHasOutstandingReservations() {
+        receive(fixture, "5.0000");
+        reservationService.reserve(fixture.principal(),
+                new WmsInventoryReservationService.ReservationCommand(
+                        fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                        null, BigDecimal.ONE, List.of()));
+        String countPublicId = createAndPlan(fixture);
+
+        assertThrows(IllegalStateException.class,
+                () -> stockCountService.start(fixture.principal(), countPublicId));
+        assertEquals(Boolean.FALSE, jdbc.queryForObject("""
+                SELECT freeze_stock FROM stock_counts
+                WHERE tenant_id = ? AND public_id = ?
+                """, Boolean.class, fixture.tenantId(), countPublicId));
+        BigDecimal reserved = jdbc.queryForObject("""
+                SELECT reserved_qty FROM inventory_balances
+                WHERE tenant_id = ? AND warehouse_id = (
+                  SELECT id FROM warehouses WHERE tenant_id = ? AND public_id = ?
+                ) AND location_id = (
+                  SELECT id FROM warehouse_locations WHERE tenant_id = ? AND public_id = ?
+                ) AND item_id = (
+                  SELECT id FROM items WHERE tenant_id = ? AND public_id = ?
+                ) AND lot_id IS NULL AND stock_status = 'AVAILABLE'
+                """, BigDecimal.class, fixture.tenantId(), fixture.tenantId(), fixture.warehousePublicId(),
+                fixture.tenantId(), fixture.locationPublicId(), fixture.tenantId(), fixture.itemPublicId());
+        assertEquals(new BigDecimal("1.0000"), reserved);
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+    }
+
+    @Test
+    void reservationCannotChangeAvailabilityInsideAFrozenCountLocation() {
+        receive(fixture, "5.0000");
+        String countPublicId = createAndPlan(fixture);
+        stockCountService.start(fixture.principal(), countPublicId);
+
+        assertThrows(IllegalStateException.class, () -> reservationService.reserve(fixture.principal(),
+                new WmsInventoryReservationService.ReservationCommand(
+                        fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                        null, BigDecimal.ONE, List.of())));
+
+        BigDecimal reserved = jdbc.queryForObject("""
+                SELECT reserved_qty FROM inventory_balances
+                WHERE tenant_id = ? AND warehouse_id = (
+                  SELECT id FROM warehouses WHERE tenant_id = ? AND public_id = ?
+                ) AND location_id = (
+                  SELECT id FROM warehouse_locations WHERE tenant_id = ? AND public_id = ?
+                ) AND item_id = (
+                  SELECT id FROM items WHERE tenant_id = ? AND public_id = ?
+                ) AND lot_id IS NULL AND stock_status = 'AVAILABLE'
+                """, BigDecimal.class, fixture.tenantId(), fixture.tenantId(), fixture.warehousePublicId(),
+                fixture.tenantId(), fixture.locationPublicId(), fixture.tenantId(), fixture.itemPublicId());
+        assertEquals(new BigDecimal("0.0000"), reserved);
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+    }
+
+    @Test
+    void inventoryAdjustmentReadApisAreTenantScoped() {
+        Fixture foreign = fixture();
+        String ownAdjustment = insertDraftAdjustment(fixture);
+        String foreignAdjustment = insertDraftAdjustment(foreign);
+
+        assertEquals(ownAdjustment, adjustmentService.get(fixture.principal(), ownAdjustment).get("publicId"));
+        assertThrows(IllegalArgumentException.class,
+                () -> adjustmentService.get(fixture.principal(), foreignAdjustment));
+        assertEquals(1, adjustmentService.list(fixture.principal()).size());
     }
 
     @Test
@@ -343,6 +415,254 @@ class WmsStockCountMySqlIntegrationTest {
     }
 
     @Test
+    void approvedVariancePostsOnlyThroughItsLinkedAdjustmentAndReleasesFreezeAtomically() {
+        receive(fixture, "5.0000");
+        String countPublicId = createAndPlan(fixture);
+        Map<String, Object> started = stockCountService.start(fixture.principal(), countPublicId);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> lines = (List<Map<String, Object>>) started.get("lines");
+        String linePublicId = (String) lines.getFirst().get("publicId");
+
+        stockCountService.recordResult(fixture.principal(), countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        new BigDecimal("4.0000"), List.of(), "Initial physical count"));
+        WmsAuthenticatedPrincipal counter = secondCounter(fixture);
+        stockCountService.recordResult(counter, countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        new BigDecimal("4.0000"), List.of(), "Independent recount"));
+        stockCountService.submit(fixture.principal(), countPublicId);
+        WmsAuthenticatedPrincipal reviewer = secondCounter(fixture);
+        stockCountService.reviewLine(reviewer, countPublicId, linePublicId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        assertEquals("APPROVED", stockCountService.approve(approver, countPublicId).get("status"));
+
+        assertThrows(IllegalStateException.class, () -> receive(fixture, "1.0000"));
+        Map<String, Object> created = adjustmentService.createFromApprovedCount(fixture.principal(), countPublicId,
+                new WmsInventoryAdjustmentService.CreateFromCountCommand(
+                        "ADJ-" + UUID.randomUUID().toString().substring(0, 12), "Count variance"));
+        String adjustmentPublicId = (String) created.get("publicId");
+        assertEquals("DRAFT", created.get("status"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> allocations = (List<Map<String, Object>>) created.get("allocations");
+        assertEquals(new BigDecimal("-1.0000"), allocations.getFirst().get("adjustment_qty"));
+
+        adjustmentService.submit(fixture.principal(), adjustmentPublicId);
+        assertThrows(AccessDeniedException.class,
+                () -> adjustmentService.approve(fixture.principal(), adjustmentPublicId, "Self approval"));
+        Map<String, Object> approvedAdjustment =
+                adjustmentService.approve(approver, adjustmentPublicId, "Reviewed variance");
+        assertEquals("APPROVED", approvedAdjustment.get("status"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> reviewedLines = (List<Map<String, Object>>) approvedAdjustment.get("lines");
+        assertEquals("REVIEWED", reviewedLines.getFirst().get("status"));
+        Map<String, Object> posted = adjustmentService.post(approver, adjustmentPublicId);
+        assertEquals("POSTED", posted.get("status"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> adjustedLines = (List<Map<String, Object>>) posted.get("lines");
+        assertEquals("ADJUSTED", adjustedLines.getFirst().get("status"));
+        assertEquals(new BigDecimal("4.0000"), onHand(fixture));
+        assertEquals("COMPLETED", jdbc.queryForObject("""
+                SELECT status FROM stock_counts WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), countPublicId));
+        assertEquals(Boolean.FALSE, jdbc.queryForObject("""
+                SELECT freeze_stock FROM stock_counts WHERE tenant_id = ? AND public_id = ?
+                """, Boolean.class, fixture.tenantId(), countPublicId));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND movement_type = 'ADJUSTMENT_OUT'
+                  AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+        assertEquals(4, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id = ? AND subject_public_id = ?
+                  AND event_type = 'WMS_INVENTORY_ADJUSTMENT_UPDATED'
+                """, fixture.tenantId(), adjustmentPublicId));
+        assertThrows(IllegalStateException.class,
+                () -> adjustmentService.createFromApprovedCount(fixture.principal(), countPublicId,
+                        new WmsInventoryAdjustmentService.CreateFromCountCommand(
+                                "ADJ-DUP-" + UUID.randomUUID().toString().substring(0, 8), null)));
+    }
+
+    @Test
+    void rejectedAdjustmentDoesNotPostAndAllowsAReplacementDraft() {
+        receive(fixture, "5.0000");
+        String countPublicId = createAndPlan(fixture);
+        Map<String, Object> started = stockCountService.start(fixture.principal(), countPublicId);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> lines = (List<Map<String, Object>>) started.get("lines");
+        String linePublicId = (String) lines.getFirst().get("publicId");
+
+        stockCountService.recordResult(fixture.principal(), countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        new BigDecimal("4.0000"), List.of(), "Initial physical count"));
+        stockCountService.recordResult(secondCounter(fixture), countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        new BigDecimal("4.0000"), List.of(), "Independent recount"));
+        stockCountService.submit(fixture.principal(), countPublicId);
+        stockCountService.reviewLine(secondCounter(fixture), countPublicId, linePublicId);
+        stockCountService.approve(secondCounter(fixture), countPublicId);
+
+        Map<String, Object> created = adjustmentService.createFromApprovedCount(fixture.principal(), countPublicId,
+                new WmsInventoryAdjustmentService.CreateFromCountCommand(
+                        "ADJ-REJ-" + UUID.randomUUID().toString().substring(0, 10), null));
+        String rejectedPublicId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), rejectedPublicId);
+        Map<String, Object> rejected = adjustmentService.reject(
+                secondCounter(fixture), rejectedPublicId, "Variance evidence requires correction");
+        assertEquals("REJECTED", rejected.get("status"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rejectedLines = (List<Map<String, Object>>) rejected.get("lines");
+        assertEquals("CANCELLED", rejectedLines.getFirst().get("status"));
+
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+        assertEquals("APPROVED", jdbc.queryForObject("""
+                SELECT status FROM stock_counts WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), countPublicId));
+        assertEquals(Boolean.TRUE, jdbc.queryForObject("""
+                SELECT freeze_stock FROM stock_counts WHERE tenant_id = ? AND public_id = ?
+                """, Boolean.class, fixture.tenantId(), countPublicId));
+
+        Map<String, Object> replacement = adjustmentService.createFromApprovedCount(fixture.principal(), countPublicId,
+                new WmsInventoryAdjustmentService.CreateFromCountCommand(
+                        "ADJ-RETRY-" + UUID.randomUUID().toString().substring(0, 10), null));
+        assertEquals("DRAFT", replacement.get("status"));
+        assertEquals(2, count("""
+                SELECT COUNT(*) FROM stock_count_adjustment_links
+                WHERE tenant_id = ? AND stock_count_id = (
+                  SELECT id FROM stock_counts WHERE tenant_id = ? AND public_id = ?
+                )
+                """, fixture.tenantId(), fixture.tenantId(), countPublicId));
+    }
+
+    @Test
+    void serializedCountVariancePostsTheExactMissingSerialThroughAdjustmentWorkflow() {
+        fixture = fixture("SERIAL");
+        receiveSerials(fixture, List.of("SERIAL-ADJUST-001", "SERIAL-ADJUST-002"));
+        String countPublicId = createAndPlan(fixture);
+        Map<String, Object> started = stockCountService.start(fixture.principal(), countPublicId);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> lines = (List<Map<String, Object>>) started.get("lines");
+        String linePublicId = (String) lines.getFirst().get("publicId");
+        List<String> serialIds = jdbc.queryForList("""
+                SELECT public_id FROM inventory_serials
+                WHERE tenant_id = ? AND item_id = (
+                  SELECT id FROM items WHERE tenant_id = ? AND public_id = ?
+                )
+                ORDER BY serial_number
+                """, String.class, fixture.tenantId(), fixture.tenantId(), fixture.itemPublicId());
+        assertEquals(2, serialIds.size());
+        List<String> physicallyObserved = List.of(serialIds.getFirst());
+
+        stockCountService.recordResult(fixture.principal(), countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        BigDecimal.ONE, physicallyObserved, "One serial physically present"));
+        WmsAuthenticatedPrincipal counter = secondCounter(fixture);
+        stockCountService.recordResult(counter, countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        BigDecimal.ONE, physicallyObserved, "Independent serial recount"));
+
+        stockCountService.submit(fixture.principal(), countPublicId);
+        WmsAuthenticatedPrincipal reviewer = secondCounter(fixture);
+        stockCountService.reviewLine(reviewer, countPublicId, linePublicId);
+        WmsAuthenticatedPrincipal countApprover = secondCounter(fixture);
+        stockCountService.approve(countApprover, countPublicId);
+
+        Map<String, Object> created = adjustmentService.createFromApprovedCount(fixture.principal(), countPublicId,
+                new WmsInventoryAdjustmentService.CreateFromCountCommand(
+                        "ADJ-SER-" + UUID.randomUUID().toString().substring(0, 10), null));
+        String adjustmentPublicId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentPublicId);
+        WmsAuthenticatedPrincipal adjustmentApprover = secondCounter(fixture);
+        adjustmentService.approve(adjustmentApprover, adjustmentPublicId, "Serial variance verified");
+        adjustmentService.post(adjustmentApprover, adjustmentPublicId);
+
+        assertEquals("AVAILABLE", serialStatus(fixture, serialIds.getFirst()));
+        assertEquals("LOST", serialStatus(fixture, serialIds.get(1)));
+        assertEquals(BigDecimal.ONE.setScale(4), onHand(fixture));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM inventory_adjustment_line_serials
+                WHERE tenant_id = ? AND observation_status = 'MISSING'
+                """, fixture.tenantId()));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND movement_type = 'ADJUSTMENT_OUT'
+                  AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+    }
+
+    @Test
+    void serializedCountIdentityVarianceRestoresFoundLostSerialAndMarksMissingSerialLost() {
+        fixture = fixture("SERIAL");
+        receiveSerials(fixture, List.of("SERIAL-BALANCE-001", "SERIAL-BALANCE-002", "SERIAL-BALANCE-003"));
+        List<String> serialIds = jdbc.queryForList("""
+                SELECT public_id FROM inventory_serials
+                WHERE tenant_id = ? AND item_id = (
+                  SELECT id FROM items WHERE tenant_id = ? AND public_id = ?
+                )
+                ORDER BY serial_number
+                """, String.class, fixture.tenantId(), fixture.tenantId(), fixture.itemPublicId());
+        assertEquals(3, serialIds.size());
+
+        postingService.postTransferDispatch(fixture.principal(),
+                new WmsInventoryPostingService.PostingCommand(UUID.randomUUID(), "TRANSFER_DISPATCH",
+                        List.of(new WmsInventoryPostingService.PostingLeg(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, serialIds.get(2), null, "AVAILABLE", BigDecimal.ONE)),
+                        "Prepare a known lost serial for count reconciliation"));
+        postingService.markTransferSerialLost(fixture.principal(), serialIds.get(2));
+
+        String countPublicId = createAndPlan(fixture);
+        Map<String, Object> started = stockCountService.start(fixture.principal(), countPublicId);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> lines = (List<Map<String, Object>>) started.get("lines");
+        String linePublicId = (String) lines.getFirst().get("publicId");
+        List<String> physicallyObserved = List.of(serialIds.get(0), serialIds.get(2));
+
+        stockCountService.recordResult(fixture.principal(), countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        BigDecimal.valueOf(2), physicallyObserved, "One expected serial and one found lost serial"));
+        WmsAuthenticatedPrincipal counter = secondCounter(fixture);
+        stockCountService.recordResult(counter, countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        BigDecimal.valueOf(2), physicallyObserved, "Independent serial recount"));
+        stockCountService.submit(fixture.principal(), countPublicId);
+        stockCountService.reviewLine(secondCounter(fixture), countPublicId, linePublicId);
+        stockCountService.approve(secondCounter(fixture), countPublicId);
+
+        Map<String, Object> created = adjustmentService.createFromApprovedCount(fixture.principal(), countPublicId,
+                new WmsInventoryAdjustmentService.CreateFromCountCommand(
+                        "ADJ-BAL-" + UUID.randomUUID().toString().substring(0, 10), null));
+        String adjustmentPublicId = (String) created.get("publicId");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> allocations = (List<Map<String, Object>>) created.get("allocations");
+        assertEquals(new BigDecimal("0.0000"), allocations.getFirst().get("adjustment_qty"));
+
+        adjustmentService.submit(fixture.principal(), adjustmentPublicId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, adjustmentPublicId, "Balanced serial identity variance");
+        adjustmentService.post(approver, adjustmentPublicId);
+
+        assertEquals("AVAILABLE", serialStatus(fixture, serialIds.get(0)));
+        assertEquals("LOST", serialStatus(fixture, serialIds.get(1)));
+        assertEquals("AVAILABLE", serialStatus(fixture, serialIds.get(2)));
+        assertEquals(new BigDecimal("2.0000"), onHand(fixture));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND movement_type = 'ADJUSTMENT_IN'
+                  AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND movement_type = 'ADJUSTMENT_OUT'
+                  AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+    }
+
+    @Test
     void approvedCountWithoutVarianceCompletesAndReleasesLocationFreeze() {
         receive(fixture, "3.0000");
         String countPublicId = createAndPlan(fixture);
@@ -469,6 +789,13 @@ class WmsStockCountMySqlIntegrationTest {
                 membershipId, membershipPublicId, Set.of());
     }
 
+    private String serialStatus(Fixture f, String serialPublicId) {
+        return jdbc.queryForObject("""
+                SELECT status FROM inventory_serials
+                WHERE tenant_id = ? AND public_id = ?
+                """, String.class, f.tenantId(), serialPublicId);
+    }
+
     private BigDecimal onHand(Fixture f) {
         return jdbc.queryForObject("""
                 SELECT COALESCE(SUM(on_hand_qty), 0) FROM inventory_balances
@@ -484,6 +811,21 @@ class WmsStockCountMySqlIntegrationTest {
     private long count(String sql, Object... args) {
         Long result = jdbc.queryForObject(sql, Long.class, args);
         return result == null ? 0L : result;
+    }
+
+    private String insertDraftAdjustment(Fixture f) {
+        String publicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO inventory_adjustments
+                  (public_id, tenant_id, warehouse_id, document_number, adjustment_type, status,
+                   reason_code, reason_description, created_by_membership_id)
+                VALUES (?, ?, (
+                  SELECT id FROM warehouses WHERE tenant_id = ? AND public_id = ?
+                ), ?, 'PHYSICAL_COUNT', 'DRAFT', 'PHYSICAL_COUNT', 'Tenant isolation test', ?)
+                """, publicId, f.tenantId(), f.tenantId(), f.warehousePublicId(),
+                "ADJ-READ-" + UUID.randomUUID().toString().substring(0, 8),
+                f.principal().membershipId());
+        return publicId;
     }
 
     private Fixture fixture() {
@@ -524,10 +866,14 @@ class WmsStockCountMySqlIntegrationTest {
                 INSERT INTO role_permissions (role_id, permission_id)
                 SELECT ?, id FROM permissions
                 WHERE permission_code IN (
-                  'WMS_INVENTORY_POST', 'WMS_STOCK_COUNT_READ', 'WMS_STOCK_COUNT_CREATE',
+                  'WMS_INVENTORY_POST', 'WMS_INVENTORY_RESERVE',
+                  'WMS_STOCK_COUNT_READ', 'WMS_STOCK_COUNT_CREATE',
                   'WMS_STOCK_COUNT_PLAN', 'WMS_STOCK_COUNT_START', 'WMS_STOCK_COUNT_CANCEL',
                   'WMS_STOCK_COUNT_RECORD', 'WMS_STOCK_COUNT_SUBMIT',
-                  'WMS_STOCK_COUNT_REVIEW', 'WMS_STOCK_COUNT_APPROVE'
+                  'WMS_STOCK_COUNT_REVIEW', 'WMS_STOCK_COUNT_APPROVE',
+                  'WMS_INVENTORY_ADJUSTMENT_READ', 'WMS_INVENTORY_ADJUSTMENT_CREATE',
+                  'WMS_INVENTORY_ADJUSTMENT_SUBMIT', 'WMS_INVENTORY_ADJUSTMENT_APPROVE',
+                  'WMS_INVENTORY_ADJUSTMENT_REJECT', 'WMS_INVENTORY_ADJUSTMENT_POST'
                 )
                 """, roleId);
 

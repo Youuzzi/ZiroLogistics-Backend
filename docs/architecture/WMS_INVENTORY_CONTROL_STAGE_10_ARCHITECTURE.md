@@ -36,7 +36,7 @@ The frozen V1 schema already contains the principal tables for this stage:
 
 V1 defines count types FULL_COUNT, CYCLE_COUNT, SPOT_COUNT; count modes BLIND, OPEN; the count, line and scope lifecycle states; the adjustment document lifecycle and reason types; and MIN_MAX / MANUAL replenishment rules. Stage 10 must use those allowlists and columns as written.
 
-**V1–V21 are immutable.** Do not edit an existing migration, regenerate the baseline, or create duplicate count/adjustment/replenishment tables. Any required schema extension must be an additive V22+ migration and must identify the exact V1 gap it closes.
+**V1–V22 are immutable.** Do not edit an existing migration, regenerate the baseline, or create duplicate count/adjustment/replenishment tables. Any required schema extension must be an additive V23+ migration and must identify the exact V1 gap it closes.
 
 ### 2.1 Proven schema gap: serialized count observations
 
@@ -78,7 +78,7 @@ A stock count belongs to one warehouse and contains one or more location scopes.
 
 FULL_COUNT, CYCLE_COUNT and SPOT_COUNT describe the business purpose. BLIND means counter-facing API responses must not disclose expected_qty; OPEN may disclose it only to a membership with WMS_STOCK_COUNT_RECORD or reviewer/approver permission. A read-only membership must not receive expected_qty even for an OPEN count. Hiding the quantity only in the UI is insufficient—the backend response must omit it for unauthorized actors.
 
-Planning validates the warehouse and location scopes but does not take the inventory snapshot. Starting the count acquires the warehouse and all scoped location locks, locks the relevant item/lot rows and inventory balance buckets, then creates count lines for those buckets and activates freeze_stock in the same transaction. expected_qty is the snapshot of inventory_balances.on_hand_qty at that start boundary, never available_qty; reserved stock is physically present and remains part of the count. During an active frozen count, an authorized counter may add an explicit zero-expected line for a scoped location and selected active stock item/lot/status so that unexpected physical stock can be recorded. The bucket must not already exist in the snapshot. The unique bucket key in V1 prevents duplicate lines.
+Planning validates the warehouse and location scopes but does not take the inventory snapshot. Starting the count acquires the warehouse and all scoped location locks, locks the relevant item/lot rows and inventory balance buckets, then creates count lines for those buckets and activates freeze_stock in the same transaction. expected_qty is the snapshot of inventory_balances.on_hand_qty at that start boundary, never available_qty. Because a negative physical-count adjustment must not invalidate an outstanding outbound allocation, the first release requires reserved_qty = 0 for every bucket in the scoped locations before a count can start; existing reservations must be consumed or released first. During an active frozen count, an authorized counter may add an explicit zero-expected line for a scoped location and selected active stock item/lot/status so that unexpected physical stock can be recorded. The bucket must not already exist in the snapshot. The unique bucket key in V1 prevents duplicate lines.
 
 Once the count starts, its expected quantities and scope are immutable. Re-planning or editing the scope after start is prohibited.
 
@@ -86,7 +86,7 @@ Once the count starts, its expected quantities and scope are immutable. Re-plann
 
 For the first Stage 10 release, stock counts that start must use freeze_stock = true. A non-frozen count is deferred until ledger-based point-in-time reconciliation is designed and tested.
 
-While a frozen count is IN_PROGRESS, SUBMITTED, UNDER_REVIEW or APPROVED, every on-hand posting that touches a scoped location as source or destination is rejected. This covers receipt, putaway, picking, shipping, inter-warehouse transfer receipt/dispatch, adjustment and replenishment paths because those paths must use the inventory posting boundary. Reservations that change only reserved_qty do not alter physical on-hand quantity; count snapshots and comparisons use on-hand quantity.
+While a frozen count is IN_PROGRESS, SUBMITTED, UNDER_REVIEW or APPROVED, every on-hand posting that touches a scoped location as source or destination is rejected. This covers receipt, putaway, picking, shipping, inter-warehouse transfer receipt/dispatch, adjustment and replenishment paths because those paths must use the inventory posting boundary. Reservation creation and consumption are also blocked for frozen locations: although they do not change on_hand_qty, they change available quantity and can make an approved negative adjustment impossible while the count remains frozen. The shared tenant lock serializes reservation changes against count start and freeze activation.
 
 The freeze check belongs inside WmsInventoryPostingService, after the transaction has locked the same warehouse/location rows used by count start. Count start must take those locks before writing the frozen state and snapshot. This shared lock is required to prevent a race in which a posting slips between snapshot creation and freeze activation.
 
@@ -119,8 +119,10 @@ Approval and posting are separate, explicit transitions. The adjustment creator 
 For each non-zero allocation:
 - Positive adjustment_qty posts one ADJUSTMENT_IN movement.
 - Negative adjustment_qty posts one ADJUSTMENT_OUT movement.
-- Zero variance produces no ledger entry.
+- Zero variance produces no ledger entry for quantity-tracked allocations. For serial-tracked allocations, a zero net quantity delta can still contain exact identity variance; post the PRESENT and MISSING serial identities as balanced ADJUSTMENT_IN / ADJUSTMENT_OUT legs.
 - Every movement calls WmsInventoryPostingService; no controller or adjustment repository writes balance, ledger or serial tables directly.
+
+The generic `POST /inventory/postings` endpoint must reject `ADJUSTMENT_IN` and `ADJUSTMENT_OUT`. The adjustment application service uses a dedicated typed posting entry that verifies the approved adjustment, its exact stock-count link, the still-approved/frozen count, the adjustment line, exact allocation, and each scoped location. It also compares the stored system quantity with the locked balance baseline inside the posting boundary. Ledger entries carry `reference_type = INVENTORY_ADJUSTMENT`, the adjustment ID and adjustment-line ID. No caller-controlled freeze bypass is exposed.
 
 Serial adjustments use exact serial identities. The current posting boundary supports ADJUSTMENT_OUT from AVAILABLE to LOST and ADJUSTMENT_IN to restore a known LOST serial into AVAILABLE stock. Stage 10 must extend these operations only for stock statuses that have an explicit serial lifecycle mapping, with integration tests proving the matching status transition. V1 has no EXPIRED or BLOCKED serial lifecycle state, so a variance in those serialized buckets may be recorded and reviewed but must not be silently posted as an adjustment. A status reclassification between AVAILABLE, QUARANTINED and DAMAGED must use an explicit STATUS_CHANGE movement rather than being disguised as a quantity correction. Do not create a new serial identity to mask a count discrepancy. Lot identity and stock status must match the allocation; all quantity and serial counts must reconcile before posting.
 

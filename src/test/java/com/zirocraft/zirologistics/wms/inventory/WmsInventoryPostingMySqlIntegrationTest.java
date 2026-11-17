@@ -110,13 +110,14 @@ class WmsInventoryPostingMySqlIntegrationTest {
         post(f, "STATUS_CHANGE",
                 leg(f, f.locationA(), null, null, "AVAILABLE", "1.0000"),
                 leg(f, f.locationA(), null, null, "QUARANTINED", "1.0000"));
-        post(f, "ADJUSTMENT_OUT", leg(f, f.locationA(), null, null, "DAMAGED", "1.0000"));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> post(f, "ADJUSTMENT_OUT", leg(f, f.locationA(), null, null, "DAMAGED", "1.0000")));
 
         assertEquals(new BigDecimal("3.0000"), balance(f, f.locationA(), "AVAILABLE"));
         assertEquals(new BigDecimal("4.0000"), balance(f, f.locationB(), "AVAILABLE"));
-        assertEquals(new BigDecimal("1.0000"), balance(f, f.locationA(), "DAMAGED"));
+        assertEquals(new BigDecimal("2.0000"), balance(f, f.locationA(), "DAMAGED"));
         assertEquals(new BigDecimal("1.0000"), balance(f, f.locationA(), "QUARANTINED"));
-        assertEquals(8, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", f.tenantId()));
+        assertEquals(7, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", f.tenantId()));
     }
 
     @Test
@@ -141,14 +142,13 @@ class WmsInventoryPostingMySqlIntegrationTest {
         assertEquals("AVAILABLE", serialStatus(f, serialPublicId));
         assertEquals(new BigDecimal("1.0000"), balance(f, f.locationA(), "AVAILABLE"));
 
-        post(f, "ADJUSTMENT_OUT", leg(f, f.locationA(), serialPublicId, null, "AVAILABLE", "1.0000"));
-        assertEquals("LOST", serialStatus(f, serialPublicId));
-        assertEquals(new BigDecimal("0.0000"), balance(f, f.locationA(), "AVAILABLE"));
-
-        post(f, "ADJUSTMENT_IN", leg(f, f.locationA(), serialPublicId, null, "AVAILABLE", "1.0000"));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> post(f, "ADJUSTMENT_OUT", leg(f, f.locationA(), serialPublicId, null, "AVAILABLE", "1.0000")));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> post(f, "ADJUSTMENT_IN", leg(f, f.locationA(), serialPublicId, null, "AVAILABLE", "1.0000")));
         assertEquals("AVAILABLE", serialStatus(f, serialPublicId));
         assertEquals(new BigDecimal("1.0000"), balance(f, f.locationA(), "AVAILABLE"));
-        assertEquals(7, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", f.tenantId()));
+        assertEquals(5, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", f.tenantId()));
     }
 
     @Test

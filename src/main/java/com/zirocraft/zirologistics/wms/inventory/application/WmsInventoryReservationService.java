@@ -44,6 +44,7 @@ public class WmsInventoryReservationService {
                 WHERE tenant_id = ? AND warehouse_id = ? AND public_id = ? AND status = 'ACTIVE'
                 """, access.tenantId(), warehouseId, required(command.locationPublicId()), "Active location not found");
         lockIds("warehouse_locations", List.of(locationId), access.tenantId(), "Location");
+        assertLocationNotFrozen(access.tenantId(), warehouseId, locationId);
 
         Item item = jdbc.query("""
                 SELECT id, tracking_method FROM items
@@ -134,6 +135,7 @@ public class WmsInventoryReservationService {
                 WHERE tenant_id = ? AND warehouse_id = ? AND public_id = ? AND status = 'ACTIVE'
                 """, access.tenantId(), warehouseId, required(command.locationPublicId()), "Active location not found");
         lockIds("warehouse_locations", List.of(locationId), access.tenantId(), "Location");
+        assertLocationNotFrozen(access.tenantId(), warehouseId, locationId);
         Item item = jdbc.query("""
                 SELECT id, tracking_method FROM items
                 WHERE tenant_id = ? AND public_id = ? AND status = 'ACTIVE' AND is_stock_item = 1
@@ -167,6 +169,21 @@ public class WmsInventoryReservationService {
                 WHERE id = ? AND tenant_id = ? AND reserved_qty >= ?
                 """, quantity, balanceId, access.tenantId(), quantity);
         if (changed != 1) throw new IllegalStateException("Reservation changed; retry picking");
+    }
+
+    private void assertLocationNotFrozen(long tenantId, long warehouseId, long locationId) {
+        Integer activeFrozenCounts = jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM stock_count_scopes s
+                JOIN stock_counts c
+                  ON c.id = s.stock_count_id AND c.tenant_id = s.tenant_id
+                WHERE c.tenant_id = ? AND c.warehouse_id = ? AND s.location_id = ?
+                  AND c.freeze_stock = 1
+                  AND c.status IN ('IN_PROGRESS','SUBMITTED','UNDER_REVIEW','APPROVED')
+                """, Integer.class, tenantId, warehouseId, locationId);
+        if (activeFrozenCounts != null && activeFrozenCounts > 0) {
+            throw new IllegalStateException("Inventory reservation is blocked by an active frozen stock count");
+        }
     }
 
     private Access lockTenantAndResolveAccess(WmsAuthenticatedPrincipal principal) {
