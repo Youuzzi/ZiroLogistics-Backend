@@ -280,6 +280,16 @@ public class WmsInventoryAdjustmentService {
                 throw new IllegalArgumentException("Manual adjustment lot must be active");
             }
             long currentWarehouseId = number(row, "warehouse_id");
+            if (requiredLong("""
+                    SELECT COUNT(*) FROM stock_count_scopes scope
+                    JOIN stock_counts count_header
+                      ON count_header.id = scope.stock_count_id AND count_header.tenant_id = scope.tenant_id
+                    WHERE count_header.tenant_id = ? AND count_header.warehouse_id = ?
+                      AND scope.location_id = ? AND count_header.freeze_stock = 1
+                      AND count_header.status IN ('IN_PROGRESS','SUBMITTED','UNDER_REVIEW','APPROVED')
+                    """, access.tenantId(), currentWarehouseId, number(row, "location_id")) > 0) {
+                throw new IllegalStateException("Manual adjustments cannot be created in a frozen stock-count location");
+            }
             if (warehouseId != null && warehouseId != currentWarehouseId) {
                 throw new IllegalArgumentException("One manual adjustment document must belong to one warehouse");
             }
@@ -288,7 +298,7 @@ public class WmsInventoryAdjustmentService {
                     + Objects.toString(row.get("lot_id"), "null") + ":" + stockStatus;
             if (!buckets.add(bucket)) throw new IllegalArgumentException("Duplicate inventory bucket in manual adjustment");
             List<Map<String, Object>> balances = jdbc.queryForList("""
-                    SELECT on_hand_qty FROM inventory_balances
+                    SELECT on_hand_qty, reserved_qty FROM inventory_balances
                     WHERE tenant_id = ? AND warehouse_id = ? AND location_id = ? AND item_id = ?
                       AND lot_id <=> ? AND stock_status = ? FOR UPDATE
                     """, access.tenantId(), currentWarehouseId, number(row, "location_id"),
@@ -688,7 +698,7 @@ public class WmsInventoryAdjustmentService {
     private void validateFreshAllocations(long tenantId, long adjustmentId) {
         List<Map<String, Object>> allocations = jdbc.queryForList("""
                 SELECT al.warehouse_id, al.location_id, al.item_id, al.lot_id,
-                       al.stock_status, al.system_qty
+                       al.stock_status, al.system_qty, al.adjustment_qty
                 FROM inventory_adjustment_allocations al
                 JOIN inventory_adjustment_lines ln
                   ON ln.id = al.inventory_adjustment_line_id AND ln.tenant_id = al.tenant_id
@@ -705,8 +715,13 @@ public class WmsInventoryAdjustmentService {
                     number(allocation, "item_id"), nullableNumber(allocation.get("lot_id")),
                     string(allocation, "stock_status"));
             BigDecimal current = rows.isEmpty() ? BigDecimal.ZERO.setScale(4) : decimal(rows.getFirst().get("on_hand_qty"));
+            BigDecimal reserved = rows.isEmpty() ? BigDecimal.ZERO.setScale(4) : decimal(rows.getFirst().get("reserved_qty"));
             if (current.compareTo(decimal(allocation.get("system_qty"))) != 0) {
                 throw new IllegalStateException("Adjustment baseline is stale; refresh the adjustment before approval or posting");
+            }
+            BigDecimal delta = decimal(allocation.get("adjustment_qty"));
+            if (delta.signum() < 0 && current.subtract(reserved).compareTo(delta.abs()) < 0) {
+                throw new IllegalStateException("Available inventory is insufficient for the negative adjustment");
             }
         }
     }
