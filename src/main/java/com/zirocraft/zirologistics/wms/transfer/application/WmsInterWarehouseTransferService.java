@@ -94,7 +94,7 @@ public class WmsInterWarehouseTransferService {
                         JOIN inventory_serials s ON s.id=ts.serial_id AND s.tenant_id=ts.tenant_id
                         JOIN stock_transfer_allocations a ON a.id=ts.stock_transfer_allocation_id AND a.tenant_id=ts.tenant_id
                         WHERE ts.tenant_id=? AND a.public_id=? ORDER BY s.serial_number
-                        """,a.tenantId(),allocation.get("public_id")));
+                        """,tenantId,allocation.get("public_id")));
             }
             line.remove("id");
             line.put("allocations",allocations);
