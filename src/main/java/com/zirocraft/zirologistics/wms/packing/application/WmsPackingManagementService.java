@@ -312,16 +312,20 @@ public class WmsPackingManagementService {
                   AND COALESCE(packed.packed_qty,0.0000)<>ptl.picked_qty
                 """,a.tenantId(),a.tenantId(),number(s,"outbound_shipment_id"));
         if(mismatches>0) throw new IllegalStateException("Packed quantities must exactly reconcile with picked quantities");
-        jdbc.update("""
+        if(!"PICKED".equals(s.get("shipment_status")))
+            throw new IllegalStateException("Shipment must remain PICKED until packing completes");
+        int shipmentChanged=jdbc.update("""
                 UPDATE outbound_shipments SET status='PACKED',packed_at=UTC_TIMESTAMP(6),
                   version=version+1,updated_at=UTC_TIMESTAMP(6)
                 WHERE id=? AND tenant_id=? AND status='PICKED'
                 """,number(s,"outbound_shipment_id"),a.tenantId());
-        jdbc.update("""
+        if(shipmentChanged!=1) throw new IllegalStateException("Shipment state changed while packing; refresh and retry");
+        int sessionChanged=jdbc.update("""
                 UPDATE packing_sessions SET status='COMPLETED',completed_at=UTC_TIMESTAMP(6),
                   version=version+1,updated_at=UTC_TIMESTAMP(6)
                 WHERE id=? AND tenant_id=? AND status='IN_PROGRESS'
                 """,number(s,"id"),a.tenantId());
+        if(sessionChanged!=1) throw new IllegalStateException("Packing session state changed; refresh and retry");
         audit(a,"PACKING_SESSION_COMPLETED",sessionPublicId,Map.of("packageCount",
                 count("SELECT COUNT(*) FROM packing_packages WHERE tenant_id=? AND packing_session_id=?",a.tenantId(),number(s,"id"))));
         return publicSession(session(a.tenantId(),sessionPublicId));
