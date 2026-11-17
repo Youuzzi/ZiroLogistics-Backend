@@ -435,12 +435,14 @@ public class WmsInterWarehouseTransferService {
             }else if("COUNTERS".equals(u.status())){
                 jdbc.update("""
                         UPDATE stock_transfer_allocations SET
-                          status=CASE WHEN dispatched_qty=received_qty+?+damaged_qty+?+short_qty+? THEN 'RECEIVED'
-                                      ELSE 'PARTIALLY_RECEIVED' END,
+                          status=CASE
+                            WHEN dispatched_qty=planned_qty AND dispatched_qty=received_qty+?+damaged_qty+?+short_qty+? THEN 'RECEIVED'
+                            WHEN received_qty+?+damaged_qty+?+short_qty+?>0 THEN 'PARTIALLY_RECEIVED'
+                            ELSE 'IN_TRANSIT' END,
                           received_qty=received_qty+?,damaged_qty=damaged_qty+?,short_qty=short_qty+?,
                           updated_at=UTC_TIMESTAMP(6)
                         WHERE id=? AND tenant_id=?
-                        """,u.good(),u.damaged(),u.shortage(),u.good(),u.damaged(),u.shortage(),u.allocationId(),a.tenantId());
+                        """,u.good(),u.damaged(),u.shortage(),u.good(),u.damaged(),u.shortage(),u.good(),u.damaged(),u.shortage(),u.allocationId(),a.tenantId());
                 jdbc.update("""
                         UPDATE stock_transfer_lines l
                         JOIN stock_transfer_allocations a ON a.stock_transfer_line_id=l.id AND a.tenant_id=l.tenant_id
