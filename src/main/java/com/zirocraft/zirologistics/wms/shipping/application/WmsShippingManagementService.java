@@ -200,7 +200,7 @@ public class WmsShippingManagementService {
         long shipmentId = number(shipment, "id");
         String warehousePublicId = string(shipment, "warehouse_public_id");
         List<Map<String, Object>> taskLines = jdbc.queryForList("""
-                SELECT ptl.id,ptl.picked_qty,ptl.item_id,i.public_id item_public_id,
+                SELECT ptl.id,ptl.picked_qty,ptl.item_id,a.lot_id,i.public_id item_public_id,
                        i.tracking_method,lot.public_id lot_public_id
                 FROM picking_task_lines ptl
                 JOIN items i ON i.id=ptl.item_id AND i.tenant_id=ptl.tenant_id
@@ -289,7 +289,7 @@ public class WmsShippingManagementService {
                         if (remaining.signum() == 0) break;
                         if (number(transfer, "item_id") != number(line, "item_id")
                                 || !Objects.equals(nullableNumber(transfer.get("lot_id")),
-                                                   nullableNumber(findLotId(tenantId, line)))) {
+                                                   nullableNumber(line.get("lot_id")))) {
                             throw new IllegalStateException("Picking ledger movement does not match its shipment line");
                         }
                         if (!"STAGING".equals(transfer.get("location_type"))
@@ -315,16 +315,6 @@ public class WmsShippingManagementService {
         List<WmsInventoryPostingService.PostingLeg> result = new ArrayList<>(aggregated.values());
         result.addAll(serialLegs);
         return List.copyOf(result);
-    }
-
-    private Long findLotId(long tenantId, Map<String, Object> line) {
-        List<Long> ids = jdbc.queryForList("""
-                SELECT a.lot_id FROM picking_task_lines ptl
-                JOIN outbound_shipment_allocations a
-                  ON a.id=ptl.outbound_shipment_allocation_id AND a.tenant_id=ptl.tenant_id
-                WHERE ptl.tenant_id=? AND ptl.id=?
-                """, Long.class, tenantId, number(line, "id"));
-        return ids.isEmpty() ? null : ids.getFirst();
     }
 
     private Long resolveCarrier(long tenantId, String publicId) {
