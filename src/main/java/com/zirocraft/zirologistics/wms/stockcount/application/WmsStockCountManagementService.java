@@ -964,8 +964,8 @@ public class WmsStockCountManagementService {
                 WHERE l.tenant_id = ? AND s.stock_count_id = ?
                 ORDER BY wl.location_code, i.sku, l.stock_status, l.id
                 """, access.tenantId(), number(row, "id"));
-        boolean exposeExpected = access.canReviewCount()
-                || ("OPEN".equals(string(row, "count_mode")) && access.canRecordCount());
+        boolean exposeExpected = "OPEN".equals(string(row, "count_mode"))
+                && (access.canRecordCount() || access.canReviewCount());
         List<Map<String, Object>> safeLines = new ArrayList<>();
         for (Map<String, Object> line : lines) {
             Map<String, Object> safe = new LinkedHashMap<>();
