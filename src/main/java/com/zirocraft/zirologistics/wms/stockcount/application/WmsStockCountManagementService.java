@@ -198,7 +198,7 @@ public class WmsStockCountManagementService {
         lockIds("inventory_lots", lotIds, access.tenantId(), "lot");
 
         List<Map<String, Object>> balances = jdbc.queryForList(
-                "SELECT id, location_id, item_id, lot_id, stock_status, on_hand_qty " + bucketSql.substring(bucketSql.indexOf("FROM")),
+                "SELECT id, location_id, item_id, lot_id, stock_status, on_hand_qty " + bucketSql.substring(bucketSql.indexOf("FROM")) + " FOR UPDATE",
                 queryArgs.toArray());
         Map<Long, Long> scopeIds = new LinkedHashMap<>();
         jdbc.queryForList("""
