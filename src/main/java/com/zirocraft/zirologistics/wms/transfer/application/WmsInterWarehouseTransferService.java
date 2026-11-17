@@ -316,7 +316,7 @@ public class WmsInterWarehouseTransferService {
                     throw new IllegalArgumentException("Dispatch serial count must equal dispatched quantity");
                 if(new HashSet<>(serialIds).size()!=serialIds.size())throw new IllegalArgumentException("Duplicate serial in dispatch");
                 for(String serialId:serialIds){
-                    Map<String,Object> serial=linkedSerial(a.tenantId(),number(al,"id"),serialId,"PLANNED");
+                    linkedSerial(a.tenantId(),number(al,"id"),serialId,"PLANNED");
                     legs.add(postingLeg(al,serialId,"AVAILABLE",BigDecimal.ONE,false));
                     updates.add(new DispatchUpdate(number(al,"id"),serialId));
                 }
