@@ -61,7 +61,7 @@ public class WmsPackingManagementService {
             long packageId=requiredLong("SELECT id FROM packing_packages WHERE tenant_id=? AND public_id=?",
                     a.tenantId(),pack.get("public_id"));
             pack.put("lines",jdbc.queryForList("""
-                    SELECT pl.id,pl.line_number,pl.packed_qty,pl.notes,
+                    SELECT pl.line_number,pl.packed_qty,pl.notes,
                            i.public_id item_public_id,i.sku,i.item_name,
                            ptl.line_number picking_line_number
                     FROM packing_package_lines pl
@@ -166,6 +166,8 @@ public class WmsPackingManagementService {
         requireAssignedInProgress(s,a);
         String type=enumValue(command.packageType()==null?"CARTON":command.packageType(),PACKAGE_TYPES,"package type");
         BigDecimal weight=optionalMeasure(command.weight(),4,"weight");
+        if(command.weightUomCode()!=null&&!command.weightUomCode().isBlank()&&weight==null)
+            throw new IllegalArgumentException("Weight UOM cannot be supplied without a package weight");
         BigDecimal length=optionalMeasure(command.length(),3,"length");
         BigDecimal width=optionalMeasure(command.width(),3,"width");
         BigDecimal height=optionalMeasure(command.height(),3,"height");
@@ -177,7 +179,7 @@ public class WmsPackingManagementService {
                     VALUES(?,?,?,?,?,?,?,'OPEN',?,?,?,?,?)
                     """,publicId,a.tenantId(),number(s,"id"),number(s,"outbound_shipment_id"),number(s,"warehouse_id"),
                     required(command.packageNumber(),"package number",60),type,weight,length,width,height,
-                    resolveWeightUom(a.tenantId(),command.weightUomCode()));
+                    resolveWeightUom(command.weightUomCode()));
         } catch(DuplicateKeyException ex) { throw new IllegalStateException("Package number already exists in this session",ex); }
         audit(a,"PACKING_PACKAGE_CREATED",publicId,Map.of("sessionPublicId",sessionPublicId,"packageType",type));
         return packageRow(a.tenantId(),publicId);
@@ -369,7 +371,7 @@ public class WmsPackingManagementService {
         if(s.get("assigned_to_membership_id")==null||number(s,"assigned_to_membership_id")!=a.membershipId())
             throw new AccessDeniedException("Only the assigned member may operate this packing session");
     }
-    private Long resolveWeightUom(long tenant,String code) {
+    private Long resolveWeightUom(String code) {
         if(code==null||code.isBlank()) return null;
         return requiredLong("SELECT id FROM units_of_measure WHERE uom_code=? AND dimension='MASS' AND is_active=1",code.trim().toUpperCase(Locale.ROOT));
     }
@@ -438,11 +440,15 @@ public class WmsPackingManagementService {
     }
     private static BigDecimal quantity(BigDecimal v) {
         if(v==null||v.signum()<=0)throw new IllegalArgumentException("Packed quantity must be positive");
-        try{return v.setScale(4,RoundingMode.UNNECESSARY);}catch(ArithmeticException e){throw new IllegalArgumentException("Quantity supports at most four decimals",e);}
+        try{v=v.setScale(4,RoundingMode.UNNECESSARY);}catch(ArithmeticException e){throw new IllegalArgumentException("Quantity supports at most four decimals",e);}
+        if(v.precision()>19)throw new IllegalArgumentException("Quantity exceeds DECIMAL(19,4)");
+        return v;
     }
     private static BigDecimal optionalMeasure(BigDecimal v,int scale,String label) {
         if(v==null)return null;if(v.signum()<=0)throw new IllegalArgumentException(label+" must be positive");
-        try{return v.setScale(scale,RoundingMode.UNNECESSARY);}catch(ArithmeticException e){throw new IllegalArgumentException(label+" precision is invalid",e);}
+        try{v=v.setScale(scale,RoundingMode.UNNECESSARY);}catch(ArithmeticException e){throw new IllegalArgumentException(label+" precision is invalid",e);}
+        if(v.precision()>(scale==4?19:12))throw new IllegalArgumentException(label+" exceeds its database precision");
+        return v;
     }
     private static record Access(long tenantId,long membershipId,String userPublicId) {}
     public record CreateSessionCommand(String shipmentPublicId,String packingNumber,String notes) {}
