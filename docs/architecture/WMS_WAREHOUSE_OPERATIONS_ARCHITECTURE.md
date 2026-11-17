@@ -195,3 +195,15 @@ Delivery may be split into multiple focused PRs. Do not implement all workflows 
 - Broader retry orchestration, payload-hash idempotency registry and cross-workflow concurrency policy belong to Stage 11.
 - Reporting/analytics and frontend work are outside Stage 9.
 - No changes to the legacy application profile or legacy entities.
+
+
+#### Packing Management implementation boundary (first delivery)
+
+- `GET /api/wms/v1/tenants/current/packing-sessions` and `GET /{sessionPublicId}` provide tenant-scoped session, package and package-line reads.
+- `POST /api/wms/v1/tenants/current/packing-sessions` creates a DRAFT session only for a fully PICKED shipment. One non-cancelled session is allowed per shipment in this first delivery.
+- `POST /{sessionPublicId}/ready`, `/assign`, and `/start` enforce DRAFT → READY → IN_PROGRESS. Only the assigned active tenant membership may create packages, record packed contents, seal packages or complete the session.
+- `POST /{sessionPublicId}/packages` creates an OPEN package with an allowed V1 package type and optional positive dimensions/weight. Weight UOM, when supplied, must be an active MASS unit.
+- `POST /{sessionPublicId}/packages/{packagePublicId}/lines` records packed quantities against a picked task line. Total packed quantity across packages cannot exceed the picked quantity. Serial-tracked lines require an exact list of picked serials; the V1 unique source constraint prevents a serial from being packed more than once. Each command is recorded in `packing_confirmations` with a tenant-scoped request UUID; duplicate UUIDs roll back the package line and serial links.
+- `POST /{sessionPublicId}/packages/{packagePublicId}/seal` seals a non-empty package after serial counts reconcile. Sealed packages are immutable.
+- `POST /{sessionPublicId}/complete` requires every package SEALED and every picked task-line quantity fully packed. It atomically marks the packing session COMPLETED and shipment PACKED. Packing does not write inventory balances, ledger or serial state; final stock ISSUE remains exclusively in Shipping Management.
+- V17 adds the packing permissions and audit-event allowlist. V1–V16 remain immutable. Integration coverage uses disposable MySQL 8.4 Testcontainers only.
