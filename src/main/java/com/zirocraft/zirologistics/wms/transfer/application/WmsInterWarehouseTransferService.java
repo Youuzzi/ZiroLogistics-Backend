@@ -58,7 +58,11 @@ public class WmsInterWarehouseTransferService {
     @Transactional(readOnly = true)
     public Map<String,Object> get(WmsAuthenticatedPrincipal principal, String transferPublicId) {
         Access a = access(principal, "WMS_TRANSFER_READ");
-        Map<String,Object> h = header(a.tenantId(), transferPublicId, false);
+        return view(a.tenantId(), transferPublicId);
+    }
+
+    private Map<String,Object> view(long tenantId, String transferPublicId) {
+        Map<String,Object> h = header(tenantId, transferPublicId, false);
         Map<String,Object> result = new LinkedHashMap<>(h);
         long transferId = number(h,"id");
         List<Map<String,Object>> lines = jdbc.queryForList("""
@@ -69,7 +73,7 @@ public class WmsInterWarehouseTransferService {
                 JOIN items i ON i.id=l.item_id AND i.tenant_id=l.tenant_id
                 JOIN units_of_measure u ON u.id=l.uom_id
                 WHERE l.tenant_id=? AND l.stock_transfer_id=? ORDER BY l.line_number
-                """,a.tenantId(),transferId);
+                """,tenantId,transferId);
         for(Map<String,Object> line:lines){
             long lineId=number(line,"id");
             List<Map<String,Object>> allocations=jdbc.queryForList("""
@@ -82,7 +86,7 @@ public class WmsInterWarehouseTransferService {
                     JOIN warehouse_locations dl ON dl.id=a.destination_location_id AND dl.warehouse_id=a.destination_warehouse_id AND dl.tenant_id=a.tenant_id
                     LEFT JOIN inventory_lots lot ON lot.id=a.lot_id AND lot.tenant_id=a.tenant_id
                     WHERE a.tenant_id=? AND a.stock_transfer_line_id=? ORDER BY a.id
-                    """,a.tenantId(),lineId);
+                    """,tenantId,lineId);
             for(Map<String,Object> allocation:allocations){
                 allocation.put("serials",jdbc.queryForList("""
                         SELECT s.public_id serial_public_id,s.serial_number,ts.status,ts.dispatched_at,ts.received_at
@@ -135,7 +139,7 @@ public class WmsInterWarehouseTransferService {
             createLine(a,transferId,number(source,"id"),number(destination,"id"),lineNo,line);
         }
         audit(a,transferPublicId,Map.of("status","NONE"),Map.of("status","DRAFT","lineCount",lineNo),UUID.randomUUID());
-        return get(principal,transferPublicId);
+        return view(a.tenantId(),transferPublicId);
     }
 
     private void createLine(Access a,long transferId,long sourceWarehouse,long destinationWarehouse,int lineNo,LineCommand command){
