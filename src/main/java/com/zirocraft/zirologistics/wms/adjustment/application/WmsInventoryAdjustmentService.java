@@ -233,26 +233,130 @@ public class WmsInventoryAdjustmentService {
         String reasonCode = required(command.reasonCode(), "Reason code", 50).toUpperCase(java.util.Locale.ROOT);
         String reasonDescription = required(command.reasonDescription(), "Reason description", 500);
         String notes = optional(command.notes(), 1000);
+
+        List<Map<String, Object>> resolved = new ArrayList<>();
+        Set<String> buckets = new java.util.HashSet<>();
+        Long warehouseId = null;
+        for (ManualAllocationCommand allocation : command.allocations()) {
+            if (allocation == null) throw new IllegalArgumentException("Manual allocation is required");
+            BigDecimal counted = normalizeManualQuantity(allocation.countedQty());
+            String stockStatus = allocation.stockStatus() == null ? "AVAILABLE"
+                    : allocation.stockStatus().trim().toUpperCase(java.util.Locale.ROOT);
+            if (!"AVAILABLE".equals(stockStatus)) {
+                throw new IllegalArgumentException("Initial manual quantity adjustments support AVAILABLE stock only");
+            }
+            Map<String, Object> row = requiredRow("""
+                    SELECT w.id AS warehouse_id, w.public_id AS warehouse_public_id, w.status AS warehouse_status,
+                           wl.id AS location_id, wl.public_id AS location_public_id, wl.status AS location_status,
+                           i.id AS item_id, i.public_id AS item_public_id, i.base_uom_id, i.tracking_method,
+                           i.is_stock_item, i.status AS item_status, lot.id AS lot_id,
+                           lot.public_id AS lot_public_id, lot.status AS lot_status
+                    FROM warehouses w
+                    JOIN warehouse_locations wl
+                      ON wl.warehouse_id = w.id AND wl.tenant_id = w.tenant_id
+                    JOIN items i ON i.tenant_id = w.tenant_id
+                    LEFT JOIN inventory_lots lot
+                      ON lot.tenant_id = i.tenant_id AND lot.item_id = i.id AND lot.public_id <=> ?
+                    WHERE w.tenant_id = ? AND w.public_id = ? AND wl.public_id = ? AND i.public_id = ?
+                      AND ((? IS NULL AND lot.id IS NULL) OR lot.public_id = ?)
+                    """, allocation.lotPublicId(), access.tenantId(),
+                    required(allocation.warehousePublicId(), "Warehouse public ID", 36),
+                    required(allocation.locationPublicId(), "Location public ID", 36),
+                    required(allocation.itemPublicId(), "Item public ID", 36),
+                    allocation.lotPublicId(), allocation.lotPublicId());
+            if (!"ACTIVE".equals(string(row, "warehouse_status"))
+                    || !"ACTIVE".equals(string(row, "location_status"))
+                    || !"ACTIVE".equals(string(row, "item_status")) || !bool(row.get("is_stock_item"))) {
+                throw new IllegalArgumentException("Manual adjustment requires active warehouse, location and stock item");
+            }
+            String tracking = string(row, "tracking_method");
+            if (!Set.of("NONE", "LOT").contains(tracking)) {
+                throw new IllegalArgumentException("Serial-tracked manual adjustments require the dedicated serial evidence workflow");
+            }
+            if ("LOT".equals(tracking) != (row.get("lot_id") != null)) {
+                throw new IllegalArgumentException("Lot assignment does not match item tracking method");
+            }
+            if (row.get("lot_id") != null && !"ACTIVE".equals(string(row, "lot_status"))) {
+                throw new IllegalArgumentException("Manual adjustment lot must be active");
+            }
+            long currentWarehouseId = number(row, "warehouse_id");
+            if (warehouseId != null && warehouseId != currentWarehouseId) {
+                throw new IllegalArgumentException("One manual adjustment document must belong to one warehouse");
+            }
+            warehouseId = currentWarehouseId;
+            String bucket = number(row, "location_id") + ":" + number(row, "item_id") + ":"
+                    + Objects.toString(row.get("lot_id"), "null") + ":" + stockStatus;
+            if (!buckets.add(bucket)) throw new IllegalArgumentException("Duplicate inventory bucket in manual adjustment");
+            List<Map<String, Object>> balances = jdbc.queryForList("""
+                    SELECT on_hand_qty FROM inventory_balances
+                    WHERE tenant_id = ? AND warehouse_id = ? AND location_id = ? AND item_id = ?
+                      AND lot_id <=> ? AND stock_status = ? FOR UPDATE
+                    """, access.tenantId(), currentWarehouseId, number(row, "location_id"),
+                    number(row, "item_id"), nullableNumber(row.get("lot_id")), stockStatus);
+            BigDecimal system = balances.isEmpty() ? BigDecimal.ZERO.setScale(4)
+                    : decimal(balances.getFirst().get("on_hand_qty"));
+            BigDecimal delta = counted.subtract(system);
+            if (delta.signum() == 0) throw new IllegalArgumentException("Zero-variance allocations are not allowed");
+            if ("LOSS".equals(type) && delta.signum() >= 0) throw new IllegalArgumentException("LOSS requires a negative quantity variance");
+            if ("FOUND".equals(type) && delta.signum() <= 0) throw new IllegalArgumentException("FOUND requires a positive quantity variance");
+            Map<String, Object> enriched = new LinkedHashMap<>(row);
+            enriched.put("stock_status", stockStatus);
+            enriched.put("system_qty", system);
+            enriched.put("counted_qty", counted);
+            enriched.put("adjustment_qty", delta);
+            resolved.add(enriched);
+        }
+
         String publicId = UUID.randomUUID().toString();
         try {
             jdbc.update("""
                     INSERT INTO inventory_adjustments
                       (public_id, tenant_id, warehouse_id, document_number, adjustment_type, status,
                        reason_code, reason_description, created_by_membership_id, notes)
-                    VALUES (?, ?, 0, ?, ?, 'DRAFT', ?, ?, ?, ?)
-                    """, publicId, access.tenantId(), documentNumber, type, reasonCode,
-                    reasonDescription, access.membershipId(), notes);
-        } catch (org.springframework.dao.DataIntegrityViolationException invalidWarehouse) {
-            // The header must carry a real tenant-owned warehouse; it is set after validating allocations below.
-            throw new IllegalArgumentException("Manual adjustment warehouse is required");
+                    VALUES (?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?)
+                    """, publicId, access.tenantId(), warehouseId, documentNumber, type,
+                    reasonCode, reasonDescription, access.membershipId(), notes);
+        } catch (DuplicateKeyException duplicate) {
+            throw new IllegalStateException("Inventory adjustment document number already exists", duplicate);
         }
-        return createManualWithWarehouse(access, command, publicId, type, reasonCode, reasonDescription, notes);
+        long adjustmentId = requiredLong("SELECT id FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?",
+                access.tenantId(), publicId);
+        Map<Long, Long> lines = new LinkedHashMap<>();
+        int nextLine = 0;
+        for (Map<String, Object> allocation : resolved) {
+            long itemId = number(allocation, "item_id");
+            Long lineId = lines.get(itemId);
+            if (lineId == null) {
+                jdbc.update("""
+                        INSERT INTO inventory_adjustment_lines
+                          (public_id, tenant_id, inventory_adjustment_id, warehouse_id,
+                           line_number, item_id, uom_id, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'COUNTED')
+                        """, UUID.randomUUID().toString(), access.tenantId(), adjustmentId,
+                        warehouseId, ++nextLine, itemId, number(allocation, "base_uom_id"));
+                lineId = requiredLong("SELECT LAST_INSERT_ID()");
+                lines.put(itemId, lineId);
+            }
+            insertAllocation(access.tenantId(), lineId, itemId, warehouseId,
+                    number(allocation, "location_id"), nullableNumber(allocation.get("lot_id")),
+                    string(allocation, "stock_status"), decimal(allocation.get("system_qty")),
+                    decimal(allocation.get("counted_qty")), decimal(allocation.get("adjustment_qty")));
+        }
+        audit(access, publicId, "NONE", "DRAFT", "CREATE_MANUAL", Map.of(
+                "adjustmentType", type, "reasonCode", reasonCode,
+                "reasonDescription", reasonDescription, "allocationCount", resolved.size()));
+        return view(access.tenantId(), publicId);
     }
 
-    private Map<String, Object> createManualWithWarehouse(Access access, CreateManualCommand command,
-                                                           String publicId, String type, String reasonCode,
-                                                           String reasonDescription, String notes) {
-        throw new UnsupportedOperationException("Manual adjustment warehouse resolution is pending");
+    private static BigDecimal normalizeManualQuantity(BigDecimal quantity) {
+        if (quantity == null || quantity.signum() < 0) throw new IllegalArgumentException("Counted quantity must be non-negative");
+        try {
+            BigDecimal normalized = quantity.setScale(4, java.math.RoundingMode.UNNECESSARY);
+            if (normalized.precision() > 19) throw new IllegalArgumentException("Counted quantity exceeds DECIMAL(19,4)");
+            return normalized;
+        } catch (ArithmeticException invalidScale) {
+            throw new IllegalArgumentException("Counted quantity must fit DECIMAL(19,4)", invalidScale);
+        }
     }
 
     @Transactional
@@ -684,5 +788,11 @@ public class WmsInventoryAdjustmentService {
     }
 
     public record CreateFromCountCommand(String documentNumber, String notes) {}
+    public record ManualAllocationCommand(String warehousePublicId, String locationPublicId,
+                                          String itemPublicId, String lotPublicId, String stockStatus,
+                                          BigDecimal countedQty) {}
+    public record CreateManualCommand(String documentNumber, String adjustmentType, String reasonCode,
+                                      String reasonDescription, String notes,
+                                      List<ManualAllocationCommand> allocations) {}
     private record Access(long tenantId, long membershipId, String userPublicId) {}
 }
