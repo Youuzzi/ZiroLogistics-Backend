@@ -323,8 +323,8 @@ public class WmsInterWarehouseTransferService {
             }else{
                 if(!serialIds.isEmpty())throw new IllegalArgumentException("Non-serial allocation cannot dispatch serial identities");
                 legs.add(postingLeg(al,null,"AVAILABLE",qty,false));
+                updates.add(new DispatchUpdate(number(al,"id"),null,qty));
             }
-            updates.add(new DispatchUpdate(number(al,"id"),null,qty));
         }
         postingService.postTransferDispatch(principal,new WmsInventoryPostingService.PostingCommand(
                 command.requestId(),"TRANSFER_DISPATCH",legs,optional(command.notes(),1000)));
