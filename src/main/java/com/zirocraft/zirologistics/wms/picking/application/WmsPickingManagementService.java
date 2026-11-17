@@ -65,7 +65,7 @@ public class WmsPickingManagementService {
                 SELECT l.line_number,l.planned_qty,l.picked_qty,l.status,l.notes,
                        i.public_id item_public_id,i.sku,i.item_name,
                        src.public_id source_location_public_id,src.location_code source_location_code,
-                       a.public_id allocation_public_id,a.allocated_qty,
+                       a.allocated_qty,
                        lot.public_id lot_public_id,lot.lot_number,
                        (SELECT COUNT(*) FROM picking_task_line_serials ps
                         WHERE ps.tenant_id=l.tenant_id AND ps.picking_task_line_id=l.id AND ps.status='ALLOCATED') serials_remaining
