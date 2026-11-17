@@ -75,7 +75,7 @@ public class WmsInventoryPostingService {
         lockTenant(principal.tenantId());
         Access access = access(principal);
         Map<String, Object> adjustment = requiredRowForUpdate("""
-                SELECT a.id AS adjustment_id
+                SELECT a.id AS adjustment_id, a.adjustment_type
                 FROM inventory_adjustments a
                 WHERE a.tenant_id = ? AND a.public_id = ? AND a.status = 'APPROVED'
                   AND NOT EXISTS (
@@ -83,6 +83,20 @@ public class WmsInventoryPostingService {
                     WHERE link.tenant_id = a.tenant_id AND link.inventory_adjustment_id = a.id
                   )
                 """, access.tenantId(), required(adjustmentPublicId, "adjustment public ID"));
+        if (!accessService.resolve(principal.userPublicId(), principal.membershipPublicId())
+                .hasPermission("WMS_INVENTORY_ADJUSTMENT_POST")) {
+            throw new AccessDeniedException("Manual adjustment posting permission is required");
+        }
+        String adjustmentType = string(adjustment, "adjustment_type");
+        if (!Set.of("CORRECTION", "OTHER", "LOSS", "FOUND").contains(adjustmentType)) {
+            throw new AccessDeniedException("Adjustment type is not eligible for manual quantity posting");
+        }
+        if ("LOSS".equals(adjustmentType) && !"ADJUSTMENT_OUT".equalsIgnoreCase(command.movementType())) {
+            throw new AccessDeniedException("LOSS adjustments can only post negative inventory movements");
+        }
+        if ("FOUND".equals(adjustmentType) && !"ADJUSTMENT_IN".equalsIgnoreCase(command.movementType())) {
+            throw new AccessDeniedException("FOUND adjustments can only post positive inventory movements");
+        }
         List<Long> lines = jdbc.queryForList("""
                 SELECT id FROM inventory_adjustment_lines
                 WHERE id = ? AND tenant_id = ? AND inventory_adjustment_id = ?
