@@ -60,16 +60,26 @@ public class WmsPackingManagementService {
         for(Map<String,Object> pack:packages) {
             long packageId=requiredLong("SELECT id FROM packing_packages WHERE tenant_id=? AND public_id=?",
                     a.tenantId(),pack.get("public_id"));
-            pack.put("lines",jdbc.queryForList("""
-                    SELECT pl.line_number,pl.packed_qty,pl.notes,
+            List<Map<String,Object>> lines=jdbc.queryForList("""
+                    SELECT pl.id,pl.line_number,pl.packed_qty,pl.notes,
                            i.public_id item_public_id,i.sku,i.item_name,
                            ptl.line_number picking_line_number
                     FROM packing_package_lines pl
                     JOIN items i ON i.id=pl.item_id AND i.tenant_id=pl.tenant_id
                     JOIN picking_task_lines ptl ON ptl.id=pl.picking_task_line_id AND ptl.tenant_id=pl.tenant_id
                     WHERE pl.tenant_id=? AND pl.packing_package_id=? ORDER BY pl.line_number
-                    """,a.tenantId(),packageId));
-            pack.remove("id");
+                    """,a.tenantId(),packageId);
+            for(Map<String,Object> line:lines) {
+                long packageLineId=number(line,"id");
+                line.put("serials",jdbc.queryForList("""
+                        SELECT si.public_id,si.serial_number
+                        FROM packing_package_serials ps
+                        JOIN inventory_serials si ON si.id=ps.serial_id AND si.tenant_id=ps.tenant_id
+                        WHERE ps.tenant_id=? AND ps.packing_package_line_id=? ORDER BY si.serial_number
+                        """,a.tenantId(),packageLineId));
+                line.remove("id");
+            }
+            pack.put("lines",lines);
         }
         result.put("packages",packages);
         return result;
@@ -343,20 +353,22 @@ public class WmsPackingManagementService {
     private Map<String,Object> session(long tenant,String publicId) {
         return requiredRow("""
                 SELECT ps.*,s.status shipment_status,s.public_id shipment_public_id,s.document_number,
-                       w.public_id warehouse_public_id
+                       w.public_id warehouse_public_id,m.public_id assigned_to_membership_public_id
                 FROM packing_sessions ps
                 JOIN outbound_shipments s ON s.id=ps.outbound_shipment_id AND s.tenant_id=ps.tenant_id
                 JOIN warehouses w ON w.id=ps.warehouse_id AND w.tenant_id=ps.tenant_id
+                LEFT JOIN tenant_memberships m ON m.id=ps.assigned_to_membership_id AND m.tenant_id=ps.tenant_id
                 WHERE ps.tenant_id=? AND ps.public_id=?
                 """,tenant,required(publicId,"packing session public ID",36));
     }
     private Map<String,Object> sessionForUpdate(long tenant,String publicId) {
         return requiredRow("""
                 SELECT ps.*,s.status shipment_status,s.public_id shipment_public_id,s.document_number,
-                       w.public_id warehouse_public_id
+                       w.public_id warehouse_public_id,m.public_id assigned_to_membership_public_id
                 FROM packing_sessions ps
                 JOIN outbound_shipments s ON s.id=ps.outbound_shipment_id AND s.tenant_id=ps.tenant_id
                 JOIN warehouses w ON w.id=ps.warehouse_id AND w.tenant_id=ps.tenant_id
+                LEFT JOIN tenant_memberships m ON m.id=ps.assigned_to_membership_id AND m.tenant_id=ps.tenant_id
                 WHERE ps.tenant_id=? AND ps.public_id=? FOR UPDATE
                 """,tenant,required(publicId,"packing session public ID",36));
     }
