@@ -112,6 +112,10 @@ Adjustments may be generated from an approved physical count or created as a sep
 
 An adjustment document groups lines by item; each allocation represents one warehouse/location/item/lot/stock-status bucket. system_qty, counted_qty and adjustment_qty must satisfy the V1 arithmetic invariant (adjustment_qty = counted_qty - system_qty). A count-generated adjustment copies the approved expected and final counted values and creates a stock_count_adjustment_links traceability row.
 
+A standalone manual adjustment is created through POST /inventory-adjustments and must include a tenant-owned active warehouse, one or more active locations/items, a V1 adjustment type, a non-empty reason_code, and the target counted quantity for each exact bucket. The service derives system_qty from the locked inventory balance and derives adjustment_qty; callers cannot submit either baseline or delta. The initial manual quantity-correction release supports LOSS (non-positive delta), FOUND (non-negative delta), CORRECTION and OTHER. PHYSICAL_COUNT remains count-linked. DAMAGE and EXPIRY are not accepted by the manual quantity endpoint because they require explicit paired stock-status reclassification rather than ADJUSTMENT_IN/OUT; they must not be represented as quantity loss or gain.
+
+Manual allocations in this release are limited to AVAILABLE stock. Lot assignment must match the item's tracking method. For serial-tracked items, the request supplies the exact physically observed serial public IDs; the service reconciles them against the locked AVAILABLE serial identities and permits a known LOST serial to be observed as PRESENT. Missing expected identities become MISSING observations. Counted quantity must equal the distinct observed identity count, and no new serial master identity is created by an adjustment. Manual adjustments have no stock-count link and therefore receive no freeze exception: any active frozen stock-count scope blocks posting. Their typed posting boundary still requires an APPROVED adjustment, exact line/allocation/serial evidence, and a current on-hand baseline.
+
 Before an adjustment is approved or posted, the service locks and re-reads the affected balance buckets. The stored system_qty must still match the current on-hand quantity. A stale manual adjustment is rejected and must be refreshed/recreated; do not post a delta calculated from an obsolete baseline. A frozen count adjustment can use the exact approved-count exception described in §4.2.
 
 Approval and posting are separate, explicit transitions. The adjustment creator cannot approve their own document. Rejection requires a reason and is audited. Only an APPROVED adjustment can be posted. Posting, allocation/line/header status changes, count completion/unfreeze (for count-linked adjustments) and audit insertion are one transaction.
@@ -152,7 +156,7 @@ Stock counts:
 - Recount uses the same results operation with the next count round; the server assigns the next round and validates the prior actor. Client cannot choose or overwrite an old round.
 
 Inventory adjustments:
-- GET /inventory-adjustments, POST /inventory-adjustments, GET /inventory-adjustments/{adjustmentPublicId}.
+- GET /inventory-adjustments, POST /inventory-adjustments (standalone reason-coded manual adjustment), GET /inventory-adjustments/{adjustmentPublicId}.
 - POST /stock-counts/{countPublicId}/inventory-adjustments to generate the adjustment from approved count differences.
 - POST /inventory-adjustments/{adjustmentPublicId}/submit, /approve, /reject, /post.
 
@@ -189,7 +193,7 @@ List endpoints are tenant-scoped, bounded and stably ordered. Blind-count actor 
 10. Serial scan duplicate detection, exact serial quantity reconciliation, wrong tenant/item/lot rejection, missing serial derivation and LOST serial found handling.
 11. Review/approval permissions, four-eyes separation, invalid status transitions and audit rollback.
 12. Count-generated adjustment links and exact variance arithmetic for positive, negative and zero differences.
-13. Stale manual adjustment is rejected; adjustment creator cannot approve; rejected adjustment creates no stock movement.
+13. Stale manual adjustment is rejected; manual LOSS/FOUND direction rules, exact serial identity restoration, active stock-count freeze protection, adjustment creator separation and rejection-without-posting are verified; rejected adjustment creates no stock movement.
 14. ADJUSTMENT_IN/OUT uses correct serial lifecycle and immutable ledger; multi-allocation failure rolls back all balances, ledger and document states.
 15. MIN_MAX rule threshold/target/cap arithmetic, inactive rules, insufficient source stock and duplicate open-task prevention.
 16. Replenishment only moves within the same warehouse, preserves item/lot/status, validates exact serials and writes paired TRANSFER legs.
