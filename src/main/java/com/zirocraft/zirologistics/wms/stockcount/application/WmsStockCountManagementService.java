@@ -168,6 +168,26 @@ public class WmsStockCountManagementService {
         if (scopes.isEmpty()) throw new IllegalStateException("Stock count has no location scopes");
         long countId = number(header, "id");
         long warehouseId = number(header, "warehouse_id");
+        List<Long> scopedLocationIds = scopes.stream().map(ScopeLocation::id).distinct().sorted().toList();
+        String scopePlaceholders = String.join(",", java.util.Collections.nCopies(scopedLocationIds.size(), "?"));
+        List<Object> overlapArgs = new ArrayList<>();
+        overlapArgs.add(access.tenantId());
+        overlapArgs.add(warehouseId);
+        overlapArgs.add(countId);
+        overlapArgs.addAll(scopedLocationIds);
+        List<Long> overlappingCounts = jdbc.queryForList("""
+                SELECT DISTINCT c.id
+                FROM stock_counts c
+                JOIN stock_count_scopes s ON s.stock_count_id = c.id AND s.tenant_id = c.tenant_id
+                WHERE c.tenant_id = ? AND c.warehouse_id = ? AND c.id <> ?
+                  AND c.freeze_stock = 1
+                  AND c.status IN ('IN_PROGRESS','SUBMITTED','UNDER_REVIEW','APPROVED')
+                  AND s.location_id IN (%s)
+                ORDER BY c.id
+                """.formatted(scopePlaceholders), Long.class, overlapArgs.toArray());
+        if (!overlappingCounts.isEmpty()) {
+            throw new IllegalStateException("One or more locations are already frozen by another active stock count");
+        }
         Integer existingLines = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM stock_count_lines WHERE tenant_id = ? AND stock_count_scope_id IN " +
                         "(SELECT id FROM stock_count_scopes WHERE tenant_id = ? AND stock_count_id = ?)",
