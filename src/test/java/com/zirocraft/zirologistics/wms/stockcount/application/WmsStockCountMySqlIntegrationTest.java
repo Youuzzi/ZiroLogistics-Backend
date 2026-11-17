@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -334,6 +335,12 @@ class WmsStockCountMySqlIntegrationTest {
         assertEquals(Boolean.TRUE, approved.get("freezeStock"));
         assertThrows(IllegalStateException.class, () -> receive(fixture, "1.0000"));
         assertEquals(1, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id = ? AND subject_public_id = ?
+                  AND event_type = 'WMS_STOCK_COUNT_UPDATED'
+                  AND JSON_UNQUOTE(JSON_EXTRACT(change_payload, '$.action')) IN ('SUBMIT','REVIEW_LINE','APPROVE')
+                """, fixture.tenantId(), countPublicId));
+        assertEquals(3, count("""
                 SELECT COUNT(*) FROM tenant_audit_events
                 WHERE tenant_id = ? AND subject_public_id = ?
                   AND event_type = 'WMS_STOCK_COUNT_UPDATED'
