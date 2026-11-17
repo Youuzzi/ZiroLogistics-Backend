@@ -287,7 +287,9 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                   'WMS_INBOUND_RECEIPT_UPDATE', 'WMS_INBOUND_RECEIPT_POST',
                   'WMS_OUTBOUND_SHIPMENT_READ', 'WMS_OUTBOUND_SHIPMENT_CREATE',
                   'WMS_OUTBOUND_SHIPMENT_UPDATE', 'WMS_OUTBOUND_SHIPMENT_ALLOCATE',
-                  'WMS_OUTBOUND_SHIPMENT_RELEASE'
+                  'WMS_OUTBOUND_SHIPMENT_RELEASE',
+                  'WMS_PICKING_READ', 'WMS_PICKING_CREATE', 'WMS_PICKING_ASSIGN',
+                  'WMS_PICKING_START', 'WMS_PICKING_CONFIRM'
                 )
                 """, roleId);
 
