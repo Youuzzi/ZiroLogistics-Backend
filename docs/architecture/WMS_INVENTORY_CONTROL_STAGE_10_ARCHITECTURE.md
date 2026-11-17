@@ -42,7 +42,7 @@ V1 defines count types FULL_COUNT, CYCLE_COUNT, SPOT_COUNT; count modes BLIND, O
 
 stock_count_results stores a counted quantity and counter but does not store which serial identities were physically observed. A quantity alone cannot safely reconcile serialized inventory.
 
-V20 is expected to add a tenant-scoped child table (proposed name stock_count_result_serials) that records the serial identities scanned for a specific count result/round. It must have composite tenant/item/warehouse references to the parent count result/line and inventory_serials, a unique key preventing a serial from being scanned twice in one count round, and indexes supporting tenant/count/round lookup. It records observed identities; the service derives missing expected serials by comparing the observed set with the serials in the frozen location snapshot.
+V21 is expected to add a tenant-scoped child table (proposed name stock_count_result_serials) that records the serial identities scanned for a specific count result/round. It must have composite tenant/item/warehouse references to the parent count result/line and inventory_serials, a unique key preventing a serial from being scanned twice in one count round, and indexes supporting tenant/count/round lookup. It records observed identities; the service derives missing expected serials by comparing the observed set with the serials in the frozen location snapshot.
 
 Do not create a second serial master. A serial unknown to the tenant/item catalogue must be registered through the existing controlled inventory serial workflow before it can be included in a count.
 
@@ -78,7 +78,7 @@ A stock count belongs to one warehouse and contains one or more location scopes.
 
 FULL_COUNT, CYCLE_COUNT and SPOT_COUNT describe the business purpose. BLIND means counter-facing API responses must not disclose expected_qty; OPEN may disclose it to an authorized counter. Hiding the quantity only in the UI is insufficient—the backend response must omit it for blind-count actors.
 
-Planning validates all scopes and creates count lines for the inventory buckets present at the selected locations, grouped by item, lot and stock status. expected_qty is a snapshot of inventory_balances.on_hand_qty at count start, never available_qty; reserved stock is physically present and remains part of the count. Authorized users may add an explicit zero-expected line for a selected stock item/lot/status so that unexpected physical stock can be recorded. The unique bucket key in V1 prevents duplicate lines.
+Planning validates the warehouse and location scopes but does not take the inventory snapshot. Starting the count acquires the warehouse and all scoped location locks, locks the relevant item/lot rows and inventory balance buckets, then creates count lines for those buckets and activates freeze_stock in the same transaction. expected_qty is the snapshot of inventory_balances.on_hand_qty at that start boundary, never available_qty; reserved stock is physically present and remains part of the count. Authorized users may add an explicit zero-expected line for a selected stock item/lot/status so that unexpected physical stock can be recorded. The unique bucket key in V1 prevents duplicate lines.
 
 Once the count starts, its expected quantities and scope are immutable. Re-planning or editing the scope after start is prohibited.
 
@@ -174,7 +174,7 @@ List endpoints are tenant-scoped, bounded and stably ordered. Blind-count actor 
 
 ## 9. Required disposable MySQL 8.4 integration tests
 
-1. Fresh V1→V20 migration and migration upgrade path; V1–V19 checksums unchanged.
+1. Fresh V1→V21 migration and migration upgrade path; V1–V20 checksums unchanged.
 2. Tenant A cannot list, read, mutate, count or post adjustments for Tenant B documents or references.
 3. Blind count API never exposes expected quantity to the counter; open count exposes it only with permission.
 4. Scope duplication, line-bucket duplication, invalid item/lot/status and non-active location are rejected.
