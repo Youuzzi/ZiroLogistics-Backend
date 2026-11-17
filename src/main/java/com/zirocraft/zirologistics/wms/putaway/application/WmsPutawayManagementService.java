@@ -259,9 +259,8 @@ public class WmsPutawayManagementService {
         }
         List<WmsInventoryPostingService.PostingLeg> legs = new ArrayList<>();
         if (serialTracked) {
-            if (qty.stripTrailingZeros().scale() > 0 || qty.compareTo(BigDecimal.valueOf(serialIds.size())) != 0
-                    || serialIds.isEmpty() || serialIds.size() > 100) {
-                throw new IllegalArgumentException("Serial-tracked putaway quantity must equal 1 per selected serial");
+            if (qty.compareTo(BigDecimal.ONE) != 0 || serialIds.size() != 1) {
+                throw new IllegalArgumentException("A serial-tracked putaway confirmation must move exactly one serial");
             }
             for (String serialPublicId : serialIds) {
                 requiredLong("""
