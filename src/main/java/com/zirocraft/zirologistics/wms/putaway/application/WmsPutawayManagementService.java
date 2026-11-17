@@ -221,11 +221,13 @@ public class WmsPutawayManagementService {
                        l.inbound_receipt_line_id, l.item_id, l.lot_id, l.source_location_id,
                        l.destination_location_id, l.planned_qty, l.confirmed_qty, l.status,
                        i.public_id AS item_public_id, i.tracking_method,
+                       w.public_id AS warehouse_public_id,
                        src.public_id AS source_location_public_id,
                        dst.public_id AS destination_location_public_id,
                        lot.public_id AS lot_public_id
                 FROM putaway_task_lines l
                 JOIN items i ON i.id = l.item_id AND i.tenant_id = l.tenant_id
+                JOIN warehouses w ON w.id = l.warehouse_id AND w.tenant_id = l.tenant_id
                 JOIN warehouse_locations src ON src.id = l.source_location_id AND src.tenant_id = l.tenant_id
                 JOIN warehouse_locations dst ON dst.id = l.destination_location_id AND dst.tenant_id = l.tenant_id
                 LEFT JOIN inventory_lots lot ON lot.id = l.lot_id AND lot.tenant_id = l.tenant_id
@@ -390,6 +392,7 @@ public class WmsPutawayManagementService {
                 number(receiptLine, "item_id"), lotId, destination);
 
         List<String> serialPublicIds = requested.serialPublicIds() == null ? List.of() : requested.serialPublicIds();
+        List<Long> serialDatabaseIds = new ArrayList<>();
         if (serialTracked) {
             if (planned.stripTrailingZeros().scale() > 0 || planned.compareTo(BigDecimal.valueOf(serialPublicIds.size())) != 0
                     || serialPublicIds.isEmpty()) {
@@ -406,13 +409,7 @@ public class WmsPutawayManagementService {
                         """, "Serial is not available on this posted receipt line", access.tenantId(),
                         number(receiptLine, "id"), required(serialPublicId, "serial public ID"),
                         warehouseId, sourceLocationId, lotId);
-                long serialId = number(serial, "id");
-                jdbc.update("""
-                        INSERT INTO putaway_task_line_serials
-                          (tenant_id, putaway_task_line_id, inbound_receipt_line_id, item_id, serial_id)
-                        VALUES (?, ?, ?, ?, ?)
-                        """, access.tenantId(), taskLineId, number(receiptLine, "id"),
-                        number(receiptLine, "item_id"), serialId);
+                serialDatabaseIds.add(number(serial, "id"));
             }
         } else if (!serialPublicIds.isEmpty()) {
             throw new IllegalArgumentException("Serial references are not allowed for this item");
@@ -430,6 +427,14 @@ public class WmsPutawayManagementService {
                 sourceLocationId, number(destination, "id"), planned, optional(requested.notes(), 1000));
         long taskLineId = requiredLong("SELECT id FROM putaway_task_lines WHERE tenant_id = ? AND public_id = ?",
                 "Created putaway line not found", access.tenantId(), linePublicId);
+        for (Long serialId : serialDatabaseIds) {
+            jdbc.update("""
+                    INSERT INTO putaway_task_line_serials
+                      (tenant_id, putaway_task_line_id, inbound_receipt_line_id, item_id, serial_id)
+                    VALUES (?, ?, ?, ?, ?)
+                    """, access.tenantId(), taskLineId, number(receiptLine, "id"),
+                    number(receiptLine, "item_id"), serialId);
+        }
     }
 
     private void validateLocationMixing(long tenantId, long warehouseId, long locationId,
