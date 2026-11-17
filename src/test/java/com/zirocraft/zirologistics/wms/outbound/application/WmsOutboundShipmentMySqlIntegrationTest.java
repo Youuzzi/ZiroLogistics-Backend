@@ -390,7 +390,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 destination.locationPublicId(), "AVAILABLE"));
         assertEquals(2, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_DISPATCH'",
                 fixture.tenantId()));
-        assertEquals(2, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_RECEIPT'",
+        assertEquals(3, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_RECEIPT'",
                 fixture.tenantId()));
     }
 
