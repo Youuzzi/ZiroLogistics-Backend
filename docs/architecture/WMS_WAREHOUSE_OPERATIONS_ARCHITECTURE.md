@@ -31,6 +31,21 @@ Lifecycle:
 
 Receipt statuses are constrained by V1: DRAFT, IN_PROGRESS, COMPLETED, POSTED, CANCELLED. The application defines legal transitions and guards terminal states. A COMPLETED receipt is not yet inventory-posted; POSTED is the irreversible inventory effect.
 
+#### Inbound Receiving implementation boundary (first delivery)
+
+The first API delivery uses a single atomic receive-and-post command rather than exposing a partially persisted receiving session:
+
+- `GET /api/wms/v1/tenants/current/inbound-receipts` and `GET /{receiptPublicId}` read tenant-scoped receipts.
+- `POST /api/wms/v1/tenants/current/inbound-receipts` creates a DRAFT receipt.
+- `POST /{receiptPublicId}/lines` adds a base-UOM stock item line while the receipt remains DRAFT.
+- `POST /{receiptPublicId}/post` supplies received/accepted/rejected quantities and required lot/serial traceability for every line. The service validates the complete receipt, moves the header through COMPLETED to POSTED inside one transaction, and delegates accepted stock to `WmsInventoryPostingService`. A failure rolls back receipt quantities, traceability links, inventory ledger/balances and audit together.
+- A fully rejected receipt is allowed and creates no inventory movement.
+- The first delivery supports PURCHASE and OTHER receipt types. RETURN requires a separate inspection/quarantine policy, and TRANSFER_IN is reserved for the inter-warehouse transfer workflow; both are deliberately rejected here rather than being incorrectly posted as ordinary available stock. A receipt with accepted quantities must have no more than 200 posting legs in this first delivery, matching the posting service's current command limit.
+- When accepted stock exists, the command's request UUID is passed unchanged to the inventory ledger's tenant-scoped uniqueness guard. A fully rejected receipt has no inventory-ledger row; its terminal receipt state prevents reposting. Broader cross-workflow/payload-hash replay semantics remain Stage 11.
+- Permissions introduced by V13 are `WMS_INBOUND_RECEIPT_READ`, `WMS_INBOUND_RECEIPT_CREATE`, `WMS_INBOUND_RECEIPT_UPDATE`, and `WMS_INBOUND_RECEIPT_POST`. Inventory posting additionally enforces `WMS_INVENTORY_POST`.
+
+This deliberately keeps the first delivery atomic and avoids persisting serial-number staging data outside the inventory serial master. A future receiving-session workflow can be added only with a reviewed persistence model for incomplete receipts.
+
 ### 2.2 Putaway
 
 Tables: `putaway_tasks`, `putaway_task_lines`, `putaway_confirmations`, `putaway_task_line_serials`.

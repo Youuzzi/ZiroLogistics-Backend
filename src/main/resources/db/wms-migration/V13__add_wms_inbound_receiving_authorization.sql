@@ -1,0 +1,45 @@
+-- Stage 9 inbound receiving authorization and audit events.
+-- V1-V12 are immutable. Operational receipt tables already exist in V1.
+
+ALTER TABLE tenant_audit_events
+  DROP CHECK chk_tenant_audit_events_type;
+
+ALTER TABLE tenant_audit_events
+  ADD CONSTRAINT chk_tenant_audit_events_type
+  CHECK (event_type IN (
+    'TENANT_PROFILE_UPDATED', 'TENANT_SUSPENDED', 'TENANT_REACTIVATED',
+    'TENANT_CLOSED', 'TENANT_PROVISIONED',
+    'ROLE_CREATED', 'ROLE_UPDATED', 'ROLE_DEACTIVATED',
+    'ROLE_PERMISSIONS_REPLACED', 'MEMBERSHIP_ROLE_ASSIGNED',
+    'MEMBERSHIP_ROLE_REMOVED',
+    'WAREHOUSE_CREATED', 'WAREHOUSE_UPDATED', 'WAREHOUSE_STATUS_CHANGED',
+    'WAREHOUSE_LOCATION_CREATED', 'WAREHOUSE_LOCATION_UPDATED',
+    'WAREHOUSE_LOCATION_STATUS_CHANGED',
+    'ITEM_CATEGORY_CREATED', 'ITEM_CATEGORY_UPDATED', 'ITEM_CATEGORY_STATUS_CHANGED',
+    'ITEM_CREATED', 'ITEM_UPDATED', 'ITEM_STATUS_CHANGED',
+    'ITEM_IDENTIFIER_ADDED', 'ITEM_IDENTIFIER_UPDATED', 'ITEM_IDENTIFIER_REMOVED',
+    'ITEM_UOM_CONVERSION_CREATED', 'ITEM_UOM_CONVERSION_DEACTIVATED',
+    'INVENTORY_LOT_CREATED', 'INVENTORY_LOT_STATUS_CHANGED',
+    'INVENTORY_SERIAL_REGISTERED', 'INVENTORY_SERIAL_STATUS_CHANGED',
+    'INVENTORY_MOVEMENT_POSTED',
+    'INBOUND_RECEIPT_CREATED', 'INBOUND_RECEIPT_LINE_ADDED',
+    'INBOUND_RECEIPT_POSTED'
+  ));
+
+INSERT INTO permissions (permission_code, module, description) VALUES
+  ('WMS_INBOUND_RECEIPT_READ', 'WAREHOUSE', 'Read tenant inbound receipts.'),
+  ('WMS_INBOUND_RECEIPT_CREATE', 'WAREHOUSE', 'Create tenant inbound receipt drafts.'),
+  ('WMS_INBOUND_RECEIPT_UPDATE', 'WAREHOUSE', 'Add lines to editable inbound receipt drafts.'),
+  ('WMS_INBOUND_RECEIPT_POST', 'WAREHOUSE', 'Receive and post inbound stock atomically.');
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r
+JOIN permissions p
+  ON p.permission_code IN (
+    'WMS_INBOUND_RECEIPT_READ',
+    'WMS_INBOUND_RECEIPT_CREATE',
+    'WMS_INBOUND_RECEIPT_UPDATE',
+    'WMS_INBOUND_RECEIPT_POST'
+  )
+WHERE r.role_code = 'TENANT_OWNER' AND r.is_system_role = 1;
