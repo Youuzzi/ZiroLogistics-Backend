@@ -139,7 +139,7 @@ public class WmsStockCountManagementService {
         lockTenant(principal);
         Access access = access(principal, "WMS_STOCK_COUNT_PLAN");
         Map<String, Object> header = header(access.tenantId(), countPublicId, false);
-        List<ScopeLocation> scopes = lockWarehouseAndScopes(access, header);
+        List<ScopeLocation> scopes = lockWarehouseAndScopes(access, header, true);
         Map<String, Object> locked = header(access.tenantId(), countPublicId, true);
         if (!"DRAFT".equals(string(locked, "status"))) {
             throw new IllegalStateException("Only a draft stock count can be planned");
@@ -161,7 +161,7 @@ public class WmsStockCountManagementService {
         lockTenant(principal);
         Access access = access(principal, "WMS_STOCK_COUNT_START");
         Map<String, Object> header = header(access.tenantId(), countPublicId, false);
-        List<ScopeLocation> scopes = lockWarehouseAndScopes(access, header);
+        List<ScopeLocation> scopes = lockWarehouseAndScopes(access, header, true);
         Map<String, Object> locked = header(access.tenantId(), countPublicId, true);
         if (!"PLANNED".equals(string(locked, "status"))) {
             throw new IllegalStateException("Only a planned stock count can be started");
@@ -251,7 +251,7 @@ public class WmsStockCountManagementService {
         lockTenant(principal);
         Access access = access(principal, "WMS_STOCK_COUNT_CANCEL");
         Map<String, Object> header = header(access.tenantId(), countPublicId, false);
-        List<ScopeLocation> scopes = lockWarehouseAndScopes(access, header);
+        List<ScopeLocation> scopes = lockWarehouseAndScopes(access, header, false);
         Map<String, Object> locked = header(access.tenantId(), countPublicId, true);
         String oldStatus = string(locked, "status");
         if (!Set.of("DRAFT", "PLANNED", "IN_PROGRESS").contains(oldStatus)) {
@@ -348,12 +348,12 @@ public class WmsStockCountManagementService {
         return result;
     }
 
-    private List<ScopeLocation> lockWarehouseAndScopes(Access access, Map<String, Object> header) {
+    private List<ScopeLocation> lockWarehouseAndScopes(Access access, Map<String, Object> header, boolean requireActive) {
         long warehouseId = number(header, "warehouse_id");
         lockIds("warehouses", List.of(warehouseId), access.tenantId(), "warehouse");
         Map<String, Object> warehouse = requiredRowForUpdate(
                 "SELECT status FROM warehouses WHERE id = ? AND tenant_id = ?", warehouseId, access.tenantId());
-        if (!"ACTIVE".equals(string(warehouse, "status"))) {
+        if (requireActive && !"ACTIVE".equals(string(warehouse, "status"))) {
             throw new IllegalStateException("Stock count warehouse is no longer active");
         }
         List<Map<String, Object>> rows = jdbc.queryForList("""
@@ -370,7 +370,7 @@ public class WmsStockCountManagementService {
                 .toList();
         lockIds("warehouse_locations", scopes.stream().map(ScopeLocation::id).toList(),
                 access.tenantId(), "location");
-        validateActiveLocations(access.tenantId(), warehouseId, scopes);
+        if (requireActive) validateActiveLocations(access.tenantId(), warehouseId, scopes);
         return scopes;
     }
 
