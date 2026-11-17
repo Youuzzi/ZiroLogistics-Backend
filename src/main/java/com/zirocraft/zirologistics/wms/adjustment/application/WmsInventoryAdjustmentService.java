@@ -411,6 +411,12 @@ public class WmsInventoryAdjustmentService {
                 if (counted.compareTo(BigDecimal.valueOf(observedSet.size())) != 0) {
                     throw new IllegalArgumentException("Counted quantity must equal the number of distinct observed serial identities");
                 }
+                if ("LOSS".equals(type) && observedSet.stream().anyMatch(serialId -> !expectedSet.contains(serialId))) {
+                    throw new IllegalArgumentException("LOSS adjustment cannot include a recovered serial identity");
+                }
+                if ("FOUND".equals(type) && expectedSet.stream().anyMatch(serialId -> !observedSet.contains(serialId))) {
+                    throw new IllegalArgumentException("FOUND adjustment cannot include a missing serial identity");
+                }
                 for (Long serialId : expectedSet) {
                     if (!observedSet.contains(serialId)) {
                         insertSerialObservation(access.tenantId(), allocationId, itemId, serialId, "MISSING");
