@@ -14,8 +14,29 @@ ALTER TABLE inventory_serials ADD CONSTRAINT chk_inventory_serials_status CHECK 
   status IN ('AVAILABLE','RESERVED','PICKED','IN_TRANSIT','SHIPPED','DAMAGED','QUARANTINED','RETURNED','LOST')
 );
 
+ALTER TABLE stock_transfers ADD UNIQUE KEY uk_stock_transfers_id_tenant (id, tenant_id);
+
 ALTER TABLE stock_transfer_allocations
+  ADD COLUMN public_id CHAR(36) NULL AFTER id,
   ADD COLUMN short_qty DECIMAL(19,4) NOT NULL DEFAULT 0.0000 AFTER damaged_qty;
+UPDATE stock_transfer_allocations SET public_id = UUID() WHERE public_id IS NULL;
+ALTER TABLE stock_transfer_allocations MODIFY public_id CHAR(36) NOT NULL;
+ALTER TABLE stock_transfer_allocations ADD UNIQUE KEY uk_stock_transfer_allocations_public_id (public_id);
+
+CREATE TABLE stock_transfer_commands (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  tenant_id BIGINT NOT NULL,
+  stock_transfer_id BIGINT NOT NULL,
+  request_id CHAR(36) NOT NULL,
+  command_type VARCHAR(30) NOT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_stock_transfer_commands_request (tenant_id, request_id),
+  KEY idx_stock_transfer_commands_document (tenant_id, stock_transfer_id, created_at),
+  CONSTRAINT fk_stock_transfer_commands_transfer FOREIGN KEY (stock_transfer_id, tenant_id)
+    REFERENCES stock_transfers (id, tenant_id) ON DELETE RESTRICT,
+  CONSTRAINT chk_stock_transfer_commands_type CHECK (command_type IN ('RELEASE','DISPATCH','RECEIVE'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ALTER TABLE stock_transfer_allocations DROP CHECK chk_stock_transfer_allocations_qty;
 ALTER TABLE stock_transfer_allocations ADD CONSTRAINT chk_stock_transfer_allocations_qty CHECK (
   planned_qty > 0
