@@ -821,6 +821,30 @@ class WmsStockCountMySqlIntegrationTest {
     }
 
     @Test
+    void manualNegativeAdjustmentCannotConsumeReservedQuantity() {
+        receive(fixture, "5.0000");
+        reservationService.reserve(fixture.principal(),
+                new WmsInventoryReservationService.ReservationCommand(
+                        fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                        null, new BigDecimal("4.0000"), List.of()));
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-RESERVED-" + UUID.randomUUID().toString().substring(0, 8), "LOSS",
+                        "LOSS", "Reserved stock must remain allocated", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", BigDecimal.ZERO.setScale(4)))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        assertThrows(IllegalStateException.class,
+                () -> adjustmentService.approve(secondCounter(fixture), adjustmentId, "Insufficient available quantity"));
+        assertEquals("SUBMITTED", jdbc.queryForObject("""
+                SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), adjustmentId));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+    }
+
+    @Test
     void manualAdjustmentRevalidatesBaselineAgainAtPosting() {
         receive(fixture, "5.0000");
         Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
