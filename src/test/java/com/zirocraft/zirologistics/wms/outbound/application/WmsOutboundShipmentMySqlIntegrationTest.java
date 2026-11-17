@@ -5,6 +5,7 @@ import com.zirocraft.zirologistics.wms.inbound.application.WmsInboundReceivingSe
 import com.zirocraft.zirologistics.wms.picking.application.WmsPickingManagementService;
 import com.zirocraft.zirologistics.wms.packing.application.WmsPackingManagementService;
 import com.zirocraft.zirologistics.wms.shipping.application.WmsShippingManagementService;
+import com.zirocraft.zirologistics.wms.transfer.application.WmsInterWarehouseTransferService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
     @Autowired private WmsPickingManagementService pickingService;
     @Autowired private WmsPackingManagementService packingService;
     @Autowired private WmsShippingManagementService shippingService;
+    @Autowired private WmsInterWarehouseTransferService transferService;
     @Autowired private JdbcTemplate jdbc;
     private Fixture fixture;
 
@@ -346,6 +348,160 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                         f.itemPublicId(), new BigDecimal(qty), null)).get("public_id");
     }
 
+
+    @Test
+    void interWarehouseTransferDispatchesAndReceivesPartialGoodDamagedAndShortQuantities() {
+        Destination destination = destination(fixture);
+        String transferId = createTransfer(fixture, destination, "5.0000", List.of());
+        String allocationId = allocationPublicId(fixture, transferId);
+        transferService.release(fixture.principal(), transferId, UUID.randomUUID());
+
+        transferService.dispatch(fixture.principal(), transferId,
+                new WmsInterWarehouseTransferService.DispatchCommand(UUID.randomUUID(),
+                        List.of(new WmsInterWarehouseTransferService.DispatchAllocation(
+                                allocationId, new BigDecimal("4.0000"), List.of())), null));
+        assertEquals(new BigDecimal("1.0000"), balanceAt(fixture, fixture.warehousePublicId(),
+                fixture.receivingLocationPublicId(), "AVAILABLE"));
+        assertEquals(BigDecimal.ZERO.setScale(4), balanceAt(fixture, destination.warehousePublicId(),
+                destination.locationPublicId(), "AVAILABLE"));
+
+        transferService.receive(fixture.principal(), transferId,
+                new WmsInterWarehouseTransferService.ReceiveCommand(UUID.randomUUID(),
+                        List.of(new WmsInterWarehouseTransferService.ReceiveAllocation(allocationId,
+                                new BigDecimal("2.0000"), new BigDecimal("1.0000"),
+                                new BigDecimal("1.0000"), List.of(), List.of(), List.of())), null));
+        assertEquals(new BigDecimal("2.0000"), balanceAt(fixture, destination.warehousePublicId(),
+                destination.locationPublicId(), "AVAILABLE"));
+        assertEquals(new BigDecimal("1.0000"), balanceAt(fixture, destination.warehousePublicId(),
+                destination.locationPublicId(), "DAMAGED"));
+        assertEquals("IN_TRANSIT", transferStatus(fixture, transferId));
+
+        transferService.dispatch(fixture.principal(), transferId,
+                new WmsInterWarehouseTransferService.DispatchCommand(UUID.randomUUID(),
+                        List.of(new WmsInterWarehouseTransferService.DispatchAllocation(
+                                allocationId, new BigDecimal("1.0000"), List.of())), null));
+        transferService.receive(fixture.principal(), transferId,
+                new WmsInterWarehouseTransferService.ReceiveCommand(UUID.randomUUID(),
+                        List.of(new WmsInterWarehouseTransferService.ReceiveAllocation(allocationId,
+                                new BigDecimal("1.0000"), BigDecimal.ZERO, BigDecimal.ZERO,
+                                List.of(), List.of(), List.of())), null));
+        assertEquals("RECEIVED", transferStatus(fixture, transferId));
+        assertEquals(new BigDecimal("3.0000"), balanceAt(fixture, destination.warehousePublicId(),
+                destination.locationPublicId(), "AVAILABLE"));
+        assertEquals(2, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_DISPATCH'",
+                fixture.tenantId()));
+        assertEquals(3, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_RECEIPT'",
+                fixture.tenantId()));
+    }
+
+    @Test
+    void serialTransferPreservesIdentityAcrossTransitAndReconcilesDamagedAndLostSerials() {
+        Fixture serialFixture = fixture("SERIAL");
+        List<String> serialNumbers = List.of("TR-" + UUID.randomUUID(), "TR-" + UUID.randomUUID(), "TR-" + UUID.randomUUID());
+        receive(serialFixture, "3.0000", serialNumbers);
+        List<String> serialIds = jdbc.queryForList("SELECT public_id FROM inventory_serials WHERE tenant_id=? ORDER BY serial_number",
+                String.class, serialFixture.tenantId());
+        Destination destination = destination(serialFixture);
+        String transferId = createTransfer(serialFixture, destination, "3.0000", serialIds);
+        String allocationId = allocationPublicId(serialFixture, transferId);
+        transferService.release(serialFixture.principal(), transferId, UUID.randomUUID());
+        transferService.dispatch(serialFixture.principal(), transferId,
+                new WmsInterWarehouseTransferService.DispatchCommand(UUID.randomUUID(),
+                        List.of(new WmsInterWarehouseTransferService.DispatchAllocation(
+                                allocationId, new BigDecimal("3.0000"), serialIds)), null));
+
+        assertEquals(3, count("SELECT COUNT(*) FROM inventory_serials WHERE tenant_id=? AND status='IN_TRANSIT' AND current_warehouse_id IS NULL AND current_location_id IS NULL",
+                serialFixture.tenantId()));
+        transferService.receive(serialFixture.principal(), transferId,
+                new WmsInterWarehouseTransferService.ReceiveCommand(UUID.randomUUID(),
+                        List.of(new WmsInterWarehouseTransferService.ReceiveAllocation(allocationId,
+                                BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE,
+                                List.of(serialIds.get(0)), List.of(serialIds.get(1)), List.of(serialIds.get(2)))), null));
+
+        assertEquals("RECEIVED", transferStatus(serialFixture, transferId));
+        assertEquals("AVAILABLE", serialStatus(serialFixture, serialIds.get(0)));
+        assertEquals("DAMAGED", serialStatus(serialFixture, serialIds.get(1)));
+        assertEquals("LOST", serialStatus(serialFixture, serialIds.get(2)));
+        assertEquals(destination.warehousePublicId(), serialWarehouse(serialFixture, serialIds.get(0)));
+        assertEquals(destination.locationPublicId(), serialLocation(serialFixture, serialIds.get(0)));
+        assertNull(serialWarehouse(serialFixture, serialIds.get(2)));
+    }
+
+    private String createTransfer(Fixture f, Destination d, String qty, List<String> serialIds) {
+        String id = (String) transferService.create(f.principal(),
+                new WmsInterWarehouseTransferService.TransferCommand(UUID.randomUUID(),
+                        f.warehousePublicId(), d.warehousePublicId(), "TR-" + UUID.randomUUID().toString().substring(0,12),
+                        null, "STANDARD", null, null,
+                        List.of(new WmsInterWarehouseTransferService.LineCommand(
+                                f.itemPublicId(), new BigDecimal(qty), null,
+                                List.of(new WmsInterWarehouseTransferService.AllocationCommand(
+                                        f.receivingLocationPublicId(), d.locationPublicId(), null,
+                                        new BigDecimal(qty), serialIds)))))).get("public_id");
+        return id;
+    }
+
+    private Destination destination(Fixture f) {
+        String warehouse = UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO warehouses(public_id,tenant_id,warehouse_code,warehouse_name,status) VALUES(?,?,?,?,'ACTIVE')",
+                warehouse, f.tenantId(), "DST_" + UUID.randomUUID().toString().substring(0,8), "Transfer Destination");
+        long warehouseId = jdbc.queryForObject("SELECT id FROM warehouses WHERE tenant_id=? AND public_id=?",
+                Long.class, f.tenantId(), warehouse);
+        String location = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO warehouse_locations(public_id,tenant_id,warehouse_id,location_code,location_name,location_type,status)
+                VALUES(?,?,?,?,'Destination Storage','STORAGE','ACTIVE')
+                """, location, f.tenantId(), warehouseId, "DST_" + UUID.randomUUID().toString().substring(0,8));
+        return new Destination(warehouse, location);
+    }
+
+    private String allocationPublicId(Fixture f, String transferId) {
+        return jdbc.queryForObject("""
+                SELECT a.public_id FROM stock_transfer_allocations a
+                JOIN stock_transfer_lines l ON l.id=a.stock_transfer_line_id AND l.tenant_id=a.tenant_id
+                JOIN stock_transfers t ON t.id=l.stock_transfer_id AND t.tenant_id=l.tenant_id
+                WHERE t.tenant_id=? AND t.public_id=?
+                """, String.class, f.tenantId(), transferId);
+    }
+
+    private String transferStatus(Fixture f, String transferId) {
+        return jdbc.queryForObject("SELECT status FROM stock_transfers WHERE tenant_id=? AND public_id=?",
+                String.class, f.tenantId(), transferId);
+    }
+
+    private BigDecimal balanceAt(Fixture f,String warehousePublicId,String locationPublicId,String status) {
+        return jdbc.queryForObject("""
+                SELECT COALESCE(SUM(b.on_hand_qty),0.0000)
+                FROM inventory_balances b
+                JOIN warehouses w ON w.id=b.warehouse_id AND w.tenant_id=b.tenant_id
+                JOIN warehouse_locations l ON l.id=b.location_id AND l.warehouse_id=b.warehouse_id AND l.tenant_id=b.tenant_id
+                JOIN items i ON i.id=b.item_id AND i.tenant_id=b.tenant_id
+                WHERE b.tenant_id=? AND w.public_id=? AND l.public_id=? AND i.public_id=? AND b.stock_status=?
+                """, BigDecimal.class, f.tenantId(), warehousePublicId, locationPublicId, f.itemPublicId(), status);
+    }
+
+    private String serialStatus(Fixture f,String serialPublicId) {
+        return jdbc.queryForObject("SELECT status FROM inventory_serials WHERE tenant_id=? AND public_id=?",
+                String.class, f.tenantId(), serialPublicId);
+    }
+
+    private String serialWarehouse(Fixture f,String serialPublicId) {
+        return jdbc.queryForObject("""
+                SELECT w.public_id FROM inventory_serials s LEFT JOIN warehouses w
+                  ON w.id=s.current_warehouse_id AND w.tenant_id=s.tenant_id
+                WHERE s.tenant_id=? AND s.public_id=?
+                """, String.class, f.tenantId(), serialPublicId);
+    }
+
+    private String serialLocation(Fixture f,String serialPublicId) {
+        return jdbc.queryForObject("""
+                SELECT l.public_id FROM inventory_serials s LEFT JOIN warehouse_locations l
+                  ON l.id=s.current_location_id AND l.warehouse_id=s.current_warehouse_id AND l.tenant_id=s.tenant_id
+                WHERE s.tenant_id=? AND s.public_id=?
+                """, String.class, f.tenantId(), serialPublicId);
+    }
+
+    private record Destination(String warehousePublicId,String locationPublicId) {}
+
     private void receive(Fixture f, String qty, List<String> serialNumbers) {
         String receiptId = (String) inboundService.create(f.principal(),
                 new WmsInboundReceivingService.ReceiptCommand(
@@ -440,7 +596,9 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                   'WMS_PACKING_READ', 'WMS_PACKING_CREATE', 'WMS_PACKING_READY',
                   'WMS_PACKING_ASSIGN', 'WMS_PACKING_START', 'WMS_PACKING_PACKAGE',
                   'WMS_PACKING_SEAL', 'WMS_PACKING_COMPLETE',
-                  'WMS_SHIPPING_READ', 'WMS_SHIPPING_SHIP'
+                  'WMS_SHIPPING_READ', 'WMS_SHIPPING_SHIP',
+                  'WMS_TRANSFER_READ', 'WMS_TRANSFER_CREATE', 'WMS_TRANSFER_RELEASE',
+                  'WMS_TRANSFER_DISPATCH', 'WMS_TRANSFER_RECEIVE'
                 )
                 """, roleId);
 

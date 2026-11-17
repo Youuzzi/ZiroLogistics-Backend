@@ -216,3 +216,28 @@ Delivery may be split into multiple focused PRs. Do not implement all workflows 
 - `POST /{sessionPublicId}/packages/{packagePublicId}/seal` seals a non-empty package after serial counts reconcile. Sealed packages are immutable.
 - `POST /{sessionPublicId}/complete` requires every package SEALED and every picked task-line quantity fully packed. It atomically marks the packing session COMPLETED and shipment PACKED. Packing does not write inventory balances, ledger or serial state; final stock ISSUE remains exclusively in Shipping Management.
 - V17 adds the packing permissions and audit-event allowlist. V1–V16 remain immutable. Integration coverage uses disposable MySQL 8.4 Testcontainers only.
+
+
+#### Inter-Warehouse Transfer implementation boundary (Stage 9 delivery)
+
+The V1 transfer tables are authoritative: `stock_transfers`, `stock_transfer_lines`, `stock_transfer_allocations`, and `stock_transfer_line_serials`. V1 already models source/destination warehouses and locations, lot allocations, partial quantities, and an `IN_TRANSIT` document/allocation/serial state. It does not provide a transit warehouse location, and the inventory ledger requires every entry to reference a real warehouse location. Do not invent a virtual `TRANSIT` location.
+
+**Inventory accounting model:**
+- Dispatch is a distinct, atomic source-side posting. It decrements source on-hand and records `TRANSFER_DISPATCH` ledger entries. It does not increment destination stock.
+- Outstanding in-transit quantity is represented by the transfer allocation/document quantities, not by an inventory balance bucket. This avoids counting goods in transit as available stock in either warehouse.
+- Receipt is a separate, atomic destination-side posting. It increments destination on-hand using `TRANSFER_RECEIPT` entries, preserving item, lot, quantity and serial identity. Good receipt uses `AVAILABLE`; physically received damaged goods use `DAMAGED`.
+- A transfer's remaining quantity is reconciled explicitly as received-good + received-damaged + short + outstanding. Short quantities are terminal loss reconciliation, not destination stock. The additive migration adds the allocation-level short quantity needed to make that reconciliation auditable.
+- A serial dispatched into transit keeps its existing serial identity, changes to `IN_TRANSIT`, and has both current warehouse/location references set to NULL. Receipt places that same serial at the destination location as `AVAILABLE` or `DAMAGED`; a confirmed short serial becomes `LOST`. Transfer serial-link status records PLANNED → IN_TRANSIT → RECEIVED / DAMAGED / LOST. Never register a replacement serial during transfer receipt.
+- The two transfer posting movements are internal inventory-boundary operations and must not be callable through the generic inventory posting HTTP endpoint. The transfer application service invokes explicit transfer-only posting methods; each dispatch/receipt request UUID is single-use and shares the workflow transaction with document/serial updates and audit.
+
+**Lifecycle and API:**
+- Create a tenant-scoped DRAFT transfer between two distinct active warehouses; add item lines and source/destination location + optional lot allocations only while DRAFT.
+- Release validates line/allocation totals, warehouse/location ownership, active stock items, lot ownership, stock availability and exact serial allocations. The header becomes RELEASED.
+- Dispatch supports partial quantities up to each planned allocation. It posts source reductions and marks the dispatched amount IN_TRANSIT in one transaction. Header becomes IN_TRANSIT.
+- Receive supports partial good, damaged and short reconciliation against dispatched-but-not-yet-reconciled quantities. Good/damaged physical quantities are posted at the destination; short quantities are recorded without destination stock. Header becomes PARTIALLY_RECEIVED until no outstanding quantity remains, then RECEIVED. A transfer cannot be received beyond dispatch or reconciled twice.
+- Once dispatch has occurred, the transfer cannot be cancelled through the draft cancellation path. No direct updates to inventory balances, ledger or serial master are allowed outside the inventory posting boundary.
+- Permissions are separate for transfer read, create/edit, release, dispatch and receive. Tenant context comes from the authenticated membership; client-supplied tenant IDs are never trusted.
+
+**Additive schema boundary:** V19 may extend only the inventory-ledger movement-type CHECK, serial-status CHECK, transfer-allocation short quantity/check, transfer serial-link status CHECK, and tenant audit-event allowlist; it adds transfer permissions. V1–V18 remain immutable. Do not add a transit-location table or duplicate transfer tables.
+
+**Required MySQL 8.4 Testcontainers coverage:** ordinary and lot-tracked partial dispatch/receipt; good/damaged/short reconciliation; serial identity preservation through dispatch/receipt; serial damaged/lost outcomes; insufficient available stock; over-dispatch/over-receipt/over-reconciliation; invalid source/destination and cross-tenant references; missing permissions; duplicate request IDs; transaction rollback across ledger, balances, transfer quantities, serial state and audit; concurrent dispatch/receipt attempts.
