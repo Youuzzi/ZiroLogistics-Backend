@@ -36,7 +36,7 @@ The frozen V1 schema already contains the principal tables for this stage:
 
 V1 defines count types FULL_COUNT, CYCLE_COUNT, SPOT_COUNT; count modes BLIND, OPEN; the count, line and scope lifecycle states; the adjustment document lifecycle and reason types; and MIN_MAX / MANUAL replenishment rules. Stage 10 must use those allowlists and columns as written.
 
-**V1–V21 are immutable.** Do not edit an existing migration, regenerate the baseline, or create duplicate count/adjustment/replenishment tables. Any required schema extension must be an additive V22+ migration and must identify the exact V1 gap it closes.
+**V1–V22 are immutable.** Do not edit an existing migration, regenerate the baseline, or create duplicate count/adjustment/replenishment tables. Any required schema extension must be an additive V22+ migration and must identify the exact V1 gap it closes.
 
 ### 2.1 Proven schema gap: serialized count observations
 
@@ -121,6 +121,8 @@ For each non-zero allocation:
 - Negative adjustment_qty posts one ADJUSTMENT_OUT movement.
 - Zero variance produces no ledger entry.
 - Every movement calls WmsInventoryPostingService; no controller or adjustment repository writes balance, ledger or serial tables directly.
+
+The generic `POST /inventory/postings` endpoint must reject `ADJUSTMENT_IN` and `ADJUSTMENT_OUT`. The adjustment application service uses a dedicated typed posting entry that verifies the approved adjustment, its exact stock-count link, the still-approved/frozen count, the adjustment line and each scoped location. It also compares the stored system quantity with the locked balance baseline inside the posting boundary. Ledger entries carry `reference_type = INVENTORY_ADJUSTMENT`, the adjustment ID and adjustment-line ID. No caller-controlled freeze bypass is exposed.
 
 Serial adjustments use exact serial identities. The current posting boundary supports ADJUSTMENT_OUT from AVAILABLE to LOST and ADJUSTMENT_IN to restore a known LOST serial into AVAILABLE stock. Stage 10 must extend these operations only for stock statuses that have an explicit serial lifecycle mapping, with integration tests proving the matching status transition. V1 has no EXPIRED or BLOCKED serial lifecycle state, so a variance in those serialized buckets may be recorded and reviewed but must not be silently posted as an adjustment. A status reclassification between AVAILABLE, QUARANTINED and DAMAGED must use an explicit STATUS_CHANGE movement rather than being disguised as a quantity correction. Do not create a new serial identity to mask a count discrepancy. Lot identity and stock status must match the allocation; all quantity and serial counts must reconcile before posting.
 

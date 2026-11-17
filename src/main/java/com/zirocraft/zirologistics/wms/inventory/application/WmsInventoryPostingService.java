@@ -55,7 +55,51 @@ public class WmsInventoryPostingService {
 
     @Transactional
     public Map<String, Object> post(WmsAuthenticatedPrincipal principal, PostingCommand command) {
-        return postInternal(principal, command, false);
+        return postInternal(principal, command, false, null);
+    }
+
+    /**
+     * Narrow posting entry for an already-approved adjustment linked to its exact
+     * approved, still-frozen stock count. Generic callers cannot request a freeze bypass.
+     */
+    @Transactional
+    public Map<String, Object> postApprovedAdjustment(
+            WmsAuthenticatedPrincipal principal, String adjustmentPublicId, String stockCountPublicId,
+            long adjustmentLineId, BigDecimal expectedOnHandQty, PostingCommand command) {
+        if (command == null || !Set.of("ADJUSTMENT_IN", "ADJUSTMENT_OUT")
+                .contains(command.movementType() == null ? "" : command.movementType().toUpperCase(Locale.ROOT))) {
+            throw new IllegalArgumentException("Adjustment posting type is required");
+        }
+        if (principal == null) throw new AccessDeniedException("Tenant context is required");
+        lockTenant(principal.tenantId());
+        Access access = access(principal);
+        Map<String, Object> context = requiredRowForUpdate("""
+                SELECT a.id AS adjustment_id, c.id AS count_id
+                FROM inventory_adjustments a
+                JOIN stock_count_adjustment_links link
+                  ON link.inventory_adjustment_id = a.id AND link.tenant_id = a.tenant_id
+                JOIN stock_counts c
+                  ON c.id = link.stock_count_id AND c.tenant_id = link.tenant_id
+                WHERE a.tenant_id = ? AND a.public_id = ? AND c.public_id = ?
+                  AND a.status = 'APPROVED' AND c.status = 'APPROVED' AND c.freeze_stock = 1
+                """, access.tenantId(), required(adjustmentPublicId, "adjustment public ID"),
+                required(stockCountPublicId, "stock count public ID"));
+        List<Long> lines = jdbc.queryForList("""
+                SELECT id FROM inventory_adjustment_lines
+                WHERE id = ? AND tenant_id = ? AND inventory_adjustment_id = ?
+                FOR UPDATE
+                """, Long.class, adjustmentLineId, access.tenantId(), number(context, "adjustment_id"));
+        if (lines.isEmpty()) throw new AccessDeniedException("Adjustment line does not belong to the approved adjustment");
+        if (expectedOnHandQty == null) throw new IllegalArgumentException("Adjustment baseline quantity is required");
+        BigDecimal baseline;
+        try {
+            baseline = expectedOnHandQty.setScale(4, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException invalidScale) {
+            throw new IllegalArgumentException("Adjustment baseline must fit DECIMAL(19,4)", invalidScale);
+        }
+        AdjustmentPostingContext postingContext = new AdjustmentPostingContext(
+                number(context, "adjustment_id"), number(context, "count_id"), adjustmentLineId, baseline);
+        return postInternal(principal, command, false, postingContext);
     }
 
     @Transactional
@@ -63,7 +107,7 @@ public class WmsInventoryPostingService {
         if (command == null || !"TRANSFER_DISPATCH".equalsIgnoreCase(command.movementType())) {
             throw new IllegalArgumentException("Transfer dispatch posting type is required");
         }
-        return postInternal(principal, command, true);
+        return postInternal(principal, command, true, null);
     }
 
     @Transactional
@@ -71,7 +115,7 @@ public class WmsInventoryPostingService {
         if (command == null || !"TRANSFER_RECEIPT".equalsIgnoreCase(command.movementType())) {
             throw new IllegalArgumentException("Transfer receipt posting type is required");
         }
-        return postInternal(principal, command, true);
+        return postInternal(principal, command, true, null);
     }
 
     @Transactional
@@ -94,22 +138,30 @@ public class WmsInventoryPostingService {
     }
 
     private Map<String, Object> postInternal(WmsAuthenticatedPrincipal principal, PostingCommand command,
-                                             boolean transferBoundary) {
+                                             boolean transferBoundary, AdjustmentPostingContext adjustmentContext) {
         if (principal == null) throw new AccessDeniedException("Tenant context is required");
         // Lock the tenant before resolving effective permissions so role/membership mutations
         // that share the tenant lock cannot race authorization with this posting transaction.
         lockTenant(principal.tenantId());
         Access access = access(principal);
         NormalizedCommand normalized = normalize(command);
+        if (adjustmentContext != null) {
+            normalized = normalized.withReference("INVENTORY_ADJUSTMENT",
+                    adjustmentContext.adjustmentId(), adjustmentContext.adjustmentLineId());
+        }
         boolean transferMovement = Set.of("TRANSFER_DISPATCH", "TRANSFER_RECEIPT").contains(normalized.movementType());
         if (transferMovement != transferBoundary) {
             throw new AccessDeniedException("Transfer movements are available only through the transfer workflow");
+        }
+        boolean adjustmentMovement = Set.of("ADJUSTMENT_IN", "ADJUSTMENT_OUT").contains(normalized.movementType());
+        if (adjustmentMovement != (adjustmentContext != null)) {
+            throw new AccessDeniedException("Inventory adjustment movements must use the approved adjustment workflow");
         }
 
         // Resolve and lock reference rows in the shared warehouse -> location -> item -> lot -> serial order.
         List<ResolvedLeg> legs = resolveAndLockReferences(access.tenantId(), normalized);
         validateMovement(normalized, legs);
-        assertNoFrozenStockCount(access.tenantId(), legs);
+        assertNoFrozenStockCount(access.tenantId(), legs, adjustmentContext);
         // New serial rows are created before balance buckets to preserve the global lock order.
         List<ResolvedLeg> registeredLegs = new ArrayList<>(legs.size());
         for (ResolvedLeg leg : legs) {
@@ -132,6 +184,17 @@ public class WmsInventoryPostingService {
                         lockedBalances.put(key, lockOrCreateBalance(access.tenantId(), leg));
                     }
                 });
+        if (adjustmentContext != null) {
+            Set<String> checkedBuckets = new HashSet<>();
+            for (ResolvedLeg leg : legs) {
+                String key = balanceKey(leg);
+                if (checkedBuckets.add(key)
+                        && lockedBalances.get(key).onHand().compareTo(adjustmentContext.expectedOnHandQty()) != 0) {
+                    throw new IllegalStateException("Adjustment baseline is stale; refresh the adjustment before posting");
+                }
+            }
+        }
+
         Map<String, BigDecimal> runningOnHand = new HashMap<>();
 
         for (ResolvedLeg leg : legs) {
@@ -298,22 +361,31 @@ public class WmsInventoryPostingService {
      * Every stock posting checks both source and destination locations after
      * acquiring the same tenant, warehouse and location locks used by count start.
      */
-    private void assertNoFrozenStockCount(long tenantId, List<ResolvedLeg> legs) {
+    private void assertNoFrozenStockCount(long tenantId, List<ResolvedLeg> legs,
+                                          AdjustmentPostingContext adjustmentContext) {
         Set<String> checked = new HashSet<>();
         for (ResolvedLeg leg : legs) {
             String key = leg.warehouseId() + ":" + leg.locationId();
             if (!checked.add(key)) continue;
-            Integer activeCount = jdbc.queryForObject("""
-                    SELECT COUNT(*)
+            List<Map<String, Object>> counts = jdbc.queryForList("""
+                    SELECT c.id, c.status, c.freeze_stock
                     FROM stock_count_scopes s
                     JOIN stock_counts c
                       ON c.id = s.stock_count_id AND c.tenant_id = s.tenant_id
                     WHERE c.tenant_id = ? AND c.warehouse_id = ? AND s.location_id = ?
                       AND c.freeze_stock = 1
                       AND c.status IN ('IN_PROGRESS','SUBMITTED','UNDER_REVIEW','APPROVED')
-                    """, Integer.class, tenantId, leg.warehouseId(), leg.locationId());
-            if (activeCount != null && activeCount > 0) {
-                throw new IllegalStateException("Inventory posting is blocked by an active frozen stock count");
+                    ORDER BY c.id
+                    """, tenantId, leg.warehouseId(), leg.locationId());
+            if (adjustmentContext == null) {
+                if (!counts.isEmpty()) {
+                    throw new IllegalStateException("Inventory posting is blocked by an active frozen stock count");
+                }
+                continue;
+            }
+            if (counts.size() != 1 || number(counts.getFirst(), "id") != adjustmentContext.stockCountId()
+                    || !"APPROVED".equals(string(counts.getFirst(), "status"))) {
+                throw new IllegalStateException("Adjustment does not match the exact frozen approved stock count");
             }
         }
     }
@@ -518,11 +590,13 @@ public class WmsInventoryPostingService {
                     INSERT INTO inventory_ledger
                       (public_id, tenant_id, movement_group_id, request_id, entry_no, movement_type,
                        warehouse_id, location_id, item_id, lot_id, serial_id, stock_status,
-                       quantity_delta, balance_before_qty, balance_after_qty, actor_membership_id, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       quantity_delta, balance_before_qty, balance_after_qty, reference_type,
+                       reference_id, reference_line_id, actor_membership_id, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, UUID.randomUUID().toString(), access.tenantId(), groupId, command.requestId().toString(),
                     entryNo, command.movementType(), leg.warehouseId(), leg.locationId(), leg.itemId(),
                     leg.lotId(), leg.serialId(), leg.stockStatus(), delta, before, after,
+                    command.referenceType(), command.referenceId(), command.referenceLineId(),
                     access.membershipId(), command.notes());
         } catch (DuplicateKeyException duplicate) {
             throw new IllegalStateException("The inventory request ID has already been posted");
@@ -736,7 +810,7 @@ public class WmsInventoryPostingService {
         }).toList();
         String notes = optional(command.notes());
         if (notes != null && notes.length() > 1000) throw new IllegalArgumentException("Notes are too long");
-        return new NormalizedCommand(command.requestId(), type, legs, notes);
+        return new NormalizedCommand(command.requestId(), type, legs, notes, null, null, null);
     }
 
     static BigDecimal normalizeQuantity(BigDecimal quantity) {
@@ -797,7 +871,14 @@ public class WmsInventoryPostingService {
                              String lotPublicId, String serialPublicId, String serialNumber,
                              String stockStatus, BigDecimal quantity) {}
 
-    private record NormalizedCommand(UUID requestId, String movementType, List<PostingLeg> legs, String notes) {}
+    private record NormalizedCommand(UUID requestId, String movementType, List<PostingLeg> legs, String notes,
+                                     String referenceType, Long referenceId, Long referenceLineId) {
+        NormalizedCommand withReference(String type, Long id, Long lineId) {
+            return new NormalizedCommand(requestId, movementType, legs, notes, type, id, lineId);
+        }
+    }
+    private record AdjustmentPostingContext(long adjustmentId, long stockCountId, long adjustmentLineId,
+                                            BigDecimal expectedOnHandQty) {}
     private record Access(long tenantId, long membershipId, String userPublicId) {}
     private record Balance(long id, BigDecimal onHand, BigDecimal reserved) {}
 

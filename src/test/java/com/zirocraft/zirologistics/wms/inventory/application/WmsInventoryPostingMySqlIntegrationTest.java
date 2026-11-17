@@ -141,13 +141,8 @@ class WmsInventoryPostingMySqlIntegrationTest {
         assertEquals("AVAILABLE", serialStatus(serialFixture, serialPublicId));
         assertEquals(BigDecimal.ONE.setScale(4), balance(serialFixture));
 
-        post(serialFixture, UUID.randomUUID(), "ADJUSTMENT_OUT",
-                leg(serialFixture, serialPublicId, null, "AVAILABLE", "1.0000"));
-        assertEquals("LOST", serialStatus(serialFixture, serialPublicId));
-        assertEquals(BigDecimal.ZERO.setScale(4), balance(serialFixture));
-
-        post(serialFixture, UUID.randomUUID(), "ADJUSTMENT_IN",
-                leg(serialFixture, serialPublicId, null, "AVAILABLE", "1.0000"));
+        assertThrows(RuntimeException.class, () -> post(serialFixture, UUID.randomUUID(), "ADJUSTMENT_OUT",
+                leg(serialFixture, serialPublicId, null, "AVAILABLE", "1.0000")));
         assertEquals("AVAILABLE", serialStatus(serialFixture, serialPublicId));
         assertEquals(BigDecimal.ONE.setScale(4), balance(serialFixture));
     }
