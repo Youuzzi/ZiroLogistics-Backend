@@ -161,14 +161,13 @@ public class WmsStockCountManagementService {
         lockTenant(principal);
         Access access = access(principal, "WMS_STOCK_COUNT_START");
         Map<String, Object> header = header(access.tenantId(), countPublicId, false);
-        List<ScopeLocation> scopes = lockWarehouseAndScopes(access, header, true);
-        Map<String, Object> locked = header(access.tenantId(), countPublicId, true);
-        if (!"PLANNED".equals(string(locked, "status"))) {
+        if (!"PLANNED".equals(string(header, "status"))) {
             throw new IllegalStateException("Only a planned stock count can be started");
         }
+        List<ScopeLocation> scopes = lockWarehouseAndScopes(access, header, true);
         if (scopes.isEmpty()) throw new IllegalStateException("Stock count has no location scopes");
-        long countId = number(locked, "id");
-        long warehouseId = number(locked, "warehouse_id");
+        long countId = number(header, "id");
+        long warehouseId = number(header, "warehouse_id");
         Integer existingLines = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM stock_count_lines WHERE tenant_id = ? AND stock_count_scope_id IN " +
                         "(SELECT id FROM stock_count_scopes WHERE tenant_id = ? AND stock_count_id = ?)",
@@ -200,6 +199,10 @@ public class WmsStockCountManagementService {
         List<Map<String, Object>> balances = jdbc.queryForList(
                 "SELECT id, location_id, item_id, lot_id, stock_status, on_hand_qty " + bucketSql.substring(bucketSql.indexOf("FROM")) + " FOR UPDATE",
                 queryArgs.toArray());
+        Map<String, Object> locked = header(access.tenantId(), countPublicId, true);
+        if (!"PLANNED".equals(string(locked, "status"))) {
+            throw new IllegalStateException("Stock count state changed; reload and retry");
+        }
         Map<Long, Long> scopeIds = new LinkedHashMap<>();
         jdbc.queryForList("""
                 SELECT id, location_id FROM stock_count_scopes
