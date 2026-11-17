@@ -212,6 +212,15 @@ public class WmsInterWarehouseTransferService {
                       AND current_warehouse_id=? AND current_location_id=? AND lot_id <=> ?
                     """,a.tenantId(),itemId,required(serialPublicId,"serial public ID"),sourceWarehouse,number(source,"id"),lotId,
                     "Serial is not available at the selected source allocation");
+            long activeAssignments=jdbc.queryForObject("""
+                    SELECT COUNT(*) FROM stock_transfer_line_serials ts
+                    JOIN stock_transfer_allocations olda ON olda.id=ts.stock_transfer_allocation_id AND olda.tenant_id=ts.tenant_id
+                    JOIN stock_transfer_lines oldl ON oldl.id=olda.stock_transfer_line_id AND oldl.tenant_id=olda.tenant_id
+                    JOIN stock_transfers oldt ON oldt.id=oldl.stock_transfer_id AND oldt.tenant_id=oldl.tenant_id
+                    WHERE ts.tenant_id=? AND ts.serial_id=? AND ts.status IN ('PLANNED','DISPATCHED','IN_TRANSIT')
+                      AND oldt.status NOT IN ('RECEIVED','CANCELLED')
+                    """,Long.class,a.tenantId(),number(serial,"id"));
+            if(activeAssignments>0)throw new IllegalStateException("Serial is already assigned to another active transfer");
             jdbc.update("""
                     INSERT INTO stock_transfer_line_serials(tenant_id,stock_transfer_allocation_id,item_id,serial_id,status)
                     VALUES(?,?,?,?,'PLANNED')
@@ -330,7 +339,7 @@ public class WmsInterWarehouseTransferService {
                 jdbc.update("""
                         UPDATE stock_transfer_lines l
                         JOIN stock_transfer_allocations a ON a.stock_transfer_line_id=l.id AND a.tenant_id=l.tenant_id
-                        SET l.dispatched_qty=l.dispatched_qty+?,l.status='DISPATCHED',l.updated_at=UTC_TIMESTAMP(6)
+                        SET l.dispatched_qty=l.dispatched_qty+?,l.status=CASE WHEN l.received_qty+l.damaged_qty+l.short_qty>0 THEN 'PARTIALLY_RECEIVED' ELSE 'DISPATCHED' END,l.updated_at=UTC_TIMESTAMP(6)
                         WHERE a.id=? AND l.tenant_id=?
                         """,u.quantity(),u.allocationId(),a.tenantId());
             }
@@ -342,7 +351,7 @@ public class WmsInterWarehouseTransferService {
             jdbc.update("""
                     UPDATE stock_transfer_lines l JOIN stock_transfer_allocations a
                       ON a.stock_transfer_line_id=l.id AND a.tenant_id=l.tenant_id
-                    SET l.dispatched_qty=l.dispatched_qty+1,l.status='DISPATCHED',l.updated_at=UTC_TIMESTAMP(6)
+                    SET l.dispatched_qty=l.dispatched_qty+1,l.status=CASE WHEN l.received_qty+l.damaged_qty+l.short_qty>0 THEN 'PARTIALLY_RECEIVED' ELSE 'DISPATCHED' END,l.updated_at=UTC_TIMESTAMP(6)
                     WHERE a.id=? AND l.tenant_id=?
                     """,u.allocationId(),a.tenantId());
         }
@@ -419,10 +428,10 @@ public class WmsInterWarehouseTransferService {
                         """,u.status(),a.tenantId(),u.allocationId(),u.serialPublicId());
             }else if("COUNTERS".equals(u.status())){
                 jdbc.update("""
-                        UPDATE stock_transfer_allocations SET received_qty=received_qty+?,
-                          damaged_qty=damaged_qty+?,short_qty=short_qty+?,
+                        UPDATE stock_transfer_allocations SET
                           status=CASE WHEN dispatched_qty=received_qty+?+damaged_qty+?+short_qty+? THEN 'RECEIVED'
                                       ELSE 'PARTIALLY_RECEIVED' END,
+                          received_qty=received_qty+?,damaged_qty=damaged_qty+?,short_qty=short_qty+?,
                           updated_at=UTC_TIMESTAMP(6)
                         WHERE id=? AND tenant_id=?
                         """,u.good(),u.damaged(),u.shortage(),u.good(),u.damaged(),u.shortage(),u.allocationId(),a.tenantId());
