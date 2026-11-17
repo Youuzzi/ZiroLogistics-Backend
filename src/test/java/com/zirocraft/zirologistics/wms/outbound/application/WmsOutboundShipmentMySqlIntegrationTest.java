@@ -3,6 +3,7 @@ package com.zirocraft.zirologistics.wms.outbound.application;
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.inbound.application.WmsInboundReceivingService;
 import com.zirocraft.zirologistics.wms.picking.application.WmsPickingManagementService;
+import com.zirocraft.zirologistics.wms.packing.application.WmsPackingManagementService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
     @Autowired private WmsOutboundShipmentService shipmentService;
     @Autowired private WmsInboundReceivingService inboundService;
     @Autowired private WmsPickingManagementService pickingService;
+    @Autowired private WmsPackingManagementService packingService;
     @Autowired private JdbcTemplate jdbc;
     private Fixture fixture;
 
@@ -186,6 +188,60 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         assertEquals(new BigDecimal("5.0000"),onHand(fixture));
     }
 
+    @Test
+    void packingRequiresPickedQuantitiesAndSealedPackagesBeforeShipmentBecomesPacked() {
+        String shipmentId=createShipment(fixture);
+        String lineId=addLine(fixture,shipmentId,"5.0000");
+        shipmentService.allocate(fixture.principal(),shipmentId,lineId,
+                new WmsOutboundShipmentService.AllocationCommand(List.of(
+                        new WmsOutboundShipmentService.AllocationLine(
+                                fixture.receivingLocationPublicId(),null,new BigDecimal("5.0000"),List.of()))));
+        shipmentService.release(fixture.principal(),shipmentId);
+        String taskId=(String)pickingService.create(fixture.principal(),
+                new WmsPickingManagementService.CreatePickingCommand(shipmentId,
+                        "PICK-"+UUID.randomUUID().toString().substring(0,8),"NORMAL",null)).get("public_id");
+        pickingService.assign(fixture.principal(),taskId,
+                new WmsPickingManagementService.AssignPickingCommand(fixture.membershipPublicId()));
+        pickingService.start(fixture.principal(),taskId);
+        String staging=UUID.randomUUID().toString();
+        long warehouseId=jdbc.queryForObject("SELECT id FROM warehouses WHERE tenant_id=? AND public_id=?",
+                Long.class,fixture.tenantId(),fixture.warehousePublicId());
+        jdbc.update("""
+                INSERT INTO warehouse_locations(public_id,tenant_id,warehouse_id,location_code,
+                  location_name,location_type,status)
+                VALUES(?,?,?,?,'Staging','STAGING','ACTIVE')
+                """,staging,fixture.tenantId(),warehouseId,"STG_"+UUID.randomUUID().toString().substring(0,8));
+        pickingService.confirm(fixture.principal(),taskId,1,
+                new WmsPickingManagementService.ConfirmPickingCommand(UUID.randomUUID(),
+                        new BigDecimal("5.0000"),staging,List.of(),null));
+
+        int ledgerBefore=count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?",fixture.tenantId());
+        String sessionId=(String)packingService.create(fixture.principal(),
+                new WmsPackingManagementService.CreateSessionCommand(shipmentId,
+                        "PACK-"+UUID.randomUUID().toString().substring(0,8),null)).get("public_id");
+        assertEquals("DRAFT",packingService.get(fixture.principal(),sessionId).get("status"));
+        packingService.ready(fixture.principal(),sessionId);
+        packingService.assign(fixture.principal(),sessionId,
+                new WmsPackingManagementService.AssignSessionCommand(fixture.membershipPublicId()));
+        packingService.start(fixture.principal(),sessionId);
+        String packageId=(String)packingService.createPackage(fixture.principal(),sessionId,
+                new WmsPackingManagementService.CreatePackageCommand(
+                        "BOX-"+UUID.randomUUID().toString().substring(0,8),"CARTON",
+                        null,null,null,null,null)).get("public_id");
+
+        assertThrows(IllegalStateException.class,()->packingService.complete(fixture.principal(),sessionId));
+        packingService.addLine(fixture.principal(),sessionId,packageId,
+                new WmsPackingManagementService.AddPackageLineCommand(UUID.randomUUID(),1,
+                        new BigDecimal("5.0000"),List.of(),null));
+        packingService.sealPackage(fixture.principal(),sessionId,packageId);
+        Map<String,Object> completed=packingService.complete(fixture.principal(),sessionId);
+
+        assertEquals("COMPLETED",completed.get("status"));
+        assertEquals("PACKED",shipmentStatus(fixture,shipmentId));
+        assertEquals(ledgerBefore,count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?",fixture.tenantId()));
+        assertEquals(new BigDecimal("5.0000"),onHand(fixture));
+    }
+
     private String createShipment(Fixture f) {
         return (String) shipmentService.create(f.principal(),
                 new WmsOutboundShipmentService.CreateShipmentCommand(
@@ -290,7 +346,10 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                   'WMS_OUTBOUND_SHIPMENT_UPDATE', 'WMS_OUTBOUND_SHIPMENT_ALLOCATE',
                   'WMS_OUTBOUND_SHIPMENT_RELEASE',
                   'WMS_PICKING_READ', 'WMS_PICKING_CREATE', 'WMS_PICKING_ASSIGN',
-                  'WMS_PICKING_START', 'WMS_PICKING_CONFIRM'
+                  'WMS_PICKING_START', 'WMS_PICKING_CONFIRM',
+                  'WMS_PACKING_READ', 'WMS_PACKING_CREATE', 'WMS_PACKING_READY',
+                  'WMS_PACKING_ASSIGN', 'WMS_PACKING_START', 'WMS_PACKING_PACKAGE',
+                  'WMS_PACKING_SEAL', 'WMS_PACKING_COMPLETE'
                 )
                 """, roleId);
 
