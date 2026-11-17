@@ -451,8 +451,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                                 otherTenant.itemPublicId(), new BigDecimal("1.0000"), null,
                                 List.of(new WmsInterWarehouseTransferService.AllocationCommand(
                                         otherTenant.receivingLocationPublicId(), destination.locationPublicId(),
-                                        null, new BigDecimal("1.0000"), List.of())))),
-                        null)));
+                                        null, new BigDecimal("1.0000"), List.of()))))));
         assertEquals(0, count("""
                 SELECT COUNT(*) FROM stock_transfers
                 WHERE tenant_id=? AND document_number LIKE 'CROSS-%'
