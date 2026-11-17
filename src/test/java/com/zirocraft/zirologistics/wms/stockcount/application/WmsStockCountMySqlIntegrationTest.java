@@ -79,6 +79,15 @@ class WmsStockCountMySqlIntegrationTest {
         Map<String, Object> cancelled = stockCountService.cancel(fixture.principal(), countPublicId);
         assertEquals("CANCELLED", cancelled.get("status"));
         assertEquals(Boolean.FALSE, cancelled.get("freezeStock"));
+
+        assertEquals(4, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id = ? AND subject_public_id = ? AND event_type = 'WMS_STOCK_COUNT_UPDATED'
+                """, fixture.tenantId(), countPublicId));
+        assertEquals(4, count("""
+                SELECT COUNT(DISTINCT operation_ref) FROM tenant_audit_events
+                WHERE tenant_id = ? AND subject_public_id = ? AND event_type = 'WMS_STOCK_COUNT_UPDATED'
+                """, fixture.tenantId(), countPublicId));
         assertEquals("CANCELLED", jdbc.queryForObject("""
                 SELECT scope_status FROM stock_count_scopes s
                 JOIN stock_counts c ON c.id = s.stock_count_id AND c.tenant_id = s.tenant_id
