@@ -216,6 +216,45 @@ public class WmsInventoryAdjustmentService {
         return view(access.tenantId(), publicId);
     }
 
+    /** Creates a reason-coded manual adjustment from caller-observed quantities. */
+    @Transactional
+    public Map<String, Object> createManual(WmsAuthenticatedPrincipal principal, CreateManualCommand command) {
+        if (command == null || command.allocations() == null || command.allocations().isEmpty()
+                || command.allocations().size() > 200) {
+            throw new IllegalArgumentException("Manual adjustment must contain between 1 and 200 allocations");
+        }
+        lockTenant(principal);
+        Access access = access(principal, "WMS_INVENTORY_ADJUSTMENT_CREATE");
+        String documentNumber = required(command.documentNumber(), "Document number", 60);
+        String type = required(command.adjustmentType(), "Adjustment type", 30).toUpperCase(java.util.Locale.ROOT);
+        if (!Set.of("CORRECTION", "OTHER", "LOSS", "FOUND").contains(type)) {
+            throw new IllegalArgumentException("Manual adjustment type must be CORRECTION, OTHER, LOSS or FOUND");
+        }
+        String reasonCode = required(command.reasonCode(), "Reason code", 50).toUpperCase(java.util.Locale.ROOT);
+        String reasonDescription = required(command.reasonDescription(), "Reason description", 500);
+        String notes = optional(command.notes(), 1000);
+        String publicId = UUID.randomUUID().toString();
+        try {
+            jdbc.update("""
+                    INSERT INTO inventory_adjustments
+                      (public_id, tenant_id, warehouse_id, document_number, adjustment_type, status,
+                       reason_code, reason_description, created_by_membership_id, notes)
+                    VALUES (?, ?, 0, ?, ?, 'DRAFT', ?, ?, ?, ?)
+                    """, publicId, access.tenantId(), documentNumber, type, reasonCode,
+                    reasonDescription, access.membershipId(), notes);
+        } catch (org.springframework.dao.DataIntegrityViolationException invalidWarehouse) {
+            // The header must carry a real tenant-owned warehouse; it is set after validating allocations below.
+            throw new IllegalArgumentException("Manual adjustment warehouse is required");
+        }
+        return createManualWithWarehouse(access, command, publicId, type, reasonCode, reasonDescription, notes);
+    }
+
+    private Map<String, Object> createManualWithWarehouse(Access access, CreateManualCommand command,
+                                                           String publicId, String type, String reasonCode,
+                                                           String reasonDescription, String notes) {
+        throw new UnsupportedOperationException("Manual adjustment warehouse resolution is pending");
+    }
+
     @Transactional
     public Map<String, Object> submit(WmsAuthenticatedPrincipal principal, String adjustmentPublicId) {
         lockTenant(principal);
