@@ -2,6 +2,7 @@ package com.zirocraft.zirologistics.wms.outbound.application;
 
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.inbound.application.WmsInboundReceivingService;
+import com.zirocraft.zirologistics.wms.picking.application.WmsPickingManagementService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
 
     @Autowired private WmsOutboundShipmentService shipmentService;
     @Autowired private WmsInboundReceivingService inboundService;
+    @Autowired private WmsPickingManagementService pickingService;
     @Autowired private JdbcTemplate jdbc;
     private Fixture fixture;
 
@@ -136,6 +138,51 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                   (SELECT id FROM inventory_serials WHERE tenant_id = ? AND public_id = ?)
                   AND status = 'ALLOCATED'
                 """, serialFixture.tenantId(), serialFixture.tenantId(), serialIds.getFirst()));
+    }
+
+
+    @Test
+    void pickingConsumesReservationAndMovesStockToStagingAtomically() {
+        String shipmentId=createShipment(fixture);
+        String lineId=addLine(fixture,shipmentId,"5.0000");
+        shipmentService.allocate(fixture.principal(),shipmentId,lineId,
+                new WmsOutboundShipmentService.AllocationCommand(List.of(
+                        new WmsOutboundShipmentService.AllocationLine(
+                                fixture.receivingLocationPublicId(),null,new BigDecimal("5.0000"),List.of()))));
+        shipmentService.release(fixture.principal(),shipmentId);
+        String taskId=(String)pickingService.create(fixture.principal(),
+                new WmsPickingManagementService.CreatePickingCommand(shipmentId,
+                        "PICK-"+UUID.randomUUID().toString().substring(0,8),"NORMAL",null)).get("public_id");
+        pickingService.assign(fixture.principal(),taskId,
+                new WmsPickingManagementService.AssignPickingCommand(fixture.membershipPublicId()));
+        pickingService.start(fixture.principal(),taskId);
+
+        String staging=UUID.randomUUID().toString();
+        long warehouseId=jdbc.queryForObject("SELECT id FROM warehouses WHERE tenant_id=? AND public_id=?",
+                Long.class,fixture.tenantId(),fixture.warehousePublicId());
+        jdbc.update("""
+                INSERT INTO warehouse_locations(public_id,tenant_id,warehouse_id,location_code,
+                  location_name,location_type,status)
+                VALUES(?,?,?,?,'Staging','STAGING','ACTIVE')
+                """,staging,fixture.tenantId(),warehouseId,"STG_"+UUID.randomUUID().toString().substring(0,8));
+
+        pickingService.confirm(fixture.principal(),taskId,1,
+                new WmsPickingManagementService.ConfirmPickingCommand(UUID.randomUUID(),
+                        new BigDecimal("2.0000"),staging,List.of(),null));
+        assertEquals(new BigDecimal("3.0000"),reserved(fixture));
+        assertEquals(new BigDecimal("5.0000"),onHand(fixture));
+        assertEquals(new BigDecimal("2.0000"),jdbc.queryForObject("""
+                SELECT COALESCE(SUM(on_hand_qty),0.0000) FROM inventory_balances
+                WHERE tenant_id=? AND location_id=(SELECT id FROM warehouse_locations WHERE tenant_id=? AND public_id=?)
+                """,BigDecimal.class,fixture.tenantId(),fixture.tenantId(),staging));
+
+        Map<String,Object> completed=pickingService.confirm(fixture.principal(),taskId,1,
+                new WmsPickingManagementService.ConfirmPickingCommand(UUID.randomUUID(),
+                        new BigDecimal("3.0000"),staging,List.of(),null));
+        assertEquals("COMPLETED",completed.get("status"));
+        assertEquals("PICKED",shipmentStatus(fixture,shipmentId));
+        assertEquals(BigDecimal.ZERO.setScale(4),reserved(fixture));
+        assertEquals(new BigDecimal("5.0000"),onHand(fixture));
     }
 
     private String createShipment(Fixture f) {
