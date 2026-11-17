@@ -133,6 +133,8 @@ Manual adjustments are independent of stock counts. They must not create a stock
 
 The manual API accepts only adjustment types other than PHYSICAL_COUNT. PHYSICAL_COUNT remains exclusively generated from an approved stock count. Each manual allocation is tenant-scoped to one active warehouse, location, stock item, optional matching lot, and stock status. Quantities are DECIMAL(19,4), exact scale 4, non-negative, and the stored delta is always counted_qty - system_qty. Duplicate bucket allocations in one adjustment are rejected by the V1 unique key.
 
+The first manual-adjustment implementation slice is intentionally limited to quantity corrections for non-serialized NONE/LOT items with AVAILABLE stock status and reason types CORRECTION, OTHER, LOSS and FOUND. DAMAGE and EXPIRY remain unavailable until the dedicated status-reclassification lifecycle and serial status mappings are implemented and tested; SERIAL and LOT_AND_SERIAL manual adjustments are rejected until exact serial evidence is supported. The API must reject these unsupported combinations rather than silently treating them as quantity changes.
+
 Manual quantity adjustments use the existing typed adjustment posting boundary and exact allocation identity:
 - CORRECTION and OTHER may add or remove quantity from AVAILABLE stock. Positive deltas use ADJUSTMENT_IN and restore only an existing LOST serial identity for serialized items; negative deltas use ADJUSTMENT_OUT and require exact AVAILABLE serial identities which transition to LOST.
 - LOSS is negative-only against AVAILABLE stock and uses ADJUSTMENT_OUT; serialized loss requires exact serial identities.
