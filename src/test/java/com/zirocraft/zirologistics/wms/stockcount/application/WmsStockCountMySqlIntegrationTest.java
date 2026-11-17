@@ -728,6 +728,8 @@ class WmsStockCountMySqlIntegrationTest {
         assertEquals(0, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
 
         adjustmentService.submit(fixture.principal(), adjustmentId);
+        assertThrows(AccessDeniedException.class,
+                () -> adjustmentService.approve(fixture.principal(), adjustmentId, "Creator cannot self-approve"));
         WmsAuthenticatedPrincipal approver = secondCounter(fixture);
         adjustmentService.approve(approver, adjustmentId, "Evidence reviewed independently");
         Map<String, Object> posted = adjustmentService.post(approver, adjustmentId);
@@ -758,6 +760,20 @@ class WmsStockCountMySqlIntegrationTest {
                                 fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
                                 null, "AVAILABLE", new BigDecimal("6.0000"))))));
         assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+
+        Map<String, Object> validLoss = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-LOSS-" + UUID.randomUUID().toString().substring(0, 8), "LOSS",
+                        "LOSS", "Verified missing stock", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("3.0000")))));
+        String lossId = (String) validLoss.get("publicId");
+        adjustmentService.submit(fixture.principal(), lossId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, lossId, "Loss independently verified");
+        assertEquals("POSTED", adjustmentService.post(approver, lossId).get("status"));
+        assertEquals(new BigDecimal("3.0000"), onHand(fixture));
     }
 
     @Test
