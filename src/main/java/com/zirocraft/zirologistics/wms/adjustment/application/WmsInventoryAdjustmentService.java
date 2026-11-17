@@ -411,10 +411,6 @@ public class WmsInventoryAdjustmentService {
             } else if (delta.signum() != 0) {
                 anyVariance = true;
             }
-            if (serialTracked && delta.signum() != 0
-                    && observedSetSizeMismatch(systemQty, counted, observedPublicIds)) {
-                throw new IllegalArgumentException("Serial identity variance does not match quantity variance");
-            }
         }
         if (!anyVariance) throw new IllegalArgumentException("Manual adjustment contains no stock quantity or serial identity variance");
         audit(access, publicId, "NONE", "DRAFT", "CREATE_MANUAL",
@@ -431,12 +427,6 @@ public class WmsInventoryAdjustmentService {
         }
         if (value.precision() > 19) throw new IllegalArgumentException("Counted quantity must fit DECIMAL(19,4)");
         return value;
-    }
-
-    private static boolean observedSetSizeMismatch(BigDecimal systemQty, BigDecimal countedQty,
-                                                   List<String> observedSerialIds) {
-        return countedQty.compareTo(BigDecimal.valueOf(observedSerialIds.size())) != 0
-                || systemQty.scale() != 4;
     }
 
     @Transactional
