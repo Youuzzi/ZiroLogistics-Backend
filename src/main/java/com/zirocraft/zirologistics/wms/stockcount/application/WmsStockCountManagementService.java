@@ -816,6 +816,7 @@ public class WmsStockCountManagementService {
         }
         if (!resolved.hasPermission(permission)) throw new AccessDeniedException("Required stock count permission is missing");
         return new Access(resolved.tenantId(), resolved.membershipId(), resolved.userPublicId(),
+                resolved.hasPermission("WMS_STOCK_COUNT_RECORD"),
                 resolved.hasPermission("WMS_STOCK_COUNT_REVIEW")
                         || resolved.hasPermission("WMS_STOCK_COUNT_APPROVE"));
     }
