@@ -122,7 +122,7 @@ public class WmsStockCountManagementService {
         }
         long countId = requiredLong(
                 "SELECT id FROM stock_counts WHERE tenant_id = ? AND public_id = ?",
-                access.tenantId(), countPublicId, "Stock count was not created");
+                access.tenantId(), countPublicId);
         for (ScopeLocation location : locations) {
             jdbc.update("""
                     INSERT INTO stock_count_scopes
