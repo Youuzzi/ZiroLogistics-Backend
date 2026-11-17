@@ -4,6 +4,7 @@ import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.inbound.application.WmsInboundReceivingService;
 import com.zirocraft.zirologistics.wms.picking.application.WmsPickingManagementService;
 import com.zirocraft.zirologistics.wms.packing.application.WmsPackingManagementService;
+import com.zirocraft.zirologistics.wms.shipping.application.WmsShippingManagementService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
     @Autowired private WmsInboundReceivingService inboundService;
     @Autowired private WmsPickingManagementService pickingService;
     @Autowired private WmsPackingManagementService packingService;
+    @Autowired private WmsShippingManagementService shippingService;
     @Autowired private JdbcTemplate jdbc;
     private Fixture fixture;
 
@@ -240,6 +242,20 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         assertEquals("PACKED",shipmentStatus(fixture,shipmentId));
         assertEquals(ledgerBefore,count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?",fixture.tenantId()));
         assertEquals(new BigDecimal("5.0000"),onHand(fixture));
+
+        int ledgerBeforeShipping=count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?",fixture.tenantId());
+        Map<String,Object> shipped=shippingService.ship(fixture.principal(),shipmentId,
+                new WmsShippingManagementService.ShipCommand(UUID.randomUUID(),null,"TRACK-"+UUID.randomUUID(),null));
+        assertEquals("SHIPPED",shipped.get("status"));
+        assertEquals("SHIPPED",shipmentStatus(fixture,shipmentId));
+        assertEquals(BigDecimal.ZERO.setScale(4),onHand(fixture));
+        assertEquals(ledgerBeforeShipping+1,count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?",fixture.tenantId()));
+        assertEquals(1,count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id=? AND movement_type='ISSUE' AND quantity_delta<0
+                """,fixture.tenantId()));
+        assertThrows(IllegalStateException.class,()->shippingService.ship(fixture.principal(),shipmentId,
+                new WmsShippingManagementService.ShipCommand(UUID.randomUUID(),null,null,null)));
     }
 
     @Test
@@ -306,6 +322,14 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         packingService.sealPackage(serialFixture.principal(),sessionId,packageId);
         assertEquals("COMPLETED",packingService.complete(serialFixture.principal(),sessionId).get("status"));
         assertEquals("PACKED",shipmentStatus(serialFixture,shipmentId));
+
+        Map<String,Object> shipped=shippingService.ship(serialFixture.principal(),shipmentId,
+                new WmsShippingManagementService.ShipCommand(UUID.randomUUID(),null,null,null));
+        assertEquals("SHIPPED",shipped.get("status"));
+        assertEquals(2,count("""
+                SELECT COUNT(*) FROM inventory_serials
+                WHERE tenant_id=? AND status='SHIPPED'
+                """,serialFixture.tenantId()));
     }
 
     private String createShipment(Fixture f) {
@@ -415,7 +439,8 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                   'WMS_PICKING_START', 'WMS_PICKING_CONFIRM',
                   'WMS_PACKING_READ', 'WMS_PACKING_CREATE', 'WMS_PACKING_READY',
                   'WMS_PACKING_ASSIGN', 'WMS_PACKING_START', 'WMS_PACKING_PACKAGE',
-                  'WMS_PACKING_SEAL', 'WMS_PACKING_COMPLETE'
+                  'WMS_PACKING_SEAL', 'WMS_PACKING_COMPLETE',
+                  'WMS_SHIPPING_READ', 'WMS_SHIPPING_SHIP'
                 )
                 """, roleId);
 
