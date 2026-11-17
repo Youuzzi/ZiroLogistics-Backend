@@ -129,7 +129,7 @@ public class WmsInventoryPostingService {
                 SELECT a.id AS adjustment_id
                 FROM inventory_adjustments a
                 WHERE a.tenant_id = ? AND a.public_id = ? AND a.status = 'APPROVED'
-                  AND a.adjustment_type <> 'PHYSICAL_COUNT'
+                  AND a.adjustment_type IN ('LOSS','FOUND','CORRECTION','OTHER')
                   AND NOT EXISTS (
                     SELECT 1 FROM stock_count_adjustment_links l
                     WHERE l.tenant_id = a.tenant_id AND l.inventory_adjustment_id = a.id
@@ -990,7 +990,7 @@ public class WmsInventoryPostingService {
             return new NormalizedCommand(requestId, movementType, legs, notes, type, id, lineId);
         }
     }
-    private record AdjustmentPostingContext(long adjustmentId, long stockCountId, long adjustmentLineId,
+    private record AdjustmentPostingContext(long adjustmentId, Long stockCountId, long adjustmentLineId,
                                             BigDecimal expectedSystemQty, BigDecimal expectedOnHandQty) {}
     private record Access(long tenantId, long membershipId, String userPublicId) {}
     private record Balance(long id, BigDecimal onHand, BigDecimal reserved) {}
