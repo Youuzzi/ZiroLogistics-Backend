@@ -728,14 +728,37 @@ class WmsStockCountMySqlIntegrationTest {
     @Test
     void manualLossAndFoundRequireCorrectVarianceDirection() {
         receive(fixture, "5.0000");
-        Map<String, Object> invalidLoss = adjustmentService.createManual(fixture.principal(),
+        assertThrows(IllegalArgumentException.class, () -> adjustmentService.createManual(fixture.principal(),
                 new WmsInventoryAdjustmentService.CreateManualCommand(
                         "MAN-LOSS-INVALID-" + UUID.randomUUID().toString().substring(0, 6), "LOSS",
                         "LOSS", "Loss reason", null,
                         List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
                                 fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
-                                null, "AVAILABLE", new BigDecimal("6.0000")))));
-        assertNotNull(invalidLoss);
+                                null, "AVAILABLE", new BigDecimal("6.0000"))))));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+    }
+
+    @Test
+    void manualFoundAdjustmentCanAddVerifiedQuantityFromZeroBaseline() {
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-FOUND-" + UUID.randomUUID().toString().substring(0, 8), "FOUND",
+                        "FOUND", "Verified unrecorded stock", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("2.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, adjustmentId, "Found quantity independently verified");
+        Map<String, Object> posted = adjustmentService.post(approver, adjustmentId);
+        assertEquals("POSTED", posted.get("status"));
+        assertEquals(new BigDecimal("2.0000"), onHand(fixture));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND movement_type = 'ADJUSTMENT_IN'
+                  AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
     }
 
     @Test
