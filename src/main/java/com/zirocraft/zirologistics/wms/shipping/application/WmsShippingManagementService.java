@@ -449,6 +449,10 @@ public class WmsShippingManagementService {
         throw new IllegalStateException("Missing text field " + key);
     }
 
+    private static String nullable(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
     private static String optional(String value, int max) {
         if (value == null || value.isBlank()) return null;
         if (value.trim().length() > max) throw new IllegalArgumentException("Text exceeds maximum length");
