@@ -5,7 +5,12 @@ import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrin
 import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityHttpEnabledCondition;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import java.math.BigDecimal;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Profile;
@@ -35,6 +40,22 @@ public class WmsInventoryAdjustmentController {
     @GetMapping("/inventory-adjustments/{adjustmentPublicId}")
     public Map<String, Object> get(Authentication authentication, @PathVariable String adjustmentPublicId) {
         return service.get(principal(authentication), adjustmentPublicId);
+    }
+
+
+    @PostMapping("/inventory-adjustments")
+    public Map<String, Object> createManual(Authentication authentication,
+                                            @Valid @RequestBody ManualCreateRequest request) {
+        return service.createManual(principal(authentication),
+                new WmsInventoryAdjustmentService.ManualAdjustmentCommand(
+                        request.documentNumber(), request.warehousePublicId(), request.adjustmentType(),
+                        request.reasonCode(), request.reasonDescription(), request.notes(),
+                        request.allocations().stream().map(allocation ->
+                                new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                        allocation.locationPublicId(), allocation.itemPublicId(),
+                                        allocation.lotPublicId(), allocation.stockStatus(),
+                                        allocation.countedQty(), allocation.serialPublicIds(), allocation.notes()))
+                                .toList()));
     }
 
     @PostMapping("/stock-counts/{countPublicId}/inventory-adjustments")
@@ -70,6 +91,24 @@ public class WmsInventoryAdjustmentController {
     public Map<String, Object> post(Authentication authentication, @PathVariable String adjustmentPublicId) {
         return service.post(principal(authentication), adjustmentPublicId);
     }
+
+    public record ManualCreateRequest(
+            @NotBlank @Size(max = 60) String documentNumber,
+            @NotBlank String warehousePublicId,
+            @NotBlank String adjustmentType,
+            @NotBlank @Size(max = 50) String reasonCode,
+            @Size(max = 500) String reasonDescription,
+            @Size(max = 1000) String notes,
+            @NotEmpty @Size(max = 100) List<@Valid ManualAllocationRequest> allocations) {}
+
+    public record ManualAllocationRequest(
+            @NotBlank String locationPublicId,
+            @NotBlank String itemPublicId,
+            String lotPublicId,
+            String stockStatus,
+            @NotNull @DecimalMin("0.0") @Digits(integer = 15, fraction = 4) BigDecimal countedQty,
+            @Size(max = 200) List<@NotBlank String> serialPublicIds,
+            @Size(max = 1000) String notes) {}
 
     public record CreateFromCountRequest(
             @NotBlank @Size(max = 60) String documentNumber,
