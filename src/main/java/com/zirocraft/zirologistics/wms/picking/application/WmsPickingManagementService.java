@@ -167,6 +167,7 @@ public class WmsPickingManagementService {
         lockTenant(principal); Access a=access(principal,"WMS_PICKING_START");
         Map<String,Object> t=taskForUpdate(a.tenantId(),taskPublicId);
         if(!"ASSIGNED".equals(t.get("status"))) throw new IllegalStateException("Only assigned picking tasks can be started");
+        if(number(t,"assigned_to_membership_id")!=a.membershipId()) throw new AccessDeniedException("Only the assigned member may start this picking task");
         jdbc.update("""
                 UPDATE picking_tasks SET status='IN_PROGRESS',started_at=UTC_TIMESTAMP(6),
                   version=version+1,updated_at=UTC_TIMESTAMP(6)
@@ -183,6 +184,7 @@ public class WmsPickingManagementService {
         lockTenant(principal); Access a=access(principal,"WMS_PICKING_CONFIRM");
         Map<String,Object> t=taskForUpdate(a.tenantId(),taskPublicId);
         if(!"IN_PROGRESS".equals(t.get("status"))) throw new IllegalStateException("Picking task must be in progress");
+        if(number(t,"assigned_to_membership_id")!=a.membershipId()) throw new AccessDeniedException("Only the assigned member may confirm picking");
         Map<String,Object> line=requiredRow("""
                 SELECT l.*,i.public_id item_public_id,i.tracking_method,
                        src.public_id source_location_public_id,
