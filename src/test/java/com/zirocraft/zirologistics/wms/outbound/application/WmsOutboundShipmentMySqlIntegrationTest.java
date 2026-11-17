@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -425,6 +426,63 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         assertEquals(destination.warehousePublicId(), serialWarehouse(serialFixture, serialIds.get(0)));
         assertEquals(destination.locationPublicId(), serialLocation(serialFixture, serialIds.get(0)));
         assertNull(serialWarehouse(serialFixture, serialIds.get(2)));
+    }
+
+    @Test
+    void interWarehouseTransfersAreIsolatedAcrossTenantsForReadAndCreation() {
+        Destination destination = destination(fixture);
+        String transferId = createTransfer(fixture, destination, "5.0000", List.of());
+
+        Fixture otherTenant = fixture("NONE");
+
+        assertTrue(transferService.list(fixture.principal()).stream()
+                .anyMatch(row -> transferId.equals(row.get("public_id"))));
+        assertFalse(transferService.list(otherTenant.principal()).stream()
+                .anyMatch(row -> transferId.equals(row.get("public_id"))));
+        assertThrows(IllegalArgumentException.class,
+                () -> transferService.get(otherTenant.principal(), transferId));
+
+        assertThrows(IllegalArgumentException.class, () ->
+                transferService.create(
+                        otherTenant.principal(),
+                        new WmsInterWarehouseTransferService.TransferCommand(
+                                UUID.randomUUID(), fixture.warehousePublicId(), destination.warehousePublicId(),
+                                "CROSS-" + UUID.randomUUID().toString().substring(0, 8), null, "STANDARD",
+                                null, null,
+                                List.of(
+                                        new WmsInterWarehouseTransferService.LineCommand(
+                                                otherTenant.itemPublicId(), new BigDecimal("1.0000"), null,
+                                                List.of(
+                                                        new WmsInterWarehouseTransferService.AllocationCommand(
+                                                                otherTenant.receivingLocationPublicId(),
+                                                                destination.locationPublicId(), null,
+                                                                new BigDecimal("1.0000"), List.of())
+                                                )
+                                        )
+                                )
+                        )
+                )
+        );
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM stock_transfers
+                WHERE tenant_id=? AND document_number LIKE 'CROSS-%'
+                """, otherTenant.tenantId()));
+
+        jdbc.update("""
+                DELETE rp FROM role_permissions rp
+                JOIN permissions p ON p.id=rp.permission_id
+                JOIN membership_roles mr ON mr.role_id=rp.role_id
+                WHERE mr.tenant_id=? AND mr.membership_id=? AND p.permission_code='WMS_TRANSFER_DISPATCH'
+                """, fixture.tenantId(), fixture.principal().membershipId());
+        assertThrows(AccessDeniedException.class, () -> transferService.dispatch(
+                fixture.principal(), transferId,
+                new WmsInterWarehouseTransferService.DispatchCommand(
+                        UUID.randomUUID(),
+                        List.of(new WmsInterWarehouseTransferService.DispatchAllocation(
+                                allocationPublicId(fixture, transferId), BigDecimal.ONE, List.of())),
+                        null)));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+        assertEquals("DRAFT", transferStatus(fixture, transferId));
     }
 
     private String createTransfer(Fixture f, Destination d, String qty, List<String> serialIds) {
