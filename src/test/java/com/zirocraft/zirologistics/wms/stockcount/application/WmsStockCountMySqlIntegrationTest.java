@@ -136,6 +136,25 @@ class WmsStockCountMySqlIntegrationTest {
     }
 
     @Test
+    void overlappingActiveCountCannotFreezeTheSameLocationTwice() {
+        String firstCount = createAndPlan(fixture);
+        Map<String, Object> firstStarted = stockCountService.start(fixture.principal(), firstCount);
+        assertEquals(Boolean.TRUE, firstStarted.get("freezeStock"));
+
+        String secondCount = createAndPlan(fixture);
+        assertThrows(IllegalStateException.class,
+                () -> stockCountService.start(fixture.principal(), secondCount));
+
+        Map<String, Object> second = stockCountService.get(fixture.principal(), secondCount);
+        assertEquals("PLANNED", second.get("status"));
+        assertEquals(Boolean.FALSE, second.get("freezeStock"));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM stock_counts
+                WHERE tenant_id = ? AND freeze_stock = 1 AND status = 'IN_PROGRESS'
+                """, fixture.tenantId()));
+    }
+
+    @Test
     void countCannotUseForeignTenantWarehouseOrLocation() {
         Fixture other = fixture();
         assertThrows(IllegalArgumentException.class, () -> stockCountService.create(fixture.principal(),
