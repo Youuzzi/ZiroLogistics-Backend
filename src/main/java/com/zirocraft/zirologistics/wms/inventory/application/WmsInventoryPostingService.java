@@ -108,6 +108,55 @@ public class WmsInventoryPostingService {
         return postInternal(principal, command, false, postingContext);
     }
 
+
+    /**
+     * Typed posting boundary for a standalone approved reason-coded adjustment.
+     * It has no stock-count freeze exception: any active frozen scope still blocks it.
+     */
+    @Transactional
+    public Map<String, Object> postApprovedManualAdjustment(
+            WmsAuthenticatedPrincipal principal, String adjustmentPublicId,
+            long adjustmentLineId, BigDecimal expectedSystemQty, BigDecimal expectedOnHandQty,
+            PostingCommand command) {
+        if (command == null || !Set.of("ADJUSTMENT_IN", "ADJUSTMENT_OUT")
+                .contains(command.movementType() == null ? "" : command.movementType().toUpperCase(Locale.ROOT))) {
+            throw new IllegalArgumentException("Adjustment posting type is required");
+        }
+        if (principal == null) throw new AccessDeniedException("Tenant context is required");
+        lockTenant(principal.tenantId());
+        Access access = access(principal);
+        Map<String, Object> context = requiredRowForUpdate("""
+                SELECT a.id AS adjustment_id
+                FROM inventory_adjustments a
+                WHERE a.tenant_id = ? AND a.public_id = ? AND a.status = 'APPROVED'
+                  AND a.adjustment_type <> 'PHYSICAL_COUNT'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM stock_count_adjustment_links l
+                    WHERE l.tenant_id = a.tenant_id AND l.inventory_adjustment_id = a.id
+                  )
+                """, access.tenantId(), required(adjustmentPublicId, "adjustment public ID"));
+        List<Long> lines = jdbc.queryForList("""
+                SELECT id FROM inventory_adjustment_lines
+                WHERE id = ? AND tenant_id = ? AND inventory_adjustment_id = ?
+                FOR UPDATE
+                """, Long.class, adjustmentLineId, access.tenantId(), number(context, "adjustment_id"));
+        if (lines.isEmpty()) throw new AccessDeniedException("Adjustment line does not belong to the approved manual adjustment");
+        if (expectedSystemQty == null || expectedOnHandQty == null) {
+            throw new IllegalArgumentException("Adjustment system and current baseline quantities are required");
+        }
+        BigDecimal systemBaseline;
+        BigDecimal currentBaseline;
+        try {
+            systemBaseline = expectedSystemQty.setScale(4, RoundingMode.UNNECESSARY);
+            currentBaseline = expectedOnHandQty.setScale(4, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException invalidScale) {
+            throw new IllegalArgumentException("Adjustment baseline must fit DECIMAL(19,4)", invalidScale);
+        }
+        AdjustmentPostingContext postingContext = new AdjustmentPostingContext(
+                number(context, "adjustment_id"), null, adjustmentLineId, systemBaseline, currentBaseline);
+        return postInternal(principal, command, false, postingContext);
+    }
+
     @Transactional
     public Map<String, Object> postTransferDispatch(WmsAuthenticatedPrincipal principal, PostingCommand command) {
         if (command == null || !"TRANSFER_DISPATCH".equalsIgnoreCase(command.movementType())) {
@@ -441,7 +490,7 @@ public class WmsInventoryPostingService {
                       AND c.status IN ('IN_PROGRESS','SUBMITTED','UNDER_REVIEW','APPROVED')
                     ORDER BY c.id
                     """, tenantId, leg.warehouseId(), leg.locationId());
-            if (adjustmentContext == null) {
+            if (adjustmentContext == null || adjustmentContext.stockCountId() == null) {
                 if (!counts.isEmpty()) {
                     throw new IllegalStateException("Inventory posting is blocked by an active frozen stock count");
                 }
