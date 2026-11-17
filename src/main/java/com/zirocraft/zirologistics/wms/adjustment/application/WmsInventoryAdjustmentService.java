@@ -26,7 +26,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Count-linked inventory adjustment workflow. All stock changes are delegated
+ * Inventory adjustment workflow. All stock changes are delegated
  * to WmsInventoryPostingService; this service never writes balances or ledger rows.
  */
 @Service
@@ -375,7 +375,8 @@ public class WmsInventoryAdjustmentService {
                 return requiredLong("SELECT LAST_INSERT_ID()");
             });
             long allocationId = insertAllocation(access.tenantId(), lineId, itemId, warehouseId,
-                    locationId, lotId, stockStatus, systemQty, counted, delta);
+                    locationId, lotId, stockStatus, systemQty, counted, delta,
+                    optional(allocationCommand.notes(), 1000));
 
             if (serialTracked) {
                 List<Long> expectedSerials = jdbc.queryForList("""
@@ -700,13 +701,20 @@ public class WmsInventoryAdjustmentService {
     private long insertAllocation(long tenantId, long lineId, long itemId, long warehouseId, long locationId,
                                   Long lotId, String stockStatus, BigDecimal expected,
                                   BigDecimal counted, BigDecimal delta) {
+        return insertAllocation(tenantId, lineId, itemId, warehouseId, locationId,
+                lotId, stockStatus, expected, counted, delta, null);
+    }
+
+    private long insertAllocation(long tenantId, long lineId, long itemId, long warehouseId, long locationId,
+                                  Long lotId, String stockStatus, BigDecimal expected,
+                                  BigDecimal counted, BigDecimal delta, String notes) {
         jdbc.update("""
                 INSERT INTO inventory_adjustment_allocations
                   (tenant_id, inventory_adjustment_line_id, item_id, warehouse_id, location_id,
-                   lot_id, stock_status, system_qty, counted_qty, adjustment_qty)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   lot_id, stock_status, system_qty, counted_qty, adjustment_qty, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, tenantId, lineId, itemId, warehouseId, locationId, lotId,
-                stockStatus, expected, counted, delta);
+                stockStatus, expected, counted, delta, notes);
         return requiredLong("SELECT LAST_INSERT_ID()");
     }
 
