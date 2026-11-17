@@ -91,7 +91,7 @@ public class WmsPickingManagementService {
                 SELECT id,warehouse_id,status,public_id,document_number
                 FROM outbound_shipments WHERE tenant_id=? AND public_id=?
                 FOR UPDATE
-                """,a.tenantId(),required(command.shipmentPublicId(),"shipment public ID"));
+                """,a.tenantId(),required(command.shipmentPublicId(),"shipment public ID",36));
         if(!"RELEASED".equals(shipment.get("status"))) throw new IllegalStateException("Picking tasks can only be created for released shipments");
         long shipmentId=number(shipment,"id"), warehouseId=number(shipment,"warehouse_id");
         int existing=count("SELECT COUNT(*) FROM picking_tasks WHERE tenant_id=? AND outbound_shipment_id=? AND status<>'CANCELLED'",a.tenantId(),shipmentId);
