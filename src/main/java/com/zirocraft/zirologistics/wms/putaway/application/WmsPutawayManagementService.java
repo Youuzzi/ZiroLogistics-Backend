@@ -61,7 +61,7 @@ public class WmsPutawayManagementService {
         Access access = access(principal, "WMS_PUTAWAY_READ");
         Map<String, Object> task = publicTask(task(access.tenantId(), taskPublicId));
         task.put("lines", jdbc.queryForList("""
-                SELECT l.public_id, l.inbound_receipt_line_id, rl.public_id AS receipt_line_public_id,
+                SELECT l.public_id, rl.public_id AS receipt_line_public_id,
                        i.public_id AS item_public_id, i.sku, i.item_name, i.tracking_method,
                        lot.public_id AS lot_public_id, lot.lot_number,
                        src.public_id AS source_location_public_id, src.location_code AS source_location_code,
@@ -128,7 +128,7 @@ public class WmsPutawayManagementService {
         Set<String> serialsInRequest = new HashSet<>();
         for (TaskLineCommand requested : command.lines()) {
             createLine(access, taskId, receiptId, warehouseId, number(receipt, "receiving_location_id"),
-                    sourceLocationPublicId, requested, serialsInRequest);
+                    requested, serialsInRequest);
         }
         Map<String, Object> created = task(access.tenantId(), taskPublicId);
         audit(access, "PUTAWAY_TASK_CREATED", taskPublicId, Map.of(),
@@ -242,6 +242,19 @@ public class WmsPutawayManagementService {
         if (already.add(qty).compareTo(planned) > 0) {
             throw new IllegalArgumentException("Confirmed quantity exceeds the remaining planned quantity");
         }
+        Map<String, Object> destination = requiredRow("""
+                SELECT id, status, location_type, allow_mixed_skus, allow_mixed_lots
+                FROM warehouse_locations
+                WHERE tenant_id = ? AND warehouse_id = ? AND id = ?
+                """, "Putaway destination is no longer available", access.tenantId(),
+                number(line, "warehouse_id"), number(line, "destination_location_id"));
+        if (!"ACTIVE".equals(destination.get("status"))
+                || !STORAGE_LOCATION_TYPES.contains(string(destination, "location_type"))) {
+            throw new IllegalStateException("Putaway destination is no longer an active storage location");
+        }
+        validateLocationMixing(access.tenantId(), number(line, "warehouse_id"),
+                number(line, "destination_location_id"), number(line, "item_id"),
+                line.get("lot_id") == null ? null : number(line, "lot_id"), destination);
         String tracking = String.valueOf(line.get("tracking_method"));
         boolean serialTracked = Set.of("SERIAL", "LOT_AND_SERIAL").contains(tracking);
         List<String> serialIds = command.serialPublicIds() == null ? List.of() : command.serialPublicIds();
@@ -330,7 +343,7 @@ public class WmsPutawayManagementService {
     }
 
     private void createLine(Access access, long taskId, long receiptId, long warehouseId,
-                            long sourceLocationId, String sourceLocationPublicId,
+                            long sourceLocationId,
                             TaskLineCommand requested, Set<String> serialsInRequest) {
         Map<String, Object> receiptLine = requiredRow("""
                 SELECT l.id, l.item_id, l.accepted_qty, l.status, i.public_id AS item_public_id,
