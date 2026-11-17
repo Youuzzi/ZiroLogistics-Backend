@@ -120,6 +120,55 @@ public class WmsInventoryReservationService {
         if (updated != 1) throw new IllegalStateException("Inventory availability changed; retry allocation");
     }
 
+    /** Consume an existing reservation as part of a picking transaction. */
+    @Transactional
+    public void consume(WmsAuthenticatedPrincipal principal, ReservationCommand command) {
+        if (command == null) throw new IllegalArgumentException("Reservation command is required");
+        Access access = lockTenantAndResolveAccess(principal);
+        BigDecimal quantity = quantity(command.quantity());
+        long warehouseId = id("SELECT id FROM warehouses WHERE tenant_id = ? AND public_id = ? AND status = 'ACTIVE'",
+                access.tenantId(), required(command.warehousePublicId()), "Active warehouse not found");
+        lockIds("warehouses", List.of(warehouseId), access.tenantId(), "Warehouse");
+        long locationId = id("""
+                SELECT id FROM warehouse_locations
+                WHERE tenant_id = ? AND warehouse_id = ? AND public_id = ? AND status = 'ACTIVE'
+                """, access.tenantId(), warehouseId, required(command.locationPublicId()), "Active location not found");
+        lockIds("warehouse_locations", List.of(locationId), access.tenantId(), "Location");
+        Item item = jdbc.query("""
+                SELECT id, tracking_method FROM items
+                WHERE tenant_id = ? AND public_id = ? AND status = 'ACTIVE' AND is_stock_item = 1
+                """, rs -> rs.next() ? new Item(rs.getLong("id"), rs.getString("tracking_method")) : null,
+                access.tenantId(), required(command.itemPublicId()));
+        if (item == null) throw new IllegalArgumentException("Active stock item not found");
+        lockIds("items", List.of(item.id()), access.tenantId(), "Item");
+        Long lotId = null;
+        if (command.lotPublicId() != null && !command.lotPublicId().isBlank()) {
+            lotId = id("""
+                    SELECT id FROM inventory_lots
+                    WHERE tenant_id = ? AND item_id = ? AND public_id = ? AND status = 'ACTIVE'
+                    """, access.tenantId(), item.id(), command.lotPublicId().trim(), "Active item lot not found");
+            lockIds("inventory_lots", List.of(lotId), access.tenantId(), "Lot");
+        }
+        boolean lotTracked = "LOT".equals(item.trackingMethod()) || "LOT_AND_SERIAL".equals(item.trackingMethod());
+        if (lotTracked != (lotId != null)) throw new IllegalArgumentException("Lot allocation does not match item tracking method");
+        List<java.util.Map<String, Object>> rows = jdbc.queryForList("""
+                SELECT id, reserved_qty FROM inventory_balances
+                WHERE tenant_id = ? AND warehouse_id = ? AND location_id = ? AND item_id = ?
+                  AND lot_id <=> ? AND stock_status = 'AVAILABLE'
+                FOR UPDATE
+                """, access.tenantId(), warehouseId, locationId, item.id(), lotId);
+        if (rows.isEmpty()) throw new IllegalStateException("Reserved inventory balance was not found");
+        long balanceId = ((Number) rows.getFirst().get("id")).longValue();
+        BigDecimal reserved = (BigDecimal) rows.getFirst().get("reserved_qty");
+        if (reserved.compareTo(quantity) < 0) throw new IllegalStateException("Reserved quantity is insufficient");
+        int changed = jdbc.update("""
+                UPDATE inventory_balances
+                SET reserved_qty = reserved_qty - ?, version = version + 1
+                WHERE id = ? AND tenant_id = ? AND reserved_qty >= ?
+                """, quantity, balanceId, access.tenantId(), quantity);
+        if (changed != 1) throw new IllegalStateException("Reservation changed; retry picking");
+    }
+
     private Access lockTenantAndResolveAccess(WmsAuthenticatedPrincipal principal) {
         if (principal == null) throw new AccessDeniedException("Tenant context is required");
         List<Long> tenants = jdbc.queryForList(
