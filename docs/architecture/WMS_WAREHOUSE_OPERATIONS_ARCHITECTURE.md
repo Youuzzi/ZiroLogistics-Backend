@@ -110,6 +110,15 @@ Shipment statuses are constrained by V1: DRAFT, RELEASED, PICKING, PICKED, PACKE
 - The first delivery intentionally does not issue stock or mark the shipment SHIPPED; packing and final shipping ISSUE remain separate workflows. Picking task/confirmation UUIDs are tenant-scoped and single-use; broader payload-hash replay protection remains Stage 11.
 - V16 adds `WMS_PICKING_READ`, `WMS_PICKING_CREATE`, `WMS_PICKING_ASSIGN`, `WMS_PICKING_START`, and `WMS_PICKING_CONFIRM`, plus picking audit event allowlist. V1–V15 remain immutable.
 
+#### Shipping implementation boundary (first delivery)
+
+- `GET /api/wms/v1/tenants/current/shipping` and `GET /{shipmentPublicId}` provide tenant-scoped packed/shipped shipment reads.
+- `POST /{shipmentPublicId}/ship` accepts a tenant-scoped request UUID and optional active carrier partner/tracking number. It only accepts a PACKED shipment with completed packing sessions, sealed packages, exact package-to-picked quantity reconciliation, and fully picked shipment lines/allocations.
+- For ordinary and lot-tracked stock, the final ISSUE source locations are reconstructed from the positive TRANSFER ledger legs associated with each picking confirmation request UUID. For serial-tracked stock, the exact serial identities recorded in sealed packages are resolved to their current active STAGING locations. The service does not guess a staging location or issue unrelated stock.
+- All final ISSUE legs are submitted through `WmsInventoryPostingService`. The inventory ledger/balances/serial lifecycle, shipment/line/allocation SHIPPED states, carrier/tracking details, and `OUTBOUND_SHIPMENT_SHIPPED` audit event commit in the same transaction. A failed posting or state update rolls back the entire shipping command.
+- Shipping uses the V1 `outbound_shipments` carrier, tracking, shipped-by, shipped-at and posted-at fields. V18 adds only `WMS_SHIPPING_READ`, `WMS_SHIPPING_SHIP` and the audit-event allowlist entry; V1–V17 remain immutable.
+- A shipment can be shipped once. The request UUID is also single-use through inventory-ledger uniqueness. Durable payload-hash replay semantics remain Stage 11.
+
 ### 2.4 Inter-warehouse transfer
 
 Tables: `stock_transfers`, `stock_transfer_lines`, `stock_transfer_allocations`, `stock_transfer_line_serials`.
