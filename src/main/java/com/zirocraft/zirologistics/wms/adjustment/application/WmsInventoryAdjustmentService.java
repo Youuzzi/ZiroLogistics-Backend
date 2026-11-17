@@ -451,6 +451,12 @@ public class WmsInventoryAdjustmentService {
         if (!"APPROVED".equals(string(header, "status"))) {
             throw new IllegalStateException("Only an approved inventory adjustment can be posted");
         }
+        long adjustmentId = number(header, "id");
+        long countLinks = requiredLong("""
+                SELECT COUNT(*) FROM stock_count_adjustment_links
+                WHERE tenant_id = ? AND inventory_adjustment_id = ?
+                """, access.tenantId(), adjustmentId);
+        if (countLinks == 0) return postManual(principal, adjustmentPublicId);
         Map<String, Object> link = requiredRowForUpdate("""
                 SELECT c.id AS count_id, c.public_id AS count_public_id, c.status, c.freeze_stock
                 FROM stock_count_adjustment_links l
@@ -460,8 +466,6 @@ public class WmsInventoryAdjustmentService {
         if (!"APPROVED".equals(string(link, "status")) || !bool(link.get("freeze_stock"))) {
             throw new IllegalStateException("Linked stock count is no longer approved and frozen");
         }
-        long adjustmentId = number(header, "id");
-
         List<Map<String, Object>> allocations = jdbc.queryForList("""
                 SELECT al.id AS allocation_id, al.inventory_adjustment_line_id, al.item_id,
                        w.public_id AS warehouse_public_id,
@@ -559,6 +563,76 @@ public class WmsInventoryAdjustmentService {
         if (countChanged != 1) throw new IllegalStateException("Linked stock count could not be completed");
         audit(access, adjustmentPublicId, "APPROVED", "POSTED", "POST",
                 Map.of("stockCountPublicId", string(link, "count_public_id")));
+        return view(access.tenantId(), adjustmentPublicId);
+    }
+
+    @Transactional
+    public Map<String, Object> postManual(WmsAuthenticatedPrincipal principal, String adjustmentPublicId) {
+        lockTenant(principal);
+        Access access = access(principal, "WMS_INVENTORY_ADJUSTMENT_POST");
+        Map<String, Object> header = header(access.tenantId(), adjustmentPublicId, true);
+        if (!"APPROVED".equals(string(header, "status"))) {
+            throw new IllegalStateException("Only an approved manual adjustment can be posted");
+        }
+        long adjustmentId = number(header, "id");
+        if (requiredLong("""
+                SELECT COUNT(*) FROM stock_count_adjustment_links
+                WHERE tenant_id = ? AND inventory_adjustment_id = ?
+                """, access.tenantId(), adjustmentId) != 0) {
+            throw new IllegalStateException("Count-linked adjustments must use the physical-count posting workflow");
+        }
+        List<Map<String, Object>> allocations = jdbc.queryForList("""
+                SELECT al.id AS allocation_id, al.inventory_adjustment_line_id, al.warehouse_id,
+                       al.location_id, al.item_id, al.lot_id, al.stock_status,
+                       al.system_qty, al.counted_qty, al.adjustment_qty,
+                       w.public_id AS warehouse_public_id, wl.public_id AS location_public_id,
+                       i.public_id AS item_public_id, il.public_id AS lot_public_id, i.tracking_method
+                FROM inventory_adjustment_allocations al
+                JOIN inventory_adjustment_lines ln
+                  ON ln.id = al.inventory_adjustment_line_id AND ln.tenant_id = al.tenant_id
+                JOIN warehouses w ON w.id = al.warehouse_id AND w.tenant_id = al.tenant_id
+                JOIN warehouse_locations wl
+                  ON wl.id = al.location_id AND wl.warehouse_id = al.warehouse_id AND wl.tenant_id = al.tenant_id
+                JOIN items i ON i.id = al.item_id AND i.tenant_id = al.tenant_id
+                LEFT JOIN inventory_lots il
+                  ON il.id = al.lot_id AND il.item_id = al.item_id AND il.tenant_id = al.tenant_id
+                WHERE al.tenant_id = ? AND ln.inventory_adjustment_id = ?
+                ORDER BY al.warehouse_id, al.location_id, al.item_id, al.lot_id, al.stock_status, al.id
+                FOR UPDATE
+                """, access.tenantId(), adjustmentId);
+        if (allocations.isEmpty()) throw new IllegalStateException("Manual adjustment has no allocations");
+        for (Map<String, Object> allocation : allocations) {
+            if (!Set.of("NONE", "LOT").contains(string(allocation, "tracking_method"))) {
+                throw new IllegalStateException("Serial-tracked manual adjustments require serial evidence");
+            }
+            BigDecimal delta = decimal(allocation.get("adjustment_qty"));
+            if (delta.signum() == 0) throw new IllegalStateException("Manual adjustment contains a zero variance");
+            String movement = delta.signum() > 0 ? "ADJUSTMENT_IN" : "ADJUSTMENT_OUT";
+            WmsInventoryPostingService.PostingLeg leg = new WmsInventoryPostingService.PostingLeg(
+                    string(allocation, "warehouse_public_id"), string(allocation, "location_public_id"),
+                    string(allocation, "item_public_id"), string(allocation, "lot_public_id"),
+                    null, null, string(allocation, "stock_status"), delta.abs());
+            BigDecimal baseline = decimal(allocation.get("system_qty"));
+            postingService.postManualAdjustment(principal, adjustmentPublicId,
+                    number(allocation, "inventory_adjustment_line_id"), baseline, baseline,
+                    new WmsInventoryPostingService.PostingCommand(UUID.randomUUID(), movement,
+                            List.of(leg), "Manual inventory adjustment: " + string(header, "reason_code")));
+        }
+        int adjustedLines = jdbc.update("""
+                UPDATE inventory_adjustment_lines
+                SET status = 'ADJUSTED', updated_at = UTC_TIMESTAMP(6)
+                WHERE tenant_id = ? AND inventory_adjustment_id = ? AND status = 'REVIEWED'
+                """, access.tenantId(), adjustmentId);
+        if (adjustedLines == 0) throw new IllegalStateException("Approved manual adjustment has no reviewed lines");
+        int changed = jdbc.update("""
+                UPDATE inventory_adjustments
+                SET status = 'POSTED', posted_by_membership_id = ?, posted_at = UTC_TIMESTAMP(6),
+                    version = version + 1, updated_at = UTC_TIMESTAMP(6)
+                WHERE id = ? AND tenant_id = ? AND status = 'APPROVED'
+                """, access.membershipId(), adjustmentId, access.tenantId());
+        if (changed != 1) throw new IllegalStateException("Manual adjustment state changed during posting");
+        audit(access, adjustmentPublicId, "APPROVED", "POSTED", "POST_MANUAL",
+                Map.of("adjustmentType", string(header, "adjustment_type")));
         return view(access.tenantId(), adjustmentPublicId);
     }
 
