@@ -38,7 +38,6 @@ public class WmsStockCountManagementService {
     private static final Set<String> COUNT_TYPES = Set.of("FULL_COUNT", "CYCLE_COUNT", "SPOT_COUNT");
     private static final Set<String> COUNT_MODES = Set.of("BLIND", "OPEN");
     private static final Set<String> STOCK_STATUSES = Set.of("AVAILABLE", "QUARANTINED", "DAMAGED", "EXPIRED", "BLOCKED");
-    private static final Set<String> FROZEN_STATES = Set.of("IN_PROGRESS", "SUBMITTED", "UNDER_REVIEW", "APPROVED");
 
     private final WmsMembershipAccessService accessService;
     private final JdbcTemplate jdbc;
@@ -316,6 +315,11 @@ public class WmsStockCountManagementService {
         long warehouseId = number(initialHeader, "warehouse_id");
 
         lockIds("warehouses", List.of(warehouseId), access.tenantId(), "warehouse");
+        Map<String, Object> lockedWarehouse = requiredRowForUpdate(
+                "SELECT status FROM warehouses WHERE id = ? AND tenant_id = ?", warehouseId, access.tenantId());
+        if (!"ACTIVE".equals(string(lockedWarehouse, "status"))) {
+            throw new IllegalArgumentException("Warehouse must be active to add a count line");
+        }
         Map<String, Object> location = requiredRow("""
                 SELECT id, public_id, status
                 FROM warehouse_locations
@@ -370,6 +374,10 @@ public class WmsStockCountManagementService {
             throw new IllegalArgumentException("Lot assignment does not match the item's tracking method");
         }
         String stockStatus = enumValue(command.stockStatus(), STOCK_STATUSES, "stock status");
+        boolean serialTracked = Set.of("SERIAL", "LOT_AND_SERIAL").contains(trackingMethod);
+        if (serialTracked && !Set.of("AVAILABLE", "QUARANTINED", "DAMAGED").contains(stockStatus)) {
+            throw new IllegalArgumentException("Serial-tracked count lines require a supported serial stock status");
+        }
         Map<String, Object> lockedHeader = header(access.tenantId(), countPublicId, true);
         requireActiveFrozenCount(lockedHeader);
         long countId = number(lockedHeader, "id");
@@ -383,7 +391,7 @@ public class WmsStockCountManagementService {
 
         String linePublicId = UUID.randomUUID().toString();
         try {
-            jdbc.update("""
+            int inserted = jdbc.update("""
                     INSERT INTO stock_count_lines
                       (public_id, tenant_id, stock_count_scope_id, warehouse_id, location_id,
                        item_id, lot_id, stock_status, expected_qty, line_status)
@@ -392,6 +400,7 @@ public class WmsStockCountManagementService {
                     WHERE s.tenant_id = ? AND s.stock_count_id = ? AND s.warehouse_id = ? AND s.location_id = ?
                     """, linePublicId, access.tenantId(), warehouseId, locationId, itemId, lotId, stockStatus,
                     access.tenantId(), countId, warehouseId, locationId);
+            if (inserted != 1) throw new IllegalStateException("Count line scope changed; reload and retry");
         } catch (DuplicateKeyException duplicate) {
             throw new IllegalStateException("This item/lot/status bucket already exists in the count", duplicate);
         }
