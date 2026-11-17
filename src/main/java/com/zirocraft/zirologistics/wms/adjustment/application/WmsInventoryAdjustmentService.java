@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -232,11 +233,11 @@ public class WmsInventoryAdjustmentService {
         Access access = access(principal, "WMS_INVENTORY_ADJUSTMENT_CREATE");
         String documentNumber = required(command.documentNumber(), "Document number", 60);
         String warehousePublicId = required(command.warehousePublicId(), "Warehouse public ID", 36);
-        String type = required(command.adjustmentType(), "Adjustment type", 30).toUpperCase();
+        String type = required(command.adjustmentType(), "Adjustment type", 30).toUpperCase(Locale.ROOT);
         if (!Set.of("LOSS", "FOUND", "CORRECTION", "OTHER").contains(type)) {
             throw new IllegalArgumentException("Manual quantity adjustment type must be LOSS, FOUND, CORRECTION or OTHER; PHYSICAL_COUNT is count-linked and DAMAGE/EXPIRY require status reclassification");
         }
-        String reasonCode = required(command.reasonCode(), "Reason code", 50).toUpperCase();
+        String reasonCode = required(command.reasonCode(), "Reason code", 50).toUpperCase(Locale.ROOT);
         String reasonDescription = optional(command.reasonDescription(), 500);
         String notes = optional(command.notes(), 1000);
         if (command.allocations() == null || command.allocations().isEmpty() || command.allocations().size() > 100) {
@@ -248,6 +249,8 @@ public class WmsInventoryAdjustmentService {
                 WHERE tenant_id = ? AND public_id = ?
                 """, access.tenantId(), warehousePublicId);
         long warehouseId = number(warehouse, "id");
+        requiredRowForUpdate("SELECT id FROM warehouses WHERE id = ? AND tenant_id = ?",
+                warehouseId, access.tenantId());
         if (!"ACTIVE".equals(string(warehouse, "status"))) {
             throw new IllegalArgumentException("Warehouse must be active");
         }
@@ -277,7 +280,7 @@ public class WmsInventoryAdjustmentService {
             String locationPublicId = required(allocationCommand.locationPublicId(), "Location public ID", 36);
             String itemPublicId = required(allocationCommand.itemPublicId(), "Item public ID", 36);
             String stockStatus = allocationCommand.stockStatus() == null
-                    ? "AVAILABLE" : allocationCommand.stockStatus().trim().toUpperCase();
+                    ? "AVAILABLE" : allocationCommand.stockStatus().trim().toUpperCase(Locale.ROOT);
             if (!"AVAILABLE".equals(stockStatus)) {
                 throw new IllegalArgumentException("Manual quantity adjustments currently support AVAILABLE stock only; use an explicit status-change workflow for other stock statuses");
             }
@@ -294,11 +297,15 @@ public class WmsInventoryAdjustmentService {
                 throw new IllegalArgumentException("Location must be active");
             }
             long locationId = number(location, "id");
+            requiredRowForUpdate("SELECT id FROM warehouse_locations WHERE id = ? AND warehouse_id = ? AND tenant_id = ?",
+                    locationId, warehouseId, access.tenantId());
             Map<String, Object> item = requiredRow("""
                     SELECT id, base_uom_id, tracking_method, is_stock_item, status
                     FROM items WHERE tenant_id = ? AND public_id = ?
                     """, access.tenantId(), itemPublicId);
             long itemId = number(item, "id");
+            requiredRowForUpdate("SELECT id FROM items WHERE id = ? AND tenant_id = ?",
+                    itemId, access.tenantId());
             if (!"ACTIVE".equals(string(item, "status")) || !bool(item.get("is_stock_item"))) {
                 throw new IllegalArgumentException("Only active stock items can be adjusted");
             }
@@ -313,6 +320,8 @@ public class WmsInventoryAdjustmentService {
                         """, access.tenantId(), itemId, lotPublicId);
                 if (!"ACTIVE".equals(string(lot, "status"))) throw new IllegalArgumentException("Lot must be active");
                 lotId = number(lot, "id");
+                requiredRowForUpdate("SELECT id FROM inventory_lots WHERE id = ? AND tenant_id = ? AND item_id = ?",
+                        lotId, access.tenantId(), itemId);
             }
             if (lotTracked != (lotId != null)) {
                 throw new IllegalArgumentException("Lot assignment does not match the item's tracking method");
