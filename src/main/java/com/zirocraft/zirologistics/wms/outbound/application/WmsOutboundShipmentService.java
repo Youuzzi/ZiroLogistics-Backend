@@ -417,6 +417,10 @@ public class WmsOutboundShipmentService {
         catch (ArithmeticException ex) { throw new IllegalArgumentException("Quantity supports at most four decimals", ex); }
     }
 
+    private static String required(String value) {
+        return required(value, "public ID", 1024);
+    }
+
     private static String required(String value, String label, int max) {
         if (value == null || value.isBlank() || value.trim().length() > max) {
             throw new IllegalArgumentException(label + " is required and must not exceed " + max + " characters");
