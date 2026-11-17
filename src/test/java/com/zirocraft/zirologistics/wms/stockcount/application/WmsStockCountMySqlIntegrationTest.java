@@ -379,9 +379,17 @@ class WmsStockCountMySqlIntegrationTest {
         adjustmentService.submit(fixture.principal(), adjustmentPublicId);
         assertThrows(AccessDeniedException.class,
                 () -> adjustmentService.approve(fixture.principal(), adjustmentPublicId, "Self approval"));
-        assertEquals("APPROVED", adjustmentService.approve(approver, adjustmentPublicId, "Reviewed variance").get("status"));
+        Map<String, Object> approvedAdjustment =
+                adjustmentService.approve(approver, adjustmentPublicId, "Reviewed variance");
+        assertEquals("APPROVED", approvedAdjustment.get("status"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> reviewedLines = (List<Map<String, Object>>) approvedAdjustment.get("lines");
+        assertEquals("REVIEWED", reviewedLines.getFirst().get("status"));
         Map<String, Object> posted = adjustmentService.post(approver, adjustmentPublicId);
         assertEquals("POSTED", posted.get("status"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> adjustedLines = (List<Map<String, Object>>) posted.get("lines");
+        assertEquals("ADJUSTED", adjustedLines.getFirst().get("status"));
         assertEquals(new BigDecimal("4.0000"), onHand(fixture));
         assertEquals("COMPLETED", jdbc.queryForObject("""
                 SELECT status FROM stock_counts WHERE tenant_id = ? AND public_id = ?

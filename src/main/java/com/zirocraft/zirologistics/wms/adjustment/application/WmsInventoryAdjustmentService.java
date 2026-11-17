@@ -154,7 +154,7 @@ public class WmsInventoryAdjustmentService {
                         INSERT INTO inventory_adjustment_lines
                           (public_id, tenant_id, inventory_adjustment_id, warehouse_id,
                            line_number, item_id, uom_id, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'COUNTED')
                         """, UUID.randomUUID().toString(), access.tenantId(), adjustmentId,
                         warehouseId, lineNumber, itemId, number(line, "base_uom_id"));
                 return requiredLong("SELECT LAST_INSERT_ID()");
@@ -264,6 +264,12 @@ public class WmsInventoryAdjustmentService {
                 WHERE id = ? AND tenant_id = ? AND status = 'SUBMITTED'
                 """, access.membershipId(), notes, number(header, "id"), access.tenantId());
         if (changed != 1) throw new IllegalStateException("Inventory adjustment state changed; reload and retry");
+        int reviewedLines = jdbc.update("""
+                UPDATE inventory_adjustment_lines
+                SET status = 'REVIEWED', updated_at = UTC_TIMESTAMP(6)
+                WHERE tenant_id = ? AND inventory_adjustment_id = ? AND status = 'COUNTED'
+                """, access.tenantId(), number(header, "id"));
+        if (reviewedLines == 0) throw new IllegalStateException("Inventory adjustment has no countable lines to approve");
         audit(access, adjustmentPublicId, "SUBMITTED", "APPROVED", "APPROVE", null);
         return view(access.tenantId(), adjustmentPublicId);
     }
@@ -285,6 +291,11 @@ public class WmsInventoryAdjustmentService {
                 WHERE id = ? AND tenant_id = ? AND status = 'SUBMITTED'
                 """, access.membershipId(), reason, number(header, "id"), access.tenantId());
         if (changed != 1) throw new IllegalStateException("Inventory adjustment state changed; reload and retry");
+        jdbc.update("""
+                UPDATE inventory_adjustment_lines
+                SET status = 'CANCELLED', updated_at = UTC_TIMESTAMP(6)
+                WHERE tenant_id = ? AND inventory_adjustment_id = ? AND status = 'COUNTED'
+                """, access.tenantId(), number(header, "id"));
         audit(access, adjustmentPublicId, "SUBMITTED", "REJECTED", "REJECT", Map.of("reason", reason));
         return view(access.tenantId(), adjustmentPublicId);
     }
@@ -377,11 +388,12 @@ public class WmsInventoryAdjustmentService {
             }
         }
 
-        jdbc.update("""
+        int adjustedLines = jdbc.update("""
                 UPDATE inventory_adjustment_lines
                 SET status = 'ADJUSTED', updated_at = UTC_TIMESTAMP(6)
-                WHERE tenant_id = ? AND inventory_adjustment_id = ?
+                WHERE tenant_id = ? AND inventory_adjustment_id = ? AND status = 'REVIEWED'
                 """, access.tenantId(), adjustmentId);
+        if (adjustedLines == 0) throw new IllegalStateException("Approved adjustment has no reviewed lines to post");
         int changed = jdbc.update("""
                 UPDATE inventory_adjustments
                 SET status = 'POSTED', posted_by_membership_id = ?, posted_at = UTC_TIMESTAMP(6),

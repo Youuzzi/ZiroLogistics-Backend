@@ -119,7 +119,7 @@ Approval and posting are separate, explicit transitions. The adjustment creator 
 For each non-zero allocation:
 - Positive adjustment_qty posts one ADJUSTMENT_IN movement.
 - Negative adjustment_qty posts one ADJUSTMENT_OUT movement.
-- Zero variance produces no ledger entry.
+- Zero variance produces no ledger entry for quantity-tracked allocations. For serial-tracked allocations, a zero net quantity delta can still contain exact identity variance; post the PRESENT and MISSING serial identities as balanced ADJUSTMENT_IN / ADJUSTMENT_OUT legs.
 - Every movement calls WmsInventoryPostingService; no controller or adjustment repository writes balance, ledger or serial tables directly.
 
 The generic `POST /inventory/postings` endpoint must reject `ADJUSTMENT_IN` and `ADJUSTMENT_OUT`. The adjustment application service uses a dedicated typed posting entry that verifies the approved adjustment, its exact stock-count link, the still-approved/frozen count, the adjustment line, exact allocation, and each scoped location. It also compares the stored system quantity with the locked balance baseline inside the posting boundary. Ledger entries carry `reference_type = INVENTORY_ADJUSTMENT`, the adjustment ID and adjustment-line ID. No caller-controlled freeze bypass is exposed.
