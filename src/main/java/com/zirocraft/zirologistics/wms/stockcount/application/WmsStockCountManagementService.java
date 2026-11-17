@@ -205,12 +205,16 @@ public class WmsStockCountManagementService {
         queryArgs.add(warehouseId);
         queryArgs.addAll(locationIds);
         String bucketSql = """
-                SELECT location_id, item_id, lot_id, stock_status
+                SELECT location_id, item_id, lot_id, stock_status, reserved_qty
                 FROM inventory_balances
                 WHERE tenant_id = ? AND warehouse_id = ? AND location_id IN (%s)
                 ORDER BY location_id, item_id, lot_id, stock_status
                 """.formatted(placeholders);
         List<Map<String, Object>> buckets = jdbc.queryForList(bucketSql, queryArgs.toArray());
+        if (buckets.stream().anyMatch(row -> decimal(row.get("reserved_qty")).signum() > 0)) {
+            throw new IllegalStateException(
+                    "Stock count cannot start while scoped inventory has active reservations; complete or release them first");
+        }
 
         List<Long> itemIds = buckets.stream().map(row -> number(row, "item_id")).distinct().sorted().toList();
         List<Long> lotIds = buckets.stream().map(row -> nullableNumber(row.get("lot_id")))
