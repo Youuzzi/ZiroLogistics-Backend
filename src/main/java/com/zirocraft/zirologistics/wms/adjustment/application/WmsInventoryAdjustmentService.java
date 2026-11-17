@@ -523,6 +523,7 @@ public class WmsInventoryAdjustmentService {
         return view(access.tenantId(), adjustmentPublicId);
     }
 
+
     @Transactional
     public Map<String, Object> post(WmsAuthenticatedPrincipal principal, String adjustmentPublicId) {
         lockTenant(principal);
@@ -531,16 +532,22 @@ public class WmsInventoryAdjustmentService {
         if (!"APPROVED".equals(string(header, "status"))) {
             throw new IllegalStateException("Only an approved inventory adjustment can be posted");
         }
-        Map<String, Object> link = requiredRowForUpdate("""
+        long adjustmentId = number(header, "id");
+        List<Map<String, Object>> links = jdbc.queryForList("""
                 SELECT c.id AS count_id, c.public_id AS count_public_id, c.status, c.freeze_stock
                 FROM stock_count_adjustment_links l
                 JOIN stock_counts c ON c.id = l.stock_count_id AND c.tenant_id = l.tenant_id
                 WHERE l.tenant_id = ? AND l.inventory_adjustment_id = ?
-                """, access.tenantId(), number(header, "id"));
-        if (!"APPROVED".equals(string(link, "status")) || !bool(link.get("freeze_stock"))) {
+                FOR UPDATE
+                """, access.tenantId(), adjustmentId);
+        boolean manual = links.isEmpty();
+        Map<String, Object> link = manual ? null : links.getFirst();
+        if (manual && "PHYSICAL_COUNT".equals(string(header, "adjustment_type"))) {
+            throw new IllegalStateException("Physical-count adjustment must retain its approved stock-count link");
+        }
+        if (!manual && (!"APPROVED".equals(string(link, "status")) || !bool(link.get("freeze_stock")))) {
             throw new IllegalStateException("Linked stock count is no longer approved and frozen");
         }
-        long adjustmentId = number(header, "id");
 
         List<Map<String, Object>> allocations = jdbc.queryForList("""
                 SELECT al.id AS allocation_id, al.inventory_adjustment_line_id, al.item_id,
@@ -562,6 +569,7 @@ public class WmsInventoryAdjustmentService {
                 ORDER BY al.warehouse_id, al.location_id, al.item_id, al.lot_id, al.stock_status, al.id
                 FOR UPDATE
                 """, access.tenantId(), adjustmentId);
+        if (allocations.isEmpty()) throw new IllegalStateException("Approved adjustment has no allocations");
 
         for (Map<String, Object> allocation : allocations) {
             long allocationId = number(allocation, "allocation_id");
@@ -593,21 +601,23 @@ public class WmsInventoryAdjustmentService {
                     throw new IllegalStateException("Serial identity variance does not match adjustment quantity");
                 }
                 BigDecimal baseline = decimal(allocation.get("system_qty"));
-                postLegs(principal, adjustmentPublicId, string(link, "count_public_id"), lineId,
-                        "ADJUSTMENT_IN", inbound, baseline, baseline, "Physical count found serial stock");
-                postLegs(principal, adjustmentPublicId, string(link, "count_public_id"), lineId,
+                String countPublicId = manual ? null : string(link, "count_public_id");
+                postLegs(principal, adjustmentPublicId, countPublicId, lineId,
+                        "ADJUSTMENT_IN", inbound, baseline, baseline,
+                        manual ? "Manual reason-coded adjustment: found serial stock" : "Physical count found serial stock");
+                postLegs(principal, adjustmentPublicId, countPublicId, lineId,
                         "ADJUSTMENT_OUT", outbound, baseline, baseline.add(BigDecimal.valueOf(inbound.size())),
-                        "Physical count missing serial stock");
+                        manual ? "Manual reason-coded adjustment: lost serial stock" : "Physical count missing serial stock");
             } else if (delta.signum() > 0) {
-                postLegs(principal, adjustmentPublicId, string(link, "count_public_id"), lineId,
+                postLegs(principal, adjustmentPublicId, manual ? null : string(link, "count_public_id"), lineId,
                         "ADJUSTMENT_IN", List.of(postingLeg(allocation, null, delta)),
                         decimal(allocation.get("system_qty")), decimal(allocation.get("system_qty")),
-                        "Physical count positive variance");
+                        "Approved reason-coded positive variance");
             } else if (delta.signum() < 0) {
-                postLegs(principal, adjustmentPublicId, string(link, "count_public_id"), lineId,
+                postLegs(principal, adjustmentPublicId, manual ? null : string(link, "count_public_id"), lineId,
                         "ADJUSTMENT_OUT", List.of(postingLeg(allocation, null, delta.abs())),
                         decimal(allocation.get("system_qty")), decimal(allocation.get("system_qty")),
-                        "Physical count negative variance");
+                        "Approved reason-coded negative variance");
             }
         }
 
@@ -625,20 +635,23 @@ public class WmsInventoryAdjustmentService {
                 """, access.membershipId(), adjustmentId, access.tenantId());
         if (changed != 1) throw new IllegalStateException("Inventory adjustment state changed during posting");
 
-        jdbc.update("""
-                UPDATE stock_count_scopes
-                SET scope_status = 'COMPLETED', completed_at = UTC_TIMESTAMP(6)
-                WHERE tenant_id = ? AND stock_count_id = ? AND scope_status = 'IN_PROGRESS'
-                """, access.tenantId(), number(link, "count_id"));
-        int countChanged = jdbc.update("""
-                UPDATE stock_counts
-                SET status = 'COMPLETED', freeze_stock = 0, completed_at = UTC_TIMESTAMP(6),
-                    version = version + 1, updated_at = UTC_TIMESTAMP(6)
-                WHERE id = ? AND tenant_id = ? AND status = 'APPROVED' AND freeze_stock = 1
-                """, number(link, "count_id"), access.tenantId());
-        if (countChanged != 1) throw new IllegalStateException("Linked stock count could not be completed");
+        if (!manual) {
+            jdbc.update("""
+                    UPDATE stock_count_scopes
+                    SET scope_status = 'COMPLETED', completed_at = UTC_TIMESTAMP(6)
+                    WHERE tenant_id = ? AND stock_count_id = ? AND scope_status = 'IN_PROGRESS'
+                    """, access.tenantId(), number(link, "count_id"));
+            int countChanged = jdbc.update("""
+                    UPDATE stock_counts
+                    SET status = 'COMPLETED', freeze_stock = 0, completed_at = UTC_TIMESTAMP(6),
+                        version = version + 1, updated_at = UTC_TIMESTAMP(6)
+                    WHERE id = ? AND tenant_id = ? AND status = 'APPROVED' AND freeze_stock = 1
+                    """, number(link, "count_id"), access.tenantId());
+            if (countChanged != 1) throw new IllegalStateException("Linked stock count could not be completed");
+        }
         audit(access, adjustmentPublicId, "APPROVED", "POSTED", "POST",
-                Map.of("stockCountPublicId", string(link, "count_public_id")));
+                manual ? Map.of("workflow", "MANUAL", "adjustmentType", string(header, "adjustment_type"))
+                        : Map.of("workflow", "PHYSICAL_COUNT", "stockCountPublicId", string(link, "count_public_id")));
         return view(access.tenantId(), adjustmentPublicId);
     }
 
@@ -651,9 +664,15 @@ public class WmsInventoryAdjustmentService {
         for (int offset = 0; offset < legs.size(); offset += 200) {
             List<WmsInventoryPostingService.PostingLeg> batch =
                     legs.subList(offset, Math.min(offset + 200, legs.size()));
-            postingService.postApprovedAdjustment(principal, adjustmentPublicId, countPublicId,
-                    lineId, expectedSystemQty, currentBaseline,
-                    new WmsInventoryPostingService.PostingCommand(UUID.randomUUID(), movement, batch, notes));
+            WmsInventoryPostingService.PostingCommand command =
+                    new WmsInventoryPostingService.PostingCommand(UUID.randomUUID(), movement, batch, notes);
+            if (countPublicId == null) {
+                postingService.postApprovedManualAdjustment(principal, adjustmentPublicId,
+                        lineId, expectedSystemQty, currentBaseline, command);
+            } else {
+                postingService.postApprovedAdjustment(principal, adjustmentPublicId, countPublicId,
+                        lineId, expectedSystemQty, currentBaseline, command);
+            }
             BigDecimal moved = batch.stream().map(WmsInventoryPostingService.PostingLeg::quantity)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             currentBaseline = "ADJUSTMENT_IN".equals(movement)
