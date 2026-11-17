@@ -136,9 +136,9 @@ The manual API accepts only adjustment types other than PHYSICAL_COUNT. PHYSICAL
 The first manual-adjustment implementation slice is intentionally limited to quantity corrections for non-serialized NONE/LOT items with AVAILABLE stock status and reason types CORRECTION, OTHER, LOSS and FOUND. DAMAGE and EXPIRY remain unavailable until the dedicated status-reclassification lifecycle and serial status mappings are implemented and tested; SERIAL and LOT_AND_SERIAL manual adjustments are rejected until exact serial evidence is supported. The API must reject these unsupported combinations rather than silently treating them as quantity changes.
 
 Manual quantity adjustments use the existing typed adjustment posting boundary and exact allocation identity:
-- CORRECTION and OTHER may add or remove quantity from AVAILABLE stock. Positive deltas use ADJUSTMENT_IN and restore only an existing LOST serial identity for serialized items; negative deltas use ADJUSTMENT_OUT and require exact AVAILABLE serial identities which transition to LOST.
-- LOSS is negative-only against AVAILABLE stock and uses ADJUSTMENT_OUT; serialized loss requires exact serial identities.
-- FOUND is positive-only against AVAILABLE stock and uses ADJUSTMENT_IN; serialized found stock must reference an existing LOST serial identity. Unknown serials are not silently created.
+- CORRECTION and OTHER may add or remove quantity from AVAILABLE stock for the supported NONE/LOT item tracking methods. Positive deltas use ADJUSTMENT_IN; negative deltas use ADJUSTMENT_OUT.
+- LOSS is negative-only against AVAILABLE stock and uses ADJUSTMENT_OUT.
+- FOUND is positive-only against AVAILABLE stock and uses ADJUSTMENT_IN.
 - PHYSICAL_COUNT is rejected by the manual-create API and continues to use the count-linked workflow.
 
 DAMAGE and EXPIRY are stock-status reclassifications, not quantity corrections. They must not be implemented as arbitrary ADJUSTMENT_IN/OUT pairs. DAMAGE uses the existing paired DAMAGE movement from AVAILABLE to DAMAGED in one warehouse/location and must preserve quantity; serial-tracked damage must prove exact serial identity and lifecycle transition. EXPIRY requires an explicit serial lifecycle mapping before serialized expiry can be posted; until that mapping exists, serialized EXPIRY is rejected. Status reclassification remains behind the approved adjustment document and must be validated against exact source and destination allocation rows.
