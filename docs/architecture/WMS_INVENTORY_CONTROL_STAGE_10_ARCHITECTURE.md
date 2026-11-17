@@ -36,7 +36,7 @@ The frozen V1 schema already contains the principal tables for this stage:
 
 V1 defines count types FULL_COUNT, CYCLE_COUNT, SPOT_COUNT; count modes BLIND, OPEN; the count, line and scope lifecycle states; the adjustment document lifecycle and reason types; and MIN_MAX / MANUAL replenishment rules. Stage 10 must use those allowlists and columns as written.
 
-**V1–V19 are immutable.** Do not edit an existing migration, regenerate the baseline, or create duplicate count/adjustment/replenishment tables. Any required schema extension must be an additive V20+ migration and must identify the exact V1 gap it closes.
+**V1–V20 are immutable.** Do not edit an existing migration, regenerate the baseline, or create duplicate count/adjustment/replenishment tables. Any required schema extension must be an additive V20+ migration and must identify the exact V1 gap it closes.
 
 ### 2.1 Proven schema gap: serialized count observations
 
@@ -76,7 +76,7 @@ Proposed audit event types: WMS_STOCK_COUNT_UPDATED, WMS_INVENTORY_ADJUSTMENT_UP
 
 A stock count belongs to one warehouse and contains one or more location scopes. A location may appear only once in the same count. Only active tenant-owned warehouses and locations can be scoped.
 
-FULL_COUNT, CYCLE_COUNT and SPOT_COUNT describe the business purpose. BLIND means counter-facing API responses must not disclose expected_qty; OPEN may disclose it to an authorized counter. Hiding the quantity only in the UI is insufficient—the backend response must omit it for blind-count actors.
+FULL_COUNT, CYCLE_COUNT and SPOT_COUNT describe the business purpose. BLIND means counter-facing API responses must not disclose expected_qty; OPEN may disclose it only to a membership with WMS_STOCK_COUNT_RECORD or reviewer/approver permission. A read-only membership must not receive expected_qty even for an OPEN count. Hiding the quantity only in the UI is insufficient—the backend response must omit it for unauthorized actors.
 
 Planning validates the warehouse and location scopes but does not take the inventory snapshot. Starting the count acquires the warehouse and all scoped location locks, locks the relevant item/lot rows and inventory balance buckets, then creates count lines for those buckets and activates freeze_stock in the same transaction. expected_qty is the snapshot of inventory_balances.on_hand_qty at that start boundary, never available_qty; reserved stock is physically present and remains part of the count. During an active frozen count, an authorized counter may add an explicit zero-expected line for a scoped location and selected active stock item/lot/status so that unexpected physical stock can be recorded. The bucket must not already exist in the snapshot. The unique bucket key in V1 prevents duplicate lines.
 
@@ -145,7 +145,7 @@ Base path: /api/wms/v1/tenants/current.
 Stock counts:
 - GET /stock-counts, POST /stock-counts, GET /stock-counts/{countPublicId}.
 - POST /stock-counts/{countPublicId}/plan, /start, /submit, /review, /approve, /cancel.
-- POST /stock-counts/{countPublicId}/lines/{linePublicId}/results to record a new round; result command includes counted quantity, optional scanned serial public IDs and notes.
+- POST /stock-counts/{countPublicId}/lines to add a scoped zero-expected bucket for unexpected stock; POST /stock-counts/{countPublicId}/lines/{linePublicId}/results to record a new round; result command includes counted quantity, optional scanned serial public IDs and notes.
 - Recount uses the same results operation with the next count round; the server assigns the next round and validates the prior actor. Client cannot choose or overwrite an old round.
 
 Inventory adjustments:
