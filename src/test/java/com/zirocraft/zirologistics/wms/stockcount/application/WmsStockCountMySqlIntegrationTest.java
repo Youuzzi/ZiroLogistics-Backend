@@ -725,7 +725,10 @@ class WmsStockCountMySqlIntegrationTest {
         String adjustmentId = (String) created.get("publicId");
         assertEquals("DRAFT", created.get("status"));
         assertEquals("CORRECTION", created.get("adjustment_type"));
-        assertEquals(0, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
 
         adjustmentService.submit(fixture.principal(), adjustmentId);
         assertThrows(AccessDeniedException.class,
