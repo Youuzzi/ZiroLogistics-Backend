@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,6 +37,7 @@ import java.util.UUID;
 public class WmsStockCountManagementService {
     private static final Set<String> COUNT_TYPES = Set.of("FULL_COUNT", "CYCLE_COUNT", "SPOT_COUNT");
     private static final Set<String> COUNT_MODES = Set.of("BLIND", "OPEN");
+    private static final Set<String> STOCK_STATUSES = Set.of("AVAILABLE", "QUARANTINED", "DAMAGED", "EXPIRED", "BLOCKED");
     private static final Set<String> FROZEN_STATES = Set.of("IN_PROGRESS", "SUBMITTED", "UNDER_REVIEW", "APPROVED");
 
     private final WmsMembershipAccessService accessService;
@@ -303,6 +306,361 @@ public class WmsStockCountManagementService {
         return view(access, countPublicId);
     }
 
+    @Transactional
+    public Map<String, Object> addLine(
+            WmsAuthenticatedPrincipal principal, String countPublicId, AddCountLineCommand command) {
+        if (command == null) throw new IllegalArgumentException("Stock count line command is required");
+        lockTenant(principal);
+        Access access = access(principal, "WMS_STOCK_COUNT_RECORD");
+        Map<String, Object> initialHeader = header(access.tenantId(), countPublicId, false);
+        long warehouseId = number(initialHeader, "warehouse_id");
+
+        lockIds("warehouses", List.of(warehouseId), access.tenantId(), "warehouse");
+        Map<String, Object> location = requiredRow("""
+                SELECT id, public_id, status
+                FROM warehouse_locations
+                WHERE tenant_id = ? AND warehouse_id = ? AND public_id = ?
+                """, access.tenantId(), warehouseId,
+                required(command.locationPublicId(), "Location public ID", 36));
+        long locationId = number(location, "id");
+        lockIds("warehouse_locations", List.of(locationId), access.tenantId(), "location");
+        Map<String, Object> lockedLocation = requiredRowForUpdate("""
+                SELECT status FROM warehouse_locations
+                WHERE id = ? AND tenant_id = ? AND warehouse_id = ?
+                """, locationId, access.tenantId(), warehouseId);
+        if (!"ACTIVE".equals(string(lockedLocation, "status"))) {
+            throw new IllegalArgumentException("Location must be active to add a count line");
+        }
+
+        Map<String, Object> item = requiredRow("""
+                SELECT id, tracking_method, is_stock_item, status
+                FROM items WHERE tenant_id = ? AND public_id = ?
+                """, access.tenantId(), required(command.itemPublicId(), "Item public ID", 36));
+        long itemId = number(item, "id");
+        lockIds("items", List.of(itemId), access.tenantId(), "item");
+        Map<String, Object> lockedItem = requiredRowForUpdate("""
+                SELECT tracking_method, is_stock_item, status
+                FROM items WHERE id = ? AND tenant_id = ?
+                """, itemId, access.tenantId());
+        if (!"ACTIVE".equals(string(lockedItem, "status")) || !bool(lockedItem.get("is_stock_item"))) {
+            throw new IllegalArgumentException("Count line must reference an active stock item");
+        }
+
+        String trackingMethod = string(lockedItem, "tracking_method");
+        boolean lotTracked = Set.of("LOT", "LOT_AND_SERIAL").contains(trackingMethod);
+        Long lotId = null;
+        String lotPublicId = command.lotPublicId() == null || command.lotPublicId().isBlank()
+                ? null : required(command.lotPublicId(), "Lot public ID", 36);
+        if (lotPublicId != null) {
+            Map<String, Object> lot = requiredRow("""
+                    SELECT id, status FROM inventory_lots
+                    WHERE tenant_id = ? AND item_id = ? AND public_id = ?
+                    """, access.tenantId(), itemId, lotPublicId);
+            lotId = number(lot, "id");
+            lockIds("inventory_lots", List.of(lotId), access.tenantId(), "lot");
+            Map<String, Object> lockedLot = requiredRowForUpdate("""
+                    SELECT status FROM inventory_lots
+                    WHERE id = ? AND tenant_id = ? AND item_id = ?
+                    """, lotId, access.tenantId(), itemId);
+            if (!"ACTIVE".equals(string(lockedLot, "status"))) {
+                throw new IllegalArgumentException("Count line lot must be active");
+            }
+        }
+        if (lotTracked != (lotId != null)) {
+            throw new IllegalArgumentException("Lot assignment does not match the item's tracking method");
+        }
+        String stockStatus = enumValue(command.stockStatus(), STOCK_STATUSES, "stock status");
+        Map<String, Object> lockedHeader = header(access.tenantId(), countPublicId, true);
+        requireActiveFrozenCount(lockedHeader);
+        long countId = number(lockedHeader, "id");
+        Integer scopeCount = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM stock_count_scopes
+                WHERE tenant_id = ? AND stock_count_id = ? AND warehouse_id = ? AND location_id = ?
+                """, Integer.class, access.tenantId(), countId, warehouseId, locationId);
+        if (scopeCount == null || scopeCount != 1) {
+            throw new IllegalArgumentException("Location is not part of this stock count scope");
+        }
+
+        String linePublicId = UUID.randomUUID().toString();
+        try {
+            jdbc.update("""
+                    INSERT INTO stock_count_lines
+                      (public_id, tenant_id, stock_count_scope_id, warehouse_id, location_id,
+                       item_id, lot_id, stock_status, expected_qty, line_status)
+                    SELECT ?, ?, s.id, ?, ?, ?, ?, ?, 0.0000, 'PENDING'
+                    FROM stock_count_scopes s
+                    WHERE s.tenant_id = ? AND s.stock_count_id = ? AND s.warehouse_id = ? AND s.location_id = ?
+                    """, linePublicId, access.tenantId(), warehouseId, locationId, itemId, lotId, stockStatus,
+                    access.tenantId(), countId, warehouseId, locationId);
+        } catch (DuplicateKeyException duplicate) {
+            throw new IllegalStateException("This item/lot/status bucket already exists in the count", duplicate);
+        }
+        audit(access, countPublicId, "IN_PROGRESS", "IN_PROGRESS", "ADD_ZERO_EXPECTED_LINE",
+                Map.of("linePublicId", linePublicId, "itemPublicId", command.itemPublicId(),
+                        "locationPublicId", command.locationPublicId(), "stockStatus", stockStatus));
+        return view(access, countPublicId);
+    }
+
+    @Transactional
+    public Map<String, Object> recordResult(
+            WmsAuthenticatedPrincipal principal, String countPublicId, String linePublicId,
+            RecordCountResultCommand command) {
+        if (command == null) throw new IllegalArgumentException("Count result command is required");
+        lockTenant(principal);
+        Access access = access(principal, "WMS_STOCK_COUNT_RECORD");
+        BigDecimal countedQty = normalizeCountedQuantity(command.countedQty());
+        String notes = optional(command.notes(), 1000);
+
+        Map<String, Object> line = requiredRow("""
+                SELECT l.id AS line_id, l.public_id AS line_public_id, l.tenant_id, l.warehouse_id,
+                       l.location_id, l.item_id, l.lot_id, l.stock_status, l.expected_qty, l.line_status,
+                       c.id AS count_id, c.public_id AS count_public_id, c.status AS count_status,
+                       c.freeze_stock, i.tracking_method
+                FROM stock_count_lines l
+                JOIN stock_count_scopes s
+                  ON s.id = l.stock_count_scope_id AND s.tenant_id = l.tenant_id
+                JOIN stock_counts c ON c.id = s.stock_count_id AND c.tenant_id = s.tenant_id
+                JOIN items i ON i.id = l.item_id AND i.tenant_id = l.tenant_id
+                WHERE l.tenant_id = ? AND c.public_id = ? AND l.public_id = ?
+                """, access.tenantId(), required(countPublicId, "Stock count public ID", 36),
+                required(linePublicId, "Stock count line public ID", 36));
+
+        long warehouseId = number(line, "warehouse_id");
+        long locationId = number(line, "location_id");
+        long itemId = number(line, "item_id");
+        Long lotId = nullableNumber(line.get("lot_id"));
+        lockIds("warehouses", List.of(warehouseId), access.tenantId(), "warehouse");
+        lockIds("warehouse_locations", List.of(locationId), access.tenantId(), "location");
+        lockIds("items", List.of(itemId), access.tenantId(), "item");
+        lockIds("inventory_lots", lotId == null ? List.of() : List.of(lotId), access.tenantId(), "lot");
+
+        List<String> serialPublicIds = normalizePublicIds(command.serialPublicIds());
+        if (serialPublicIds.size() > 500) {
+            throw new IllegalArgumentException("A count result cannot contain more than 500 serial identities");
+        }
+        if (serialPublicIds.stream().distinct().count() != serialPublicIds.size()) {
+            throw new IllegalArgumentException("Duplicate serial identities are not allowed");
+        }
+
+        String trackingMethod = string(line, "tracking_method");
+        boolean serialTracked = Set.of("SERIAL", "LOT_AND_SERIAL").contains(trackingMethod);
+        if (!serialTracked && !serialPublicIds.isEmpty()) {
+            throw new IllegalArgumentException("Serial identities are only valid for serial-tracked items");
+        }
+        if (serialTracked) {
+            if (countedQty.stripTrailingZeros().scale() > 0
+                    || countedQty.compareTo(BigDecimal.valueOf(serialPublicIds.size())) != 0) {
+                throw new IllegalArgumentException("Scanned serial count must exactly match the whole-unit counted quantity");
+            }
+        }
+
+        List<Long> serialIds = new ArrayList<>();
+        for (String serialPublicId : serialPublicIds) {
+            Map<String, Object> serial = requiredRow("""
+                    SELECT id FROM inventory_serials
+                    WHERE tenant_id = ? AND item_id = ? AND public_id = ? AND lot_id <=> ?
+                    """, access.tenantId(), itemId, serialPublicId, lotId);
+            serialIds.add(number(serial, "id"));
+        }
+        List<Long> orderedSerialIds = serialIds.stream().distinct().sorted().toList();
+        lockIds("inventory_serials", orderedSerialIds, access.tenantId(), "serial");
+        Map<Long, Map<String, Object>> serialRows = new HashMap<>();
+        if (!orderedSerialIds.isEmpty()) {
+            String marks = String.join(",", java.util.Collections.nCopies(orderedSerialIds.size(), "?"));
+            List<Object> args = new ArrayList<>(List.of(access.tenantId(), itemId));
+            args.add(lotId);
+            args.addAll(orderedSerialIds);
+            List<Map<String, Object>> lockedSerials = jdbc.queryForList("""
+                    SELECT id, status, current_warehouse_id, current_location_id
+                    FROM inventory_serials
+                    WHERE tenant_id = ? AND item_id = ? AND lot_id <=> ?
+                      AND id IN (%s)
+                    ORDER BY id
+                    FOR UPDATE
+                    """.formatted(marks), args.toArray());
+            for (Map<String, Object> serial : lockedSerials) {
+                serialRows.put(number(serial, "id"), serial);
+            }
+        }
+
+        Set<Long> observedSerialIds = new HashSet<>(orderedSerialIds);
+        for (Long serialId : orderedSerialIds) {
+            Map<String, Object> serial = serialRows.get(serialId);
+            if (serial == null || !validObservedSerial(serial, string(line, "stock_status"),
+                    warehouseId, locationId)) {
+                throw new IllegalArgumentException("A scanned serial is not in this count line's physical bucket");
+            }
+        }
+
+        Set<Long> expectedSerialIds = Set.of();
+        if (serialTracked) {
+            expectedSerialIds = expectedSerialSerialIds(access.tenantId(), itemId, lotId,
+                    string(line, "stock_status"), warehouseId, locationId);
+            int expectedWholeUnits;
+            try {
+                expectedWholeUnits = decimal(line.get("expected_qty")).intValueExact();
+            } catch (ArithmeticException invalidExpected) {
+                throw new IllegalStateException("Serial-tracked snapshot quantity is not a whole number", invalidExpected);
+            }
+            if (expectedSerialIds.size() != expectedWholeUnits) {
+                throw new IllegalStateException("Serial identities do not reconcile with the frozen on-hand snapshot");
+            }
+        }
+
+        Map<String, Object> lockedHeader = header(access.tenantId(), countPublicId, true);
+        requireActiveFrozenCount(lockedHeader);
+        long countId = number(lockedHeader, "id");
+        Map<String, Object> lockedLine = requiredRowForUpdate("""
+                SELECT id, line_status, expected_qty, item_id, warehouse_id
+                FROM stock_count_lines
+                WHERE id = ? AND tenant_id = ? AND public_id = ?
+                """, number(line, "line_id"), access.tenantId(), linePublicId);
+        String previousLineStatus = string(lockedLine, "line_status");
+        if (!Set.of("PENDING", "RECOUNT_REQUIRED").contains(previousLineStatus)) {
+            throw new IllegalStateException("This count line is not accepting another result");
+        }
+
+        List<Map<String, Object>> previousResults = jdbc.queryForList("""
+                SELECT id, count_round, counted_qty, counted_by_membership_id
+                FROM stock_count_results
+                WHERE tenant_id = ? AND stock_count_line_id = ?
+                ORDER BY count_round DESC
+                LIMIT 1
+                FOR UPDATE
+                """, access.tenantId(), number(line, "line_id"));
+        int round = previousResults.isEmpty() ? 1 : Math.toIntExact(number(previousResults.getFirst(), "count_round") + 1);
+        String nextLineStatus;
+        if (previousResults.isEmpty()) {
+            if (!"PENDING".equals(previousLineStatus)) {
+                throw new IllegalStateException("Recount history is missing for this count line");
+            }
+            boolean matchesSnapshot = countedQty.compareTo(decimal(lockedLine.get("expected_qty"))) == 0
+                    && (!serialTracked || observedSerialIds.equals(expectedSerialIds));
+            nextLineStatus = matchesSnapshot ? "COUNTED" : "RECOUNT_REQUIRED";
+        } else {
+            if (!"RECOUNT_REQUIRED".equals(previousLineStatus)) {
+                throw new IllegalStateException("A count line with a prior result is not awaiting recount");
+            }
+            Map<String, Object> previous = previousResults.getFirst();
+            if (number(previous, "counted_by_membership_id") == access.membershipId()) {
+                throw new IllegalStateException("A recount must be performed by a different active membership");
+            }
+            boolean stable = countedQty.compareTo(decimal(previous.get("counted_qty"))) == 0;
+            if (serialTracked) {
+                List<Long> previousSerialIds = jdbc.queryForList("""
+                        SELECT serial_id FROM stock_count_result_serials
+                        WHERE tenant_id = ? AND stock_count_result_id = ?
+                        ORDER BY serial_id
+                        """, Long.class, access.tenantId(), number(previous, "id"));
+                stable = stable && observedSerialIds.equals(new HashSet<>(previousSerialIds));
+            }
+            nextLineStatus = stable ? "COUNTED" : "RECOUNT_REQUIRED";
+        }
+
+        long resultId;
+        try {
+            jdbc.update("""
+                    INSERT INTO stock_count_results
+                      (tenant_id, stock_count_line_id, item_id, warehouse_id, count_round,
+                       counted_qty, counted_by_membership_id, result_status, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'SUBMITTED', ?)
+                    """, access.tenantId(), number(line, "line_id"), itemId, warehouseId,
+                    round, countedQty, access.membershipId(), notes);
+            resultId = requiredLong("""
+                    SELECT id FROM stock_count_results
+                    WHERE tenant_id = ? AND stock_count_line_id = ? AND count_round = ?
+                    """, access.tenantId(), number(line, "line_id"), round);
+        } catch (DuplicateKeyException duplicate) {
+            throw new IllegalStateException("This count result round has already been recorded", duplicate);
+        }
+
+        for (Long serialId : orderedSerialIds) {
+            jdbc.update("""
+                    INSERT INTO stock_count_result_serials
+                      (tenant_id, stock_count_result_id, stock_count_line_id, item_id, warehouse_id, serial_id)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """, access.tenantId(), resultId, number(line, "line_id"), itemId, warehouseId, serialId);
+        }
+        int updated = jdbc.update("""
+                UPDATE stock_count_lines
+                SET line_status = ?, updated_at = UTC_TIMESTAMP(6)
+                WHERE id = ? AND tenant_id = ? AND line_status = ?
+                """, nextLineStatus, number(line, "line_id"), access.tenantId(), previousLineStatus);
+        if (updated != 1) throw new IllegalStateException("Count line state changed; reload and retry");
+
+        audit(access, countPublicId, previousLineStatus, nextLineStatus, "RECORD_RESULT",
+                Map.of("linePublicId", linePublicId, "countRound", round,
+                        "countedQty", countedQty, "serialCount", orderedSerialIds.size()));
+        Map<String, Object> response = view(access, countPublicId);
+        Map<String, Object> recorded = new LinkedHashMap<>();
+        recorded.put("linePublicId", linePublicId);
+        recorded.put("countRound", round);
+        recorded.put("countedQty", countedQty);
+        recorded.put("lineStatus", nextLineStatus);
+        recorded.put("resultStatus", "SUBMITTED");
+        response.put("recordedResult", recorded);
+        return response;
+    }
+
+    private void requireActiveFrozenCount(Map<String, Object> header) {
+        if (!"IN_PROGRESS".equals(string(header, "status")) || !bool(header.get("freeze_stock"))) {
+            throw new IllegalStateException("Stock count must be in progress with stock frozen");
+        }
+    }
+
+    private Set<Long> expectedSerialSerialIds(long tenantId, long itemId, Long lotId,
+                                               String stockStatus, long warehouseId, long locationId) {
+        String serialStatuses = switch (stockStatus) {
+            case "AVAILABLE" -> "'AVAILABLE','RESERVED'";
+            case "QUARANTINED" -> "'QUARANTINED','RETURNED'";
+            case "DAMAGED" -> "'DAMAGED'";
+            default -> throw new IllegalArgumentException(
+                    "Serial-tracked counts do not support this stock status lifecycle");
+        };
+        List<Long> ids = jdbc.queryForList("""
+                SELECT id FROM inventory_serials
+                WHERE tenant_id = ? AND item_id = ? AND lot_id <=> ?
+                  AND current_warehouse_id = ? AND current_location_id = ?
+                  AND status IN (%s)
+                ORDER BY id
+                """.formatted(serialStatuses), Long.class, tenantId, itemId, lotId, warehouseId, locationId);
+        return new HashSet<>(ids);
+    }
+
+    private boolean validObservedSerial(Map<String, Object> serial, String stockStatus,
+                                        long warehouseId, long locationId) {
+        String serialStatus = string(serial, "status");
+        Long currentWarehouse = nullableNumber(serial.get("current_warehouse_id"));
+        Long currentLocation = nullableNumber(serial.get("current_location_id"));
+        boolean atCountLocation = Objects.equals(currentWarehouse, warehouseId)
+                && Objects.equals(currentLocation, locationId);
+        if ("LOST".equals(serialStatus)) {
+            return "AVAILABLE".equals(stockStatus) && currentWarehouse == null && currentLocation == null;
+        }
+        return switch (stockStatus) {
+            case "AVAILABLE" -> atCountLocation && Set.of("AVAILABLE", "RESERVED").contains(serialStatus);
+            case "QUARANTINED" -> atCountLocation && Set.of("QUARANTINED", "RETURNED").contains(serialStatus);
+            case "DAMAGED" -> atCountLocation && "DAMAGED".equals(serialStatus);
+            default -> false;
+        };
+    }
+
+    private static BigDecimal normalizeCountedQuantity(BigDecimal value) {
+        if (value == null || value.signum() < 0) {
+            throw new IllegalArgumentException("Counted quantity cannot be negative");
+        }
+        final BigDecimal normalized;
+        try {
+            normalized = value.setScale(4, java.math.RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException invalidScale) {
+            throw new IllegalArgumentException("Counted quantity must be exactly representable at scale 4", invalidScale);
+        }
+        if (normalized.precision() > 19) {
+            throw new IllegalArgumentException("Counted quantity must fit DECIMAL(19,4)");
+        }
+        return normalized;
+    }
+
     private Map<String, Object> view(Access access, String countPublicId) {
         Map<String, Object> row = header(access.tenantId(), countPublicId, false);
         Map<String, Object> result = new LinkedHashMap<>();
@@ -461,7 +819,7 @@ public class WmsStockCountManagementService {
     }
 
     private void lockIds(String table, List<Long> ids, long tenantId, String label) {
-        if (!Set.of("warehouses", "warehouse_locations", "items", "inventory_lots").contains(table)) {
+        if (!Set.of("warehouses", "warehouse_locations", "items", "inventory_lots", "inventory_serials").contains(table)) {
             throw new IllegalArgumentException("Unsupported lock table");
         }
         ids.stream().filter(Objects::nonNull).distinct().sorted().forEach(id -> {
@@ -565,6 +923,9 @@ public class WmsStockCountManagementService {
     public record CreateCountCommand(String warehousePublicId, String documentNumber,
                                      String countType, String countMode,
                                      List<String> locationPublicIds, String notes) {}
+    public record AddCountLineCommand(String locationPublicId, String itemPublicId,
+                                      String lotPublicId, String stockStatus) {}
+    public record RecordCountResultCommand(BigDecimal countedQty, List<String> serialPublicIds, String notes) {}
 
     private record Access(long tenantId, long membershipId, String userPublicId, boolean canReviewCount) {}
     private record ScopeLocation(long id, String publicId, String status) {}
