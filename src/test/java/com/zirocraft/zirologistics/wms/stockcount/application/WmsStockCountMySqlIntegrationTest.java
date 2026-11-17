@@ -875,6 +875,51 @@ class WmsStockCountMySqlIntegrationTest {
                 """, fixture.tenantId(), adjustmentPublicId));
     }
 
+
+    @Test
+    void manualFoundAdjustmentRestoresOnlyTheExactKnownLostSerialIdentity() {
+        fixture = fixture("SERIAL");
+        receiveSerials(fixture, List.of("MANUAL-SERIAL-001", "MANUAL-SERIAL-002"));
+        List<String> serialIds = jdbc.queryForList("""
+                SELECT public_id FROM inventory_serials
+                WHERE tenant_id = ? AND item_id = (
+                  SELECT id FROM items WHERE tenant_id = ? AND public_id = ?
+                )
+                ORDER BY serial_number
+                """, String.class, fixture.tenantId(), fixture.tenantId(), fixture.itemPublicId());
+        assertEquals(2, serialIds.size());
+
+        postingService.postTransferDispatch(fixture.principal(),
+                new WmsInventoryPostingService.PostingCommand(UUID.randomUUID(), "TRANSFER_DISPATCH",
+                        List.of(new WmsInventoryPostingService.PostingLeg(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, serialIds.get(1), null, "AVAILABLE", BigDecimal.ONE)),
+                        "Move serial out before manual loss reconciliation"));
+        postingService.markTransferSerialLost(fixture.principal(), serialIds.get(1));
+
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.ManualAdjustmentCommand(
+                        "FOUND-" + UUID.randomUUID().toString().substring(0, 8),
+                        fixture.warehousePublicId(), "FOUND", "FOUND_DURING_CYCLE_CHECK",
+                        "Known lost serial physically recovered", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.locationPublicId(), fixture.itemPublicId(), null, "AVAILABLE",
+                                new BigDecimal("2.0000"), serialIds, "Restore the exact recovered serial"))));
+        String adjustmentPublicId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentPublicId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, adjustmentPublicId, "Serial identity verified");
+        adjustmentService.post(approver, adjustmentPublicId);
+
+        assertEquals("AVAILABLE", serialStatus(fixture, serialIds.get(1)));
+        assertEquals(BigDecimal.valueOf(2).setScale(4), onHand(fixture));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND movement_type = 'ADJUSTMENT_IN'
+                  AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+    }
+
     @Test
     void manualAdjustmentRejectsStaleBaselineBeforeApprovalWithoutPostingStock() {
         receive(fixture, "5.0000");
