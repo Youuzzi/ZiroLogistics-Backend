@@ -547,8 +547,12 @@ public class WmsInventoryAdjustmentService {
                 """, access.tenantId(), adjustmentId);
         boolean manual = links.isEmpty();
         Map<String, Object> link = manual ? null : links.getFirst();
-        if (manual && "PHYSICAL_COUNT".equals(string(header, "adjustment_type"))) {
-            throw new IllegalStateException("Physical-count adjustment must retain its approved stock-count link");
+        String adjustmentType = string(header, "adjustment_type");
+        if (manual && !Set.of("LOSS", "FOUND", "CORRECTION", "OTHER").contains(adjustmentType)) {
+            throw new IllegalStateException("Only a supported reason-coded manual adjustment may post without a stock-count link");
+        }
+        if (!manual && !"PHYSICAL_COUNT".equals(adjustmentType)) {
+            throw new IllegalStateException("Only a physical-count adjustment may use a stock-count link");
         }
         if (!manual && (!"APPROVED".equals(string(link, "status")) || !bool(link.get("freeze_stock")))) {
             throw new IllegalStateException("Linked stock count is no longer approved and frozen");
@@ -718,7 +722,7 @@ public class WmsInventoryAdjustmentService {
     private void validateFreshAllocations(long tenantId, long adjustmentId) {
         List<Map<String, Object>> allocations = jdbc.queryForList("""
                 SELECT al.warehouse_id, al.location_id, al.item_id, al.lot_id,
-                       al.stock_status, al.system_qty
+                       al.stock_status, al.system_qty, al.adjustment_qty
                 FROM inventory_adjustment_allocations al
                 JOIN inventory_adjustment_lines ln
                   ON ln.id = al.inventory_adjustment_line_id AND ln.tenant_id = al.tenant_id
@@ -727,7 +731,7 @@ public class WmsInventoryAdjustmentService {
                 """, tenantId, adjustmentId);
         for (Map<String, Object> allocation : allocations) {
             List<Map<String, Object>> rows = jdbc.queryForList("""
-                    SELECT on_hand_qty FROM inventory_balances
+                    SELECT on_hand_qty, reserved_qty FROM inventory_balances
                     WHERE tenant_id = ? AND warehouse_id = ? AND location_id = ? AND item_id = ?
                       AND lot_id <=> ? AND stock_status = ?
                     FOR UPDATE
@@ -735,8 +739,13 @@ public class WmsInventoryAdjustmentService {
                     number(allocation, "item_id"), nullableNumber(allocation.get("lot_id")),
                     string(allocation, "stock_status"));
             BigDecimal current = rows.isEmpty() ? BigDecimal.ZERO.setScale(4) : decimal(rows.getFirst().get("on_hand_qty"));
+            BigDecimal reserved = rows.isEmpty() ? BigDecimal.ZERO.setScale(4) : decimal(rows.getFirst().get("reserved_qty"));
             if (current.compareTo(decimal(allocation.get("system_qty"))) != 0) {
                 throw new IllegalStateException("Adjustment baseline is stale; refresh the adjustment before approval or posting");
+            }
+            BigDecimal delta = decimal(allocation.get("adjustment_qty"));
+            if (delta.signum() < 0 && current.subtract(reserved).compareTo(delta.abs()) < 0) {
+                throw new IllegalStateException("Adjustment exceeds currently available inventory after reservations");
             }
         }
     }
