@@ -109,6 +109,7 @@ public class WmsInventoryPostingService {
         // Resolve and lock reference rows in the shared warehouse -> location -> item -> lot -> serial order.
         List<ResolvedLeg> legs = resolveAndLockReferences(access.tenantId(), normalized);
         validateMovement(normalized, legs);
+        assertNoFrozenStockCount(access.tenantId(), legs);
         // New serial rows are created before balance buckets to preserve the global lock order.
         List<ResolvedLeg> registeredLegs = new ArrayList<>(legs.size());
         for (ResolvedLeg leg : legs) {
@@ -290,6 +291,31 @@ public class WmsInventoryPostingService {
         List<Map<String, Object>> rows = jdbc.queryForList(sql + " FOR UPDATE", args);
         if (rows.isEmpty()) throw new IllegalArgumentException("Referenced inventory record is no longer available");
         return rows.getFirst();
+    }
+
+
+    /**
+     * Every stock posting checks both source and destination locations after
+     * acquiring the same tenant, warehouse and location locks used by count start.
+     */
+    private void assertNoFrozenStockCount(long tenantId, List<ResolvedLeg> legs) {
+        Set<String> checked = new HashSet<>();
+        for (ResolvedLeg leg : legs) {
+            String key = leg.warehouseId() + ":" + leg.locationId();
+            if (!checked.add(key)) continue;
+            Integer activeCount = jdbc.queryForObject("""
+                    SELECT COUNT(*)
+                    FROM stock_count_scopes s
+                    JOIN stock_counts c
+                      ON c.id = s.stock_count_id AND c.tenant_id = s.tenant_id
+                    WHERE c.tenant_id = ? AND c.warehouse_id = ? AND s.location_id = ?
+                      AND c.freeze_stock = 1
+                      AND c.status IN ('IN_PROGRESS','SUBMITTED','UNDER_REVIEW','APPROVED')
+                    """, Integer.class, tenantId, leg.warehouseId(), leg.locationId());
+            if (activeCount != null && activeCount > 0) {
+                throw new IllegalStateException("Inventory posting is blocked by an active frozen stock count");
+            }
+        }
     }
 
     private void validateMovement(NormalizedCommand command, List<ResolvedLeg> legs) {
