@@ -31,7 +31,7 @@ ALTER TABLE tenant_audit_events
   ));
 
 INSERT INTO permissions (permission_code, module, description) VALUES
-  ('WMS_INVENTORY_RESERVE', 'INVENTORY', 'Reserve and release available inventory through controlled workflows.'),
+  ('WMS_INVENTORY_RESERVE', 'INVENTORY', 'Reserve available inventory for controlled outbound workflows.'),
   ('WMS_OUTBOUND_SHIPMENT_READ', 'WAREHOUSE', 'Read tenant outbound shipments.'),
   ('WMS_OUTBOUND_SHIPMENT_CREATE', 'WAREHOUSE', 'Create tenant outbound shipment drafts.'),
   ('WMS_OUTBOUND_SHIPMENT_UPDATE', 'WAREHOUSE', 'Add lines to editable outbound shipment drafts.'),
