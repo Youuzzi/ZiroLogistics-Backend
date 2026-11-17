@@ -245,17 +245,18 @@ class WmsOutboundShipmentMySqlIntegrationTest {
     @Test
     void packingPreservesPickedSerialTraceabilityAndPreventsPackingTheSameSerialTwice() {
         Fixture serialFixture=fixture("SERIAL");
-        String serialNumber="PACK-SERIAL-"+UUID.randomUUID();
-        receive(serialFixture,"1.0000",List.of(serialNumber));
-        String serialPublicId=jdbc.queryForObject("""
-                SELECT public_id FROM inventory_serials WHERE tenant_id=? AND serial_number=?
-                """,String.class,serialFixture.tenantId(),serialNumber);
+        String firstSerialNumber="PACK-SERIAL-"+UUID.randomUUID();
+        String secondSerialNumber="PACK-SERIAL-"+UUID.randomUUID();
+        receive(serialFixture,"2.0000",List.of(firstSerialNumber,secondSerialNumber));
+        List<String> serialPublicIds=jdbc.queryForList("""
+                SELECT public_id FROM inventory_serials WHERE tenant_id=? ORDER BY serial_number
+                """,String.class,serialFixture.tenantId());
         String shipmentId=createShipment(serialFixture);
-        String lineId=addLine(serialFixture,shipmentId,"1.0000");
+        String lineId=addLine(serialFixture,shipmentId,"2.0000");
         shipmentService.allocate(serialFixture.principal(),shipmentId,lineId,
                 new WmsOutboundShipmentService.AllocationCommand(List.of(
                         new WmsOutboundShipmentService.AllocationLine(
-                                serialFixture.receivingLocationPublicId(),null,BigDecimal.ONE,List.of(serialPublicId)))));
+                                serialFixture.receivingLocationPublicId(),null,new BigDecimal("2.0000"),serialPublicIds))));
         shipmentService.release(serialFixture.principal(),shipmentId);
         String taskId=(String)pickingService.create(serialFixture.principal(),
                 new WmsPickingManagementService.CreatePickingCommand(shipmentId,
@@ -273,7 +274,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 """,staging,serialFixture.tenantId(),warehouseId,"STG_"+UUID.randomUUID().toString().substring(0,8));
         pickingService.confirm(serialFixture.principal(),taskId,1,
                 new WmsPickingManagementService.ConfirmPickingCommand(UUID.randomUUID(),
-                        BigDecimal.ONE,staging,List.of(serialPublicId),null));
+                        new BigDecimal("2.0000"),staging,serialPublicIds,null));
 
         String sessionId=(String)packingService.create(serialFixture.principal(),
                 new WmsPackingManagementService.CreateSessionCommand(shipmentId,
@@ -288,15 +289,20 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                         null,null,null,null,null)).get("public_id");
         packingService.addLine(serialFixture.principal(),sessionId,packageId,
                 new WmsPackingManagementService.AddPackageLineCommand(UUID.randomUUID(),1,
-                        BigDecimal.ONE,List.of(serialPublicId),null));
+                        BigDecimal.ONE,List.of(serialPublicIds.getFirst()),null));
         assertEquals(1,count("""
                 SELECT COUNT(*) FROM packing_package_serials ps
                 JOIN inventory_serials s ON s.id=ps.serial_id AND s.tenant_id=ps.tenant_id
                 WHERE ps.tenant_id=? AND s.public_id=?
-                """,serialFixture.tenantId(),serialPublicId));
-        assertThrows(IllegalArgumentException.class,()->packingService.addLine(serialFixture.principal(),
+                """,serialFixture.tenantId(),serialPublicIds.getFirst()));
+        assertThrows(IllegalStateException.class,()->packingService.addLine(serialFixture.principal(),
                 sessionId,packageId,new WmsPackingManagementService.AddPackageLineCommand(
-                        UUID.randomUUID(),1,BigDecimal.ONE,List.of(serialPublicId),null)));
+                        UUID.randomUUID(),1,BigDecimal.ONE,List.of(serialPublicIds.getFirst()),null)));
+        packingService.addLine(serialFixture.principal(),sessionId,packageId,
+                new WmsPackingManagementService.AddPackageLineCommand(UUID.randomUUID(),1,
+                        BigDecimal.ONE,List.of(serialPublicIds.get(1)),null));
+        assertEquals(2,count("SELECT COUNT(*) FROM packing_package_serials WHERE tenant_id=?",
+                serialFixture.tenantId()));
         packingService.sealPackage(serialFixture.principal(),sessionId,packageId);
         assertEquals("COMPLETED",packingService.complete(serialFixture.principal(),sessionId).get("status"));
         assertEquals("PACKED",shipmentStatus(serialFixture,shipmentId));
