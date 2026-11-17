@@ -160,6 +160,18 @@ class WmsStockCountMySqlIntegrationTest {
     }
 
     @Test
+    void inventoryAdjustmentReadApisAreTenantScoped() {
+        Fixture foreign = fixture();
+        String ownAdjustment = insertDraftAdjustment(fixture);
+        String foreignAdjustment = insertDraftAdjustment(foreign);
+
+        assertEquals(ownAdjustment, adjustmentService.get(fixture.principal(), ownAdjustment).get("publicId"));
+        assertThrows(IllegalArgumentException.class,
+                () -> adjustmentService.get(fixture.principal(), foreignAdjustment));
+        assertEquals(1, adjustmentService.list(fixture.principal()).size());
+    }
+
+    @Test
     void blindCountReadDoesNotExposeExpectedQuantityToCounter() {
         receive(fixture, "3.0000");
         String countPublicId = createAndPlan(fixture);
@@ -676,6 +688,21 @@ class WmsStockCountMySqlIntegrationTest {
     private long count(String sql, Object... args) {
         Long result = jdbc.queryForObject(sql, Long.class, args);
         return result == null ? 0L : result;
+    }
+
+    private String insertDraftAdjustment(Fixture f) {
+        String publicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO inventory_adjustments
+                  (public_id, tenant_id, warehouse_id, document_number, adjustment_type, status,
+                   reason_code, reason_description, created_by_membership_id)
+                VALUES (?, ?, (
+                  SELECT id FROM warehouses WHERE tenant_id = ? AND public_id = ?
+                ), ?, 'PHYSICAL_COUNT', 'DRAFT', 'PHYSICAL_COUNT', 'Tenant isolation test', ?)
+                """, publicId, f.tenantId(), f.tenantId(), f.warehousePublicId(),
+                "ADJ-READ-" + UUID.randomUUID().toString().substring(0, 8),
+                f.principal().membershipId());
+        return publicId;
     }
 
     private Fixture fixture() {
