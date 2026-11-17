@@ -4,15 +4,14 @@ import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrin
 import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityHttpEnabledCondition;
 import com.zirocraft.zirologistics.wms.stockcount.application.WmsStockCountManagementService;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -55,10 +54,42 @@ public class WmsStockCountManagementController {
         return service.start(principal(authentication), countPublicId);
     }
 
+    @PostMapping("/{countPublicId}/lines")
+    public Map<String, Object> addLine(Authentication authentication,
+                                       @PathVariable String countPublicId,
+                                       @Valid @RequestBody AddLineRequest request) {
+        return service.addLine(principal(authentication), countPublicId,
+                new WmsStockCountManagementService.AddCountLineCommand(
+                        request.locationPublicId(), request.itemPublicId(),
+                        request.lotPublicId(), request.stockStatus()));
+    }
+
+    @PostMapping("/{countPublicId}/lines/{linePublicId}/results")
+    public Map<String, Object> recordResult(Authentication authentication,
+                                            @PathVariable String countPublicId,
+                                            @PathVariable String linePublicId,
+                                            @Valid @RequestBody RecordResultRequest request) {
+        return service.recordResult(principal(authentication), countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        request.countedQty(), request.serialPublicIds(), request.notes()));
+    }
+
     @PostMapping("/{countPublicId}/cancel")
     public Map<String, Object> cancel(Authentication authentication, @PathVariable String countPublicId) {
         return service.cancel(principal(authentication), countPublicId);
     }
+
+    public record AddLineRequest(
+            @NotBlank @Size(max = 36) String locationPublicId,
+            @NotBlank @Size(max = 36) String itemPublicId,
+            @Size(max = 36) String lotPublicId,
+            @NotBlank @Size(max = 30) String stockStatus) {}
+
+    public record RecordResultRequest(
+            @NotNull @DecimalMin(value = "0.0000", inclusive = true)
+            @Digits(integer = 15, fraction = 4) BigDecimal countedQty,
+            @Size(max = 500) List<@NotBlank @Size(max = 36) String> serialPublicIds,
+            @Size(max = 1000) String notes) {}
 
     private static WmsAuthenticatedPrincipal principal(Authentication authentication) {
         Object value = authentication == null ? null : authentication.getPrincipal();

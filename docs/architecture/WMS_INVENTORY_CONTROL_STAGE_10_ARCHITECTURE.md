@@ -36,17 +36,17 @@ The frozen V1 schema already contains the principal tables for this stage:
 
 V1 defines count types FULL_COUNT, CYCLE_COUNT, SPOT_COUNT; count modes BLIND, OPEN; the count, line and scope lifecycle states; the adjustment document lifecycle and reason types; and MIN_MAX / MANUAL replenishment rules. Stage 10 must use those allowlists and columns as written.
 
-**V1–V19 are immutable.** Do not edit an existing migration, regenerate the baseline, or create duplicate count/adjustment/replenishment tables. Any required schema extension must be an additive V20+ migration and must identify the exact V1 gap it closes.
+**V1–V20 are immutable.** Do not edit an existing migration, regenerate the baseline, or create duplicate count/adjustment/replenishment tables. Any required schema extension must be an additive V20+ migration and must identify the exact V1 gap it closes.
 
 ### 2.1 Proven schema gap: serialized count observations
 
 stock_count_results stores a counted quantity and counter but does not store which serial identities were physically observed. A quantity alone cannot safely reconcile serialized inventory.
 
-V21 is expected to add a tenant-scoped child table (proposed name stock_count_result_serials) that records the serial identities scanned for a specific count result/round. It must have composite tenant/item/warehouse references to the parent count result/line and inventory_serials, a unique key preventing a serial from being scanned twice in one count round, and indexes supporting tenant/count/round lookup. It records observed identities; the service derives missing expected serials by comparing the observed set with the serials in the frozen location snapshot.
+V21 adds the tenant-scoped child table stock_count_result_serials to record serial identities scanned for a specific count result/round. Its composite foreign keys bind each observation to the matching result, line, item, warehouse, tenant and inventory_serials row. A unique key prevents a serial from being scanned twice in one result round, and supporting indexes cover count-line and serial lookup. V21 also adds the composite unique key on stock_count_results required by that foreign key. It records observed identities; the service derives expected serial identities from the frozen location bucket and compares the observed set against them.
 
 Do not create a second serial master. A serial unknown to the tenant/item catalogue must be registered through the existing controlled inventory serial workflow before it can be included in a count.
 
-Other V20 additions should be limited to reviewed permission seeds, audit-event allowlist expansion, and any database uniqueness constraint proven necessary during implementation. Do not add a generic idempotency registry here; Stage 11 owns cross-workflow idempotency.
+Later additive migrations should be limited to reviewed permission seeds, audit-event allowlist expansion, and database constraints proven necessary during implementation. Do not add a generic idempotency registry here; Stage 11 owns cross-workflow idempotency.
 
 ## 3. Tenant, authorization and audit invariants
 
@@ -76,9 +76,9 @@ Proposed audit event types: WMS_STOCK_COUNT_UPDATED, WMS_INVENTORY_ADJUSTMENT_UP
 
 A stock count belongs to one warehouse and contains one or more location scopes. A location may appear only once in the same count. Only active tenant-owned warehouses and locations can be scoped.
 
-FULL_COUNT, CYCLE_COUNT and SPOT_COUNT describe the business purpose. BLIND means counter-facing API responses must not disclose expected_qty; OPEN may disclose it to an authorized counter. Hiding the quantity only in the UI is insufficient—the backend response must omit it for blind-count actors.
+FULL_COUNT, CYCLE_COUNT and SPOT_COUNT describe the business purpose. BLIND means counter-facing API responses must not disclose expected_qty; OPEN may disclose it only to a membership with WMS_STOCK_COUNT_RECORD or reviewer/approver permission. A read-only membership must not receive expected_qty even for an OPEN count. Hiding the quantity only in the UI is insufficient—the backend response must omit it for unauthorized actors.
 
-Planning validates the warehouse and location scopes but does not take the inventory snapshot. Starting the count acquires the warehouse and all scoped location locks, locks the relevant item/lot rows and inventory balance buckets, then creates count lines for those buckets and activates freeze_stock in the same transaction. expected_qty is the snapshot of inventory_balances.on_hand_qty at that start boundary, never available_qty; reserved stock is physically present and remains part of the count. Authorized users may add an explicit zero-expected line for a selected stock item/lot/status so that unexpected physical stock can be recorded. The unique bucket key in V1 prevents duplicate lines.
+Planning validates the warehouse and location scopes but does not take the inventory snapshot. Starting the count acquires the warehouse and all scoped location locks, locks the relevant item/lot rows and inventory balance buckets, then creates count lines for those buckets and activates freeze_stock in the same transaction. expected_qty is the snapshot of inventory_balances.on_hand_qty at that start boundary, never available_qty; reserved stock is physically present and remains part of the count. During an active frozen count, an authorized counter may add an explicit zero-expected line for a scoped location and selected active stock item/lot/status so that unexpected physical stock can be recorded. The bucket must not already exist in the snapshot. The unique bucket key in V1 prevents duplicate lines.
 
 Once the count starts, its expected quantities and scope are immutable. Re-planning or editing the scope after start is prohibited.
 
@@ -100,7 +100,7 @@ Each stock_count_line represents one item/location/lot/stock-status bucket. A re
 
 For serialized items, the result quantity must equal the number of distinct serial identities recorded for that round. Every observed serial must belong to the tenant and item, and its lot must match the count line. A serial already assigned to another active location cannot be silently counted twice; it must be resolved through an authorized movement first. A known LOST serial found physically may be recorded and later restored through the adjustment workflow. Missing expected serials are derived from the frozen snapshot, not supplied as a client assertion.
 
-A discrepancy on the initial round sets the line to RECOUNT_REQUIRED. A recount is a new result round and must be performed by a different active membership from the previous counter. A counter cannot edit or erase prior rounds. The latest valid round is the candidate result for review; voiding a result requires an explicit privileged action with an audit reason.
+A discrepancy on the initial round sets the line to RECOUNT_REQUIRED. A recount is a new result round and must be performed by a different active membership from the previous counter. A counter cannot edit or erase prior rounds. If the recount confirms the same quantity and, for serial-tracked items, the same serial identity set as the immediately preceding round, the line becomes COUNTED even when the confirmed value differs from the system snapshot; that stable variance is then eligible for review. If the recount differs, another recount is required from a different membership. The latest stable result is the candidate result for review; voiding a result requires an explicit privileged action with an audit reason.
 
 After all lines have a valid final result, the stock count may be submitted and moved to UNDER_REVIEW. The reviewer checks line variances and recount evidence. Each line is marked REVIEWED and the header may be approved only when all in-scope lines are reviewed. Approval records the reviewer/approver membership and timestamp. The count creator and the membership that recorded the final result for a line cannot approve the count variance for that document; enforce this four-eyes check in the backend.
 
@@ -145,7 +145,7 @@ Base path: /api/wms/v1/tenants/current.
 Stock counts:
 - GET /stock-counts, POST /stock-counts, GET /stock-counts/{countPublicId}.
 - POST /stock-counts/{countPublicId}/plan, /start, /submit, /review, /approve, /cancel.
-- POST /stock-counts/{countPublicId}/lines/{linePublicId}/results to record a new round; result command includes counted quantity, optional scanned serial public IDs and notes.
+- POST /stock-counts/{countPublicId}/lines to add a scoped zero-expected bucket for unexpected stock; POST /stock-counts/{countPublicId}/lines/{linePublicId}/results to record a new round; result command includes counted quantity, optional scanned serial public IDs and notes.
 - Recount uses the same results operation with the next count round; the server assigns the next round and validates the prior actor. Client cannot choose or overwrite an old round.
 
 Inventory adjustments:
