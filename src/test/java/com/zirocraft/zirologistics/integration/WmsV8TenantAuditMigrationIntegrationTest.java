@@ -42,7 +42,7 @@ class WmsV8TenantAuditMigrationIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
              Statement statement = connection.createStatement()) {
-            assertEquals(69, scalar(statement,
+            assertEquals(70, scalar(statement,
                     "SELECT COUNT(*) FROM information_schema.tables " +
                             "WHERE table_schema=DATABASE() AND table_type='BASE TABLE' " +
                             "AND table_name <> 'flyway_schema_history'"));
