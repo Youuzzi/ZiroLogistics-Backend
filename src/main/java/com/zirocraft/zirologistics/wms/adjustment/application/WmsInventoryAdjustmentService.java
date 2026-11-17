@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -214,6 +215,228 @@ public class WmsInventoryAdjustmentService {
         audit(access, publicId, "NONE", "DRAFT", "CREATE_FROM_STOCK_COUNT",
                 Map.of("stockCountPublicId", countPublicId));
         return view(access.tenantId(), publicId);
+    }
+
+
+    /**
+     * Creates a standalone, reason-coded quantity adjustment. This first release
+     * intentionally limits manual adjustments to AVAILABLE stock and quantity
+     * corrections; DAMAGE/EXPIRY status reclassification remains on the dedicated
+     * paired-movement boundary and cannot be disguised as an ADJUSTMENT_IN/OUT.
+     */
+    @Transactional
+    public Map<String, Object> createManual(WmsAuthenticatedPrincipal principal,
+                                            ManualAdjustmentCommand command) {
+        if (command == null) throw new IllegalArgumentException("Manual adjustment command is required");
+        lockTenant(principal);
+        Access access = access(principal, "WMS_INVENTORY_ADJUSTMENT_CREATE");
+        String documentNumber = required(command.documentNumber(), "Document number", 60);
+        String warehousePublicId = required(command.warehousePublicId(), "Warehouse public ID", 36);
+        String type = required(command.adjustmentType(), "Adjustment type", 30).toUpperCase();
+        if (!Set.of("LOSS", "FOUND", "CORRECTION", "OTHER").contains(type)) {
+            throw new IllegalArgumentException("Manual quantity adjustment type must be LOSS, FOUND, CORRECTION or OTHER; PHYSICAL_COUNT is count-linked and DAMAGE/EXPIRY require status reclassification");
+        }
+        String reasonCode = required(command.reasonCode(), "Reason code", 50).toUpperCase();
+        String reasonDescription = optional(command.reasonDescription(), 500);
+        String notes = optional(command.notes(), 1000);
+        if (command.allocations() == null || command.allocations().isEmpty() || command.allocations().size() > 100) {
+            throw new IllegalArgumentException("Manual adjustment must contain between 1 and 100 allocations");
+        }
+
+        Map<String, Object> warehouse = requiredRow("""
+                SELECT id, status FROM warehouses
+                WHERE tenant_id = ? AND public_id = ?
+                """, access.tenantId(), warehousePublicId);
+        long warehouseId = number(warehouse, "id");
+        if (!"ACTIVE".equals(string(warehouse, "status"))) {
+            throw new IllegalArgumentException("Warehouse must be active");
+        }
+
+        String publicId = UUID.randomUUID().toString();
+        try {
+            jdbc.update("""
+                    INSERT INTO inventory_adjustments
+                      (public_id, tenant_id, warehouse_id, document_number, adjustment_type, status,
+                       reason_code, reason_description, created_by_membership_id, notes)
+                    VALUES (?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?)
+                    """, publicId, access.tenantId(), warehouseId, documentNumber, type,
+                    reasonCode, reasonDescription, access.membershipId(), notes);
+        } catch (DuplicateKeyException duplicate) {
+            throw new IllegalStateException("Inventory adjustment document number already exists", duplicate);
+        }
+        long adjustmentId = requiredLong(
+                "SELECT id FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?",
+                access.tenantId(), publicId);
+
+        Map<Long, Long> lineByItem = new LinkedHashMap<>();
+        int[] nextLineNumber = {0};
+        Set<String> buckets = new java.util.HashSet<>();
+        boolean anyVariance = false;
+        for (ManualAllocationCommand allocationCommand : command.allocations()) {
+            if (allocationCommand == null) throw new IllegalArgumentException("Manual adjustment allocation is required");
+            String locationPublicId = required(allocationCommand.locationPublicId(), "Location public ID", 36);
+            String itemPublicId = required(allocationCommand.itemPublicId(), "Item public ID", 36);
+            String stockStatus = allocationCommand.stockStatus() == null
+                    ? "AVAILABLE" : allocationCommand.stockStatus().trim().toUpperCase();
+            if (!"AVAILABLE".equals(stockStatus)) {
+                throw new IllegalArgumentException("Manual quantity adjustments currently support AVAILABLE stock only; use an explicit status-change workflow for other stock statuses");
+            }
+            BigDecimal counted = normalizeAdjustmentQuantity(allocationCommand.countedQty());
+            String lotPublicId = optional(allocationCommand.lotPublicId(), 36);
+            String bucketKey = locationPublicId + ":" + itemPublicId + ":" + Objects.toString(lotPublicId, "") + ":" + stockStatus;
+            if (!buckets.add(bucketKey)) throw new IllegalArgumentException("Duplicate inventory bucket in manual adjustment");
+
+            Map<String, Object> location = requiredRow("""
+                    SELECT id, status FROM warehouse_locations
+                    WHERE tenant_id = ? AND warehouse_id = ? AND public_id = ?
+                    """, access.tenantId(), warehouseId, locationPublicId);
+            if (!"ACTIVE".equals(string(location, "status"))) {
+                throw new IllegalArgumentException("Location must be active");
+            }
+            long locationId = number(location, "id");
+            Map<String, Object> item = requiredRow("""
+                    SELECT id, base_uom_id, tracking_method, is_stock_item, status
+                    FROM items WHERE tenant_id = ? AND public_id = ?
+                    """, access.tenantId(), itemPublicId);
+            long itemId = number(item, "id");
+            if (!"ACTIVE".equals(string(item, "status")) || !bool(item.get("is_stock_item"))) {
+                throw new IllegalArgumentException("Only active stock items can be adjusted");
+            }
+            String tracking = string(item, "tracking_method");
+            boolean lotTracked = Set.of("LOT", "LOT_AND_SERIAL").contains(tracking);
+            boolean serialTracked = Set.of("SERIAL", "LOT_AND_SERIAL").contains(tracking);
+            Long lotId = null;
+            if (lotPublicId != null) {
+                Map<String, Object> lot = requiredRow("""
+                        SELECT id, status FROM inventory_lots
+                        WHERE tenant_id = ? AND item_id = ? AND public_id = ?
+                        """, access.tenantId(), itemId, lotPublicId);
+                if (!"ACTIVE".equals(string(lot, "status"))) throw new IllegalArgumentException("Lot must be active");
+                lotId = number(lot, "id");
+            }
+            if (lotTracked != (lotId != null)) {
+                throw new IllegalArgumentException("Lot assignment does not match the item's tracking method");
+            }
+
+            List<Map<String, Object>> balanceRows = jdbc.queryForList("""
+                    SELECT on_hand_qty, reserved_qty FROM inventory_balances
+                    WHERE tenant_id = ? AND warehouse_id = ? AND location_id = ? AND item_id = ?
+                      AND lot_key = COALESCE(?, 0) AND stock_status = ?
+                    FOR UPDATE
+                    """, access.tenantId(), warehouseId, locationId, itemId, lotId, stockStatus);
+            BigDecimal systemQty = balanceRows.isEmpty()
+                    ? BigDecimal.ZERO.setScale(4) : decimal(balanceRows.getFirst().get("on_hand_qty"));
+            BigDecimal reservedQty = balanceRows.isEmpty()
+                    ? BigDecimal.ZERO.setScale(4) : decimal(balanceRows.getFirst().get("reserved_qty"));
+            BigDecimal delta = counted.subtract(systemQty).setScale(4, RoundingMode.UNNECESSARY);
+            if ("LOSS".equals(type) && delta.signum() > 0) {
+                throw new IllegalArgumentException("LOSS adjustment cannot increase on-hand quantity");
+            }
+            if ("FOUND".equals(type) && delta.signum() < 0) {
+                throw new IllegalArgumentException("FOUND adjustment cannot decrease on-hand quantity");
+            }
+            if (delta.signum() < 0 && systemQty.subtract(reservedQty).compareTo(delta.abs()) < 0) {
+                throw new IllegalStateException("Manual adjustment cannot consume reserved inventory");
+            }
+
+            List<String> observedPublicIds = allocationCommand.serialPublicIds() == null
+                    ? List.of() : allocationCommand.serialPublicIds().stream()
+                    .map(value -> required(value, "Serial public ID", 36)).distinct().sorted().toList();
+            if (allocationCommand.serialPublicIds() != null
+                    && observedPublicIds.size() != allocationCommand.serialPublicIds().size()) {
+                throw new IllegalArgumentException("Duplicate serial identity in manual adjustment");
+            }
+            if (!serialTracked && !observedPublicIds.isEmpty()) {
+                throw new IllegalArgumentException("Serial identities are only valid for serial-tracked items");
+            }
+            if (serialTracked && reservedQty.signum() != 0) {
+                throw new IllegalStateException("Serial adjustment cannot proceed while inventory is reserved");
+            }
+
+            long lineId = lineByItem.computeIfAbsent(itemId, ignored -> {
+                int lineNumber = ++nextLineNumber[0];
+                jdbc.update("""
+                        INSERT INTO inventory_adjustment_lines
+                          (public_id, tenant_id, inventory_adjustment_id, warehouse_id,
+                           line_number, item_id, uom_id, status, notes)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'COUNTED', ?)
+                        """, UUID.randomUUID().toString(), access.tenantId(), adjustmentId,
+                        warehouseId, lineNumber, itemId, number(item, "base_uom_id"),
+                        optional(allocationCommand.notes(), 1000));
+                return requiredLong("SELECT LAST_INSERT_ID()");
+            });
+            long allocationId = insertAllocation(access.tenantId(), lineId, itemId, warehouseId,
+                    locationId, lotId, stockStatus, systemQty, counted, delta);
+
+            if (serialTracked) {
+                List<Long> expectedSerials = jdbc.queryForList("""
+                        SELECT id FROM inventory_serials
+                        WHERE tenant_id = ? AND item_id = ? AND lot_id <=> ?
+                          AND current_warehouse_id = ? AND current_location_id = ? AND status = 'AVAILABLE'
+                        ORDER BY id FOR UPDATE
+                        """, Long.class, access.tenantId(), itemId, lotId, warehouseId, locationId);
+                if (systemQty.compareTo(BigDecimal.valueOf(expectedSerials.size())) != 0) {
+                    throw new IllegalStateException("Serial master identities do not reconcile with the locked inventory baseline");
+                }
+                Set<Long> expectedSet = Set.copyOf(expectedSerials);
+                Set<Long> observedSet = new java.util.HashSet<>();
+                for (String serialPublicId : observedPublicIds) {
+                    Map<String, Object> serial = requiredRow("""
+                            SELECT id, status, current_warehouse_id, current_location_id
+                            FROM inventory_serials
+                            WHERE tenant_id = ? AND item_id = ? AND lot_id <=> ? AND public_id = ?
+                            FOR UPDATE
+                            """, access.tenantId(), itemId, lotId, serialPublicId);
+                    long serialId = number(serial, "id");
+                    if (expectedSet.contains(serialId)) {
+                        observedSet.add(serialId);
+                    } else if ("LOST".equals(string(serial, "status"))
+                            && serial.get("current_warehouse_id") == null
+                            && serial.get("current_location_id") == null) {
+                        observedSet.add(serialId);
+                        insertSerialObservation(access.tenantId(), allocationId, itemId, serialId, "PRESENT");
+                    } else {
+                        throw new IllegalArgumentException("Observed serial must be in this bucket or be a known LOST serial");
+                    }
+                }
+                if (counted.compareTo(BigDecimal.valueOf(observedSet.size())) != 0) {
+                    throw new IllegalArgumentException("Counted quantity must equal the number of distinct observed serial identities");
+                }
+                for (Long serialId : expectedSet) {
+                    if (!observedSet.contains(serialId)) {
+                        insertSerialObservation(access.tenantId(), allocationId, itemId, serialId, "MISSING");
+                    }
+                }
+                if (!expectedSet.equals(observedSet)) anyVariance = true;
+            } else if (delta.signum() != 0) {
+                anyVariance = true;
+            }
+            if (serialTracked && delta.signum() != 0
+                    && observedSetSizeMismatch(systemQty, counted, observedPublicIds)) {
+                throw new IllegalArgumentException("Serial identity variance does not match quantity variance");
+            }
+        }
+        if (!anyVariance) throw new IllegalArgumentException("Manual adjustment contains no stock quantity or serial identity variance");
+        audit(access, publicId, "NONE", "DRAFT", "CREATE_MANUAL",
+                Map.of("adjustmentType", type, "reasonCode", reasonCode));
+        return view(access.tenantId(), publicId);
+    }
+
+    private static BigDecimal normalizeAdjustmentQuantity(BigDecimal value) {
+        if (value == null || value.signum() < 0) throw new IllegalArgumentException("Counted quantity cannot be negative");
+        try {
+            value = value.setScale(4, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException invalidScale) {
+            throw new IllegalArgumentException("Counted quantity must fit DECIMAL(19,4)", invalidScale);
+        }
+        if (value.precision() > 19) throw new IllegalArgumentException("Counted quantity must fit DECIMAL(19,4)");
+        return value;
+    }
+
+    private static boolean observedSetSizeMismatch(BigDecimal systemQty, BigDecimal countedQty,
+                                                   List<String> observedSerialIds) {
+        return countedQty.compareTo(BigDecimal.valueOf(observedSerialIds.size())) != 0
+                || systemQty.scale() != 4;
     }
 
     @Transactional
@@ -645,5 +868,13 @@ public class WmsInventoryAdjustmentService {
     }
 
     public record CreateFromCountCommand(String documentNumber, String notes) {}
+    public record ManualAdjustmentCommand(String documentNumber, String warehousePublicId,
+                                          String adjustmentType, String reasonCode,
+                                          String reasonDescription, String notes,
+                                          List<ManualAllocationCommand> allocations) {}
+    public record ManualAllocationCommand(String locationPublicId, String itemPublicId,
+                                          String lotPublicId, String stockStatus,
+                                          BigDecimal countedQty, List<String> serialPublicIds,
+                                          String notes) {}
     private record Access(long tenantId, long membershipId, String userPublicId) {}
 }
