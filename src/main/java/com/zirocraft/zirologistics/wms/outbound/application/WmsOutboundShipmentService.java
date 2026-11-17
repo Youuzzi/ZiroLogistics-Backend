@@ -209,6 +209,13 @@ public class WmsOutboundShipmentService {
         if (command.allocations() == null || command.allocations().isEmpty() || command.allocations().size() > 100) {
             throw new IllegalArgumentException("Provide between 1 and 100 stock allocations");
         }
+        BigDecimal requested = (BigDecimal) line.get("requested_qty");
+        BigDecimal alreadyAllocated = (BigDecimal) line.get("allocated_qty");
+        BigDecimal requestedThisCommand = command.allocations().stream()
+                .map(a -> quantity(a.quantity())).reduce(BigDecimal.ZERO.setScale(4), BigDecimal::add);
+        if (alreadyAllocated.add(requestedThisCommand).compareTo(requested) > 0) {
+            throw new IllegalArgumentException("Allocation exceeds remaining shipment quantity");
+        }
         BigDecimal total = BigDecimal.ZERO.setScale(4);
         int createdAllocationCount = 0;
         for (AllocationLine allocation : command.allocations()) {
@@ -277,7 +284,6 @@ public class WmsOutboundShipmentService {
 
         }
         BigDecimal newAllocated = ((BigDecimal) line.get("allocated_qty")).add(total).setScale(4, RoundingMode.UNNECESSARY);
-        BigDecimal requested = (BigDecimal) line.get("requested_qty");
         if (newAllocated.compareTo(requested) > 0) throw new IllegalArgumentException("Allocation exceeds remaining shipment quantity");
         jdbc.update("""
                 UPDATE outbound_shipment_lines SET allocated_qty = ?, status = 'ALLOCATED'
