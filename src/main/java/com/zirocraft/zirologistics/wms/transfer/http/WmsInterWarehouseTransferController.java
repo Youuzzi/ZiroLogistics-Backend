@@ -74,6 +74,7 @@ public class WmsInterWarehouseTransferController {
     }
 
     public record CreateTransferRequest(
+            @NotNull UUID requestId,
             @NotBlank @Size(max=36) String sourceWarehousePublicId,
             @NotBlank @Size(max=36) String destinationWarehousePublicId,
             @NotBlank @Size(max=60) String documentNumber,
@@ -83,7 +84,7 @@ public class WmsInterWarehouseTransferController {
             @Size(max=1000) String notes,
             @NotNull @Size(min=1,max=200) List<@NotNull @Valid TransferLineRequest> lines) {
         WmsInterWarehouseTransferService.TransferCommand toCommand() {
-            return new WmsInterWarehouseTransferService.TransferCommand(sourceWarehousePublicId,destinationWarehousePublicId,
+            return new WmsInterWarehouseTransferService.TransferCommand(requestId,sourceWarehousePublicId,destinationWarehousePublicId,
                     documentNumber,externalReference,transferType,scheduledAt,notes,lines.stream().map(TransferLineRequest::toCommand).toList());
         }
     }
