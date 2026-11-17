@@ -442,17 +442,27 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         assertThrows(IllegalArgumentException.class,
                 () -> transferService.get(otherTenant.principal(), transferId));
 
-        assertThrows(IllegalArgumentException.class, () -> transferService.create(
-                otherTenant.principal(),
-                new WmsInterWarehouseTransferService.TransferCommand(
-                        UUID.randomUUID(), fixture.warehousePublicId(), destination.warehousePublicId(),
-                        "CROSS-" + UUID.randomUUID().toString().substring(0, 8), null, "STANDARD",
-                        null, null,
-                        List.of(new WmsInterWarehouseTransferService.LineCommand(
-                                otherTenant.itemPublicId(), new BigDecimal("1.0000"), null,
-                                List.of(new WmsInterWarehouseTransferService.AllocationCommand(
-                                        otherTenant.receivingLocationPublicId(), destination.locationPublicId(),
-                                        null, new BigDecimal("1.0000"), List.of()))))));
+        assertThrows(IllegalArgumentException.class, () ->
+                transferService.create(
+                        otherTenant.principal(),
+                        new WmsInterWarehouseTransferService.TransferCommand(
+                                UUID.randomUUID(), fixture.warehousePublicId(), destination.warehousePublicId(),
+                                "CROSS-" + UUID.randomUUID().toString().substring(0, 8), null, "STANDARD",
+                                null, null,
+                                List.of(
+                                        new WmsInterWarehouseTransferService.LineCommand(
+                                                otherTenant.itemPublicId(), new BigDecimal("1.0000"), null,
+                                                List.of(
+                                                        new WmsInterWarehouseTransferService.AllocationCommand(
+                                                                otherTenant.receivingLocationPublicId(),
+                                                                destination.locationPublicId(), null,
+                                                                new BigDecimal("1.0000"), List.of())
+                                                )
+                                        )
+                                )
+                        )
+                )
+        );
         assertEquals(0, count("""
                 SELECT COUNT(*) FROM stock_transfers
                 WHERE tenant_id=? AND document_number LIKE 'CROSS-%'
