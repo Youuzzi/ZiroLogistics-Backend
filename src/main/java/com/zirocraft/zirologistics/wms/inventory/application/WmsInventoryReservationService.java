@@ -76,11 +76,12 @@ public class WmsInventoryReservationService {
             throw new IllegalArgumentException("Serial IDs are only valid for serial-tracked items");
         }
 
+        Long resolvedLotId = lotId;
         List<Long> serialIds = serialPublicIds.stream().distinct().map(serialPublicId -> id("""
                 SELECT id FROM inventory_serials
                 WHERE tenant_id = ? AND item_id = ? AND public_id = ? AND lot_id <=> ?
                   AND status = 'AVAILABLE' AND current_warehouse_id = ? AND current_location_id = ?
-                """, access.tenantId(), item.id(), required(serialPublicId), lotId, warehouseId, locationId,
+                """, access.tenantId(), item.id(), required(serialPublicId), resolvedLotId, warehouseId, locationId,
                 "Available serial at source location not found")).sorted().toList();
         if (serialIds.size() != serialPublicIds.size()) throw new IllegalArgumentException("Duplicate serial IDs are not allowed");
         lockIds("inventory_serials", serialIds, access.tenantId(), "Serial");
