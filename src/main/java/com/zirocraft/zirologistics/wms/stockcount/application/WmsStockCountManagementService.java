@@ -254,8 +254,8 @@ public class WmsStockCountManagementService {
             int changed = jdbc.update("""
                     UPDATE stock_count_scopes
                     SET scope_status = 'IN_PROGRESS', started_at = UTC_TIMESTAMP(6)
-                    WHERE id = ? AND tenant_id = ? AND stock_count_id = ? AND scope_status = 'PENDING'
-                    """, scope.id(), access.tenantId(), countId);
+                    WHERE tenant_id = ? AND stock_count_id = ? AND location_id = ? AND scope_status = 'PENDING'
+                    """, access.tenantId(), countId, scope.id());
             if (changed != 1) throw new IllegalStateException("Stock count scope changed; reload and retry");
         }
         int changed = jdbc.update("""
