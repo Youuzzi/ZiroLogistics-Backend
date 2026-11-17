@@ -718,7 +718,8 @@ public class WmsStockCountManagementService {
                 WHERE l.tenant_id = ? AND s.stock_count_id = ?
                 ORDER BY wl.location_code, i.sku, l.stock_status, l.id
                 """, access.tenantId(), number(row, "id"));
-        boolean exposeExpected = !"BLIND".equals(string(row, "count_mode")) || access.canReviewCount();
+        boolean exposeExpected = access.canReviewCount()
+                || ("OPEN".equals(string(row, "count_mode")) && access.canRecordCount());
         List<Map<String, Object>> safeLines = new ArrayList<>();
         for (Map<String, Object> line : lines) {
             Map<String, Object> safe = new LinkedHashMap<>();
@@ -936,6 +937,7 @@ public class WmsStockCountManagementService {
                                       String lotPublicId, String stockStatus) {}
     public record RecordCountResultCommand(BigDecimal countedQty, List<String> serialPublicIds, String notes) {}
 
-    private record Access(long tenantId, long membershipId, String userPublicId, boolean canReviewCount) {}
+    private record Access(long tenantId, long membershipId, String userPublicId,
+                          boolean canRecordCount, boolean canReviewCount) {}
     private record ScopeLocation(long id, String publicId, String status) {}
 }
