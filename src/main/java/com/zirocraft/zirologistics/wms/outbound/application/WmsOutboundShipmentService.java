@@ -78,7 +78,7 @@ public class WmsOutboundShipmentService {
                 ORDER BY l.line_number
                 """, access.tenantId(), number(raw, "id")));
         result.put("allocations", jdbc.queryForList("""
-                SELECT a.id AS allocation_id, l.public_id AS shipment_line_public_id,
+                SELECT l.public_id AS shipment_line_public_id,
                        w.public_id AS warehouse_public_id, w.warehouse_code,
                        loc.public_id AS location_public_id, loc.location_code,
                        i.public_id AS item_public_id, i.sku, lot.public_id AS lot_public_id,
@@ -210,7 +210,7 @@ public class WmsOutboundShipmentService {
             throw new IllegalArgumentException("Provide between 1 and 100 stock allocations");
         }
         BigDecimal total = BigDecimal.ZERO.setScale(4);
-        List<String> createdIds = new ArrayList<>();
+        int createdAllocationCount = 0;
         for (AllocationLine allocation : command.allocations()) {
             BigDecimal qty = quantity(allocation.quantity());
             Map<String, Object> location = requiredRow("""
@@ -231,14 +231,34 @@ public class WmsOutboundShipmentService {
                         SELECT id FROM inventory_lots WHERE tenant_id = ? AND item_id = ? AND public_id = ?
                         """, access.tenantId(), number(line, "item_id"), lotPublicId, "Allocated lot not found");
             }
-            jdbc.update("""
-                    INSERT INTO outbound_shipment_allocations
-                      (tenant_id, outbound_shipment_line_id, item_id, warehouse_id, location_id,
-                       lot_id, allocated_qty, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'ALLOCATED')
-                    """, access.tenantId(), number(line, "id"), number(line, "item_id"),
-                    number(header, "warehouse_id"), number(location, "id"), lotId, qty);
-            Long allocationId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+            List<Map<String, Object>> existingAllocations = jdbc.queryForList("""
+                    SELECT id, allocated_qty FROM outbound_shipment_allocations
+                    WHERE tenant_id = ? AND outbound_shipment_line_id = ? AND warehouse_id = ?
+                      AND location_id = ? AND lot_id <=> ?
+                    FOR UPDATE
+                    """, access.tenantId(), number(line, "id"), number(header, "warehouse_id"),
+                    number(location, "id"), lotId);
+            Long allocationId;
+            if (existingAllocations.isEmpty()) {
+                jdbc.update("""
+                        INSERT INTO outbound_shipment_allocations
+                          (tenant_id, outbound_shipment_line_id, item_id, warehouse_id, location_id,
+                           lot_id, allocated_qty, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'ALLOCATED')
+                        """, access.tenantId(), number(line, "id"), number(line, "item_id"),
+                        number(header, "warehouse_id"), number(location, "id"), lotId, qty);
+                allocationId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+                createdAllocationCount++;
+            } else {
+                Map<String, Object> existing = existingAllocations.getFirst();
+                allocationId = number(existing, "id");
+                BigDecimal combined = ((BigDecimal) existing.get("allocated_qty")).add(qty).setScale(4, RoundingMode.UNNECESSARY);
+                jdbc.update("""
+                        UPDATE outbound_shipment_allocations
+                        SET allocated_qty = ?, status = 'ALLOCATED'
+                        WHERE id = ? AND tenant_id = ?
+                        """, combined, allocationId, access.tenantId());
+            }
             if (!serialIds.isEmpty()) {
                 for (String serialPublicId : serialIds) {
                     long serialId = requiredLong("""
@@ -254,7 +274,7 @@ public class WmsOutboundShipmentService {
                 }
             }
             total = total.add(qty);
-            createdIds.add(allocationId.toString());
+
         }
         BigDecimal newAllocated = ((BigDecimal) line.get("allocated_qty")).add(total).setScale(4, RoundingMode.UNNECESSARY);
         BigDecimal requested = (BigDecimal) line.get("requested_qty");
@@ -264,7 +284,8 @@ public class WmsOutboundShipmentService {
                 WHERE id = ? AND tenant_id = ?
                 """, newAllocated, number(line, "id"), access.tenantId());
         Map<String, Object> after = Map.of("shipmentPublicId", shipmentPublicId,
-                "linePublicId", linePublicId, "allocatedQty", newAllocated, "allocationIds", createdIds);
+                "linePublicId", linePublicId, "allocatedQty", newAllocated,
+                "allocationBucketCountCreated", createdAllocationCount);
         audit(access, "OUTBOUND_SHIPMENT_ALLOCATED", shipmentPublicId,
                 Map.of("allocatedQty", line.get("allocated_qty")), after);
         return after;
