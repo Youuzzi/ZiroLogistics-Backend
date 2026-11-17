@@ -74,6 +74,23 @@ public class WmsStockCountManagementController {
                         request.countedQty(), request.serialPublicIds(), request.notes()));
     }
 
+    @PostMapping("/{countPublicId}/submit")
+    public Map<String, Object> submit(Authentication authentication, @PathVariable String countPublicId) {
+        return service.submit(principal(authentication), countPublicId);
+    }
+
+    @PostMapping("/{countPublicId}/lines/{linePublicId}/review")
+    public Map<String, Object> reviewLine(Authentication authentication,
+                                          @PathVariable String countPublicId,
+                                          @PathVariable String linePublicId) {
+        return service.reviewLine(principal(authentication), countPublicId, linePublicId);
+    }
+
+    @PostMapping("/{countPublicId}/approve")
+    public Map<String, Object> approve(Authentication authentication, @PathVariable String countPublicId) {
+        return service.approve(principal(authentication), countPublicId);
+    }
+
     @PostMapping("/{countPublicId}/cancel")
     public Map<String, Object> cancel(Authentication authentication, @PathVariable String countPublicId) {
         return service.cancel(principal(authentication), countPublicId);
