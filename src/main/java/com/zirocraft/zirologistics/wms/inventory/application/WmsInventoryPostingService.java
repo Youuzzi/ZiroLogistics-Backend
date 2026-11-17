@@ -87,7 +87,7 @@ public class WmsInventoryPostingService {
                 required(stockCountPublicId, "stock count public ID"));
         List<Long> lines = jdbc.queryForList("""
                 SELECT id FROM inventory_adjustment_lines
-                WHERE id = ? AND tenant_id = ? AND inventory_adjustment_id = ?
+                WHERE id = ? AND tenant_id = ? AND inventory_adjustment_id = ? AND status = 'REVIEWED'
                 FOR UPDATE
                 """, Long.class, adjustmentLineId, access.tenantId(), number(context, "adjustment_id"));
         if (lines.isEmpty()) throw new AccessDeniedException("Adjustment line does not belong to the approved adjustment");
@@ -137,7 +137,7 @@ public class WmsInventoryPostingService {
                 """, access.tenantId(), required(adjustmentPublicId, "adjustment public ID"));
         List<Long> lines = jdbc.queryForList("""
                 SELECT id FROM inventory_adjustment_lines
-                WHERE id = ? AND tenant_id = ? AND inventory_adjustment_id = ?
+                WHERE id = ? AND tenant_id = ? AND inventory_adjustment_id = ? AND status = 'REVIEWED'
                 FOR UPDATE
                 """, Long.class, adjustmentLineId, access.tenantId(), number(context, "adjustment_id"));
         if (lines.isEmpty()) throw new AccessDeniedException("Adjustment line does not belong to the approved manual adjustment");
