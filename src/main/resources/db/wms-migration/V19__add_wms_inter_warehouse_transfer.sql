@@ -37,6 +37,13 @@ CREATE TABLE stock_transfer_commands (
     REFERENCES stock_transfers (id, tenant_id) ON DELETE RESTRICT,
   CONSTRAINT chk_stock_transfer_commands_type CHECK (command_type IN ('RELEASE','DISPATCH','RECEIVE'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ALTER TABLE stock_transfer_lines DROP CHECK chk_stock_transfer_lines_quantities;
+ALTER TABLE stock_transfer_lines ADD CONSTRAINT chk_stock_transfer_lines_quantities CHECK (
+  requested_qty > 0 AND dispatched_qty >= 0 AND received_qty >= 0 AND damaged_qty >= 0 AND short_qty >= 0
+  AND received_qty + damaged_qty + short_qty <= dispatched_qty
+  AND dispatched_qty <= requested_qty
+);
+
 ALTER TABLE stock_transfer_allocations DROP CHECK chk_stock_transfer_allocations_qty;
 ALTER TABLE stock_transfer_allocations ADD CONSTRAINT chk_stock_transfer_allocations_qty CHECK (
   planned_qty > 0
