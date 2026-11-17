@@ -365,9 +365,9 @@ public class WmsPackingManagementService {
         if(s.get("assigned_to_membership_id")==null||number(s,"assigned_to_membership_id")!=a.membershipId())
             throw new AccessDeniedException("Only the assigned member may operate this packing session");
     }
-    private long resolveWeightUom(long tenant,String code) {
-        if(code==null||code.isBlank()) return 0L;
-        return requiredLong("SELECT id FROM units_of_measure WHERE uom_code=? AND is_active=1",code.trim().toUpperCase(Locale.ROOT));
+    private Long resolveWeightUom(long tenant,String code) {
+        if(code==null||code.isBlank()) return null;
+        return requiredLong("SELECT id FROM units_of_measure WHERE uom_code=? AND dimension='MASS' AND is_active=1",code.trim().toUpperCase(Locale.ROOT));
     }
     private void lockTenant(WmsAuthenticatedPrincipal p) {
         if(p==null) throw new AccessDeniedException("Tenant context is required");
