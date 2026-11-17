@@ -122,7 +122,7 @@ For each non-zero allocation:
 - Zero variance produces no ledger entry.
 - Every movement calls WmsInventoryPostingService; no controller or adjustment repository writes balance, ledger or serial tables directly.
 
-Serial adjustments use exact serial identities. The existing posting boundary permits ADJUSTMENT_OUT to transition an AVAILABLE serial at the stated location to LOST, and ADJUSTMENT_IN to restore a known LOST serial into AVAILABLE stock at the approved location. Do not create a new serial identity to mask a count discrepancy. Lot identity and stock status must match the allocation; all quantity and serial counts must reconcile before posting.
+Serial adjustments use exact serial identities. The current posting boundary supports ADJUSTMENT_OUT from AVAILABLE to LOST and ADJUSTMENT_IN to restore a known LOST serial into AVAILABLE stock. Stage 10 must extend these operations only for stock statuses that have an explicit serial lifecycle mapping, with integration tests proving the matching status transition. V1 has no EXPIRED or BLOCKED serial lifecycle state, so a variance in those serialized buckets may be recorded and reviewed but must not be silently posted as an adjustment. A status reclassification between AVAILABLE, QUARANTINED and DAMAGED must use an explicit STATUS_CHANGE movement rather than being disguised as a quantity correction. Do not create a new serial identity to mask a count discrepancy. Lot identity and stock status must match the allocation; all quantity and serial counts must reconcile before posting.
 
 ## 6. Replenishment rule and task lifecycle
 
