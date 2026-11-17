@@ -59,6 +59,17 @@ Lifecycle:
 - Each confirmed quantity is moved from receiving location to destination through one paired TRANSFER posting.
 - Task/line completion and inventory posting commit atomically. Partial confirmations remain possible; over-confirmation and duplicate confirmation are rejected.
 
+#### Putaway implementation boundary (first delivery)
+
+- `GET /api/wms/v1/tenants/current/putaway-tasks` and `GET /{taskPublicId}` provide tenant-scoped task reads.
+- `POST /api/wms/v1/tenants/current/putaway-tasks` creates a DRAFT task from a POSTED receipt. The caller explicitly allocates accepted receipt-line quantities to active storage destinations. LOT-tracked stock is allocated per receipt lot; SERIAL-tracked stock requires explicit serial assignment from the receipt.
+- `POST /{taskPublicId}/ready`, `/assign`, and `/start` enforce the DRAFT → READY → ASSIGNED → IN_PROGRESS lifecycle. Only the assigned active tenant member may start or confirm the task.
+- `POST /{taskPublicId}/lines/{linePublicId}/confirm` performs a partial or final location transfer through `WmsInventoryPostingService`. Source and destination ledger legs, confirmation row, line/task state and audit event commit in one transaction. The posting service remains the only writer of inventory balances, ledger and serial location state.
+- Planned quantities cannot exceed accepted, not-yet-allocated receipt quantities. Confirmed quantities cannot exceed the task line's remaining planned quantity. Destination must be an active STORAGE, RACK, SHELF or BIN location; mixed-SKU and mixed-lot policies are checked both when planned and immediately before posting.
+- A serial-tracked confirmation moves exactly one serial per request because the current inventory posting contract represents one TRANSFER as exactly two paired legs. A task may still contain many assigned serials and be confirmed in multiple requests.
+- V14 adds `WMS_PUTAWAY_READ`, `WMS_PUTAWAY_CREATE`, `WMS_PUTAWAY_ASSIGN`, `WMS_PUTAWAY_START`, and `WMS_PUTAWAY_CONFIRM`, plus the putaway audit event allowlist. V1–V13 remain immutable.
+- Confirmation request UUIDs are tenant-scoped and single-use in both putaway confirmation and inventory ledger persistence. Payload-hash replay semantics remain Stage 11.
+
 ### 2.3 Outbound order execution
 
 Tables: `outbound_shipments`, `outbound_shipment_lines`, `outbound_shipment_allocations`, `outbound_shipment_line_serials`, `picking_waves`, `picking_wave_shipments`, `picking_tasks`, `picking_task_lines`, `picking_confirmations`, `picking_task_line_serials`, `packing_sessions`, `packing_packages`, `packing_package_lines`, `packing_package_serials`.
