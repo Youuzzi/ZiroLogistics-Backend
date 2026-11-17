@@ -107,6 +107,7 @@ public class WmsInterWarehouseTransferService {
     @Transactional
     public Map<String,Object> create(WmsAuthenticatedPrincipal principal, TransferCommand command) {
         Objects.requireNonNull(command,"Transfer request is required");
+        Objects.requireNonNull(command.requestId(),"Request ID is required");
         lockTenant(principal);
         Access a=access(principal,"WMS_TRANSFER_CREATE");
         if(command.lines()==null || command.lines().isEmpty() || command.lines().size()>200)
@@ -133,12 +134,13 @@ public class WmsInterWarehouseTransferService {
                     optional(command.notes(),1000));
         }catch(DuplicateKeyException duplicate){throw new IllegalStateException("Transfer document number already exists",duplicate);}
         long transferId=requiredLong("SELECT id FROM stock_transfers WHERE tenant_id=? AND public_id=?",a.tenantId(),transferPublicId,"Transfer was not created");
+        recordCommand(a,transferId,command.requestId(),"CREATE");
         int lineNo=0;
         for(LineCommand line:command.lines()){
             lineNo++;
             createLine(a,transferId,number(source,"id"),number(destination,"id"),lineNo,line);
         }
-        audit(a,transferPublicId,Map.of("status","NONE"),Map.of("status","DRAFT","lineCount",lineNo),UUID.randomUUID());
+        audit(a,transferPublicId,Map.of("status","NONE"),Map.of("status","DRAFT","lineCount",lineNo),command.requestId());
         return view(a.tenantId(),transferPublicId);
     }
 
@@ -599,7 +601,7 @@ public class WmsInterWarehouseTransferService {
         try{return v.setScale(4,RoundingMode.UNNECESSARY);}catch(ArithmeticException e){throw new IllegalArgumentException("Quantity supports at most four decimal places",e);}
     }
 
-    public record TransferCommand(String sourceWarehousePublicId,String destinationWarehousePublicId,String documentNumber,
+    public record TransferCommand(UUID requestId,String sourceWarehousePublicId,String destinationWarehousePublicId,String documentNumber,
                                  String externalReference,String transferType,java.time.LocalDateTime scheduledAt,String notes,
                                  List<LineCommand> lines){}
     public record LineCommand(String itemPublicId,BigDecimal requestedQty,String notes,List<AllocationCommand> allocations){}
