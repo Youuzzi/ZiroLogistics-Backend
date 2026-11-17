@@ -302,12 +302,12 @@ public class WmsInterWarehouseTransferService {
                 if(new HashSet<>(serialIds).size()!=serialIds.size())throw new IllegalArgumentException("Duplicate serial in dispatch");
                 for(String serialId:serialIds){
                     Map<String,Object> serial=linkedSerial(a.tenantId(),number(al,"id"),serialId,"PLANNED");
-                    legs.add(postingLeg(al,serialId,"AVAILABLE",BigDecimal.ONE));
+                    legs.add(postingLeg(al,serialId,"AVAILABLE",BigDecimal.ONE,false));
                     updates.add(new DispatchUpdate(number(al,"id"),serialId));
                 }
             }else{
                 if(!serialIds.isEmpty())throw new IllegalArgumentException("Non-serial allocation cannot dispatch serial identities");
-                legs.add(postingLeg(al,null,"AVAILABLE",qty));
+                legs.add(postingLeg(al,null,"AVAILABLE",qty,false));
             }
             updates.add(new DispatchUpdate(number(al,"id"),null,qty));
         }
@@ -392,17 +392,17 @@ public class WmsInterWarehouseTransferService {
                         ||good.intValueExact()!=goodSerials.size()||damaged.intValueExact()!=damagedSerials.size()
                         ||shortage.intValueExact()!=shortSerials.size())
                     throw new IllegalArgumentException("Receipt serial identities must exactly match good, damaged and short quantities");
-                Set<String> all=new HashSet<>();all.addAll(goodSerials);
-                if(!all.addAll(damagedSerials)||!Collections.disjoint(goodSerials,damagedSerials)||!Collections.disjoint(goodSerials,shortSerials)||!Collections.disjoint(damagedSerials,shortSerials))
-                    throw new IllegalArgumentException("Duplicate serial in receipt reconciliation");
-                for(String serial:goodSerials){linkedSerial(a.tenantId(),number(al,"id"),serial,"IN_TRANSIT");postingLegs.add(postingLeg(al,serial,"AVAILABLE",BigDecimal.ONE));updates.add(new ReceiptUpdate(number(al,"id"),serial,"RECEIVED"));}
-                for(String serial:damagedSerials){linkedSerial(a.tenantId(),number(al,"id"),serial,"IN_TRANSIT");postingLegs.add(postingLeg(al,serial,"DAMAGED",BigDecimal.ONE));updates.add(new ReceiptUpdate(number(al,"id"),serial,"DAMAGED"));}
+                Set<String> all=new HashSet<>(goodSerials);
+                for(String serial:damagedSerials)if(!all.add(serial))throw new IllegalArgumentException("Duplicate serial in receipt reconciliation");
+                for(String serial:shortSerials)if(!all.add(serial))throw new IllegalArgumentException("Duplicate serial in receipt reconciliation");
+                for(String serial:goodSerials){linkedSerial(a.tenantId(),number(al,"id"),serial,"IN_TRANSIT");postingLegs.add(postingLeg(al,serial,"AVAILABLE",BigDecimal.ONE,true));updates.add(new ReceiptUpdate(number(al,"id"),serial,"RECEIVED"));}
+                for(String serial:damagedSerials){linkedSerial(a.tenantId(),number(al,"id"),serial,"IN_TRANSIT");postingLegs.add(postingLeg(al,serial,"DAMAGED",BigDecimal.ONE,true));updates.add(new ReceiptUpdate(number(al,"id"),serial,"DAMAGED"));}
                 for(String serial:shortSerials){linkedSerial(a.tenantId(),number(al,"id"),serial,"IN_TRANSIT");lostSerials.add(serial);updates.add(new ReceiptUpdate(number(al,"id"),serial,"LOST"));}
             }else{
                 if(!goodSerials.isEmpty()||!damagedSerials.isEmpty()||!shortSerials.isEmpty())
                     throw new IllegalArgumentException("Non-serial allocation cannot receive serial identities");
-                if(good.signum()>0)postingLegs.add(postingLeg(al,null,"AVAILABLE",good));
-                if(damaged.signum()>0)postingLegs.add(postingLeg(al,null,"DAMAGED",damaged));
+                if(good.signum()>0)postingLegs.add(postingLeg(al,null,"AVAILABLE",good,true));
+                if(damaged.signum()>0)postingLegs.add(postingLeg(al,null,"DAMAGED",damaged,true));
             }
             updates.add(new ReceiptUpdate(number(al,"id"),null,"COUNTERS",good,damaged,shortage));
         }
@@ -450,14 +450,24 @@ public class WmsInterWarehouseTransferService {
                   received_by_membership_id=?,version=version+1,updated_at=UTC_TIMESTAMP(6)
                 WHERE id=? AND tenant_id=?
                 """,next,next,a.membershipId(),number(h,"id"),a.tenantId());
+        jdbc.update("""
+                UPDATE stock_transfer_lines l
+                SET l.status=CASE
+                  WHEN (SELECT COALESCE(SUM(a.dispatched_qty),0) FROM stock_transfer_allocations a WHERE a.tenant_id=l.tenant_id AND a.stock_transfer_line_id=l.id)=l.requested_qty
+                   AND (SELECT COALESCE(SUM(a.received_qty+a.damaged_qty+a.short_qty),0) FROM stock_transfer_allocations a WHERE a.tenant_id=l.tenant_id AND a.stock_transfer_line_id=l.id)=l.requested_qty THEN 'RECEIVED'
+                  WHEN (SELECT COALESCE(SUM(a.received_qty+a.damaged_qty+a.short_qty),0) FROM stock_transfer_allocations a WHERE a.tenant_id=l.tenant_id AND a.stock_transfer_line_id=l.id)>0 THEN 'PARTIALLY_RECEIVED'
+                  ELSE l.status END, l.updated_at=UTC_TIMESTAMP(6)
+                WHERE l.tenant_id=? AND l.stock_transfer_id=?
+                """,a.tenantId(),number(h,"id"));
         audit(a,transferPublicId,Map.of("status",h.get("status")),
                 Map.of("status",next,"requestId",command.requestId().toString()),command.requestId());
         return get(principal,transferPublicId);
     }
 
-    private WmsInventoryPostingService.PostingLeg postingLeg(Map<String,Object> a,String serialPublicId,String stockStatus,BigDecimal qty){
+    private WmsInventoryPostingService.PostingLeg postingLeg(Map<String,Object> a,String serialPublicId,String stockStatus,BigDecimal qty,boolean destination){
         return new WmsInventoryPostingService.PostingLeg(
-                Objects.toString(a.get("source_warehouse_public_id")),Objects.toString(a.get("source_location_public_id")),
+                Objects.toString(a.get(destination?"destination_warehouse_public_id":"source_warehouse_public_id")),
+                Objects.toString(a.get(destination?"destination_location_public_id":"source_location_public_id")),
                 Objects.toString(a.get("item_public_id")), (String)a.get("lot_public_id"), serialPublicId,null,stockStatus,qty);
     }
 
@@ -552,8 +562,17 @@ public class WmsInterWarehouseTransferService {
     private Map<String,Object> requiredRow(String sql,Object a,Object b,Object c,String message){
         List<Map<String,Object>> rows=jdbc.queryForList(sql,a,b,c);if(rows.isEmpty())throw new IllegalArgumentException(message);return rows.getFirst();
     }
+    private Map<String,Object> requiredRow(String sql,Object a,Object b,Object c,Object d,Object e,Object f,String message){
+        List<Map<String,Object>> rows=jdbc.queryForList(sql,a,b,c,d,e,f);if(rows.isEmpty())throw new IllegalArgumentException(message);return rows.getFirst();
+    }
     private long requiredLong(String sql,Object a,Object b,String message){
         List<Long> rows=jdbc.queryForList(sql,Long.class,a,b);if(rows.isEmpty())throw new IllegalArgumentException(message);return rows.getFirst();
+    }
+    private long requiredLong(String sql,Object a,Object b,Object c,String message){
+        List<Long> rows=jdbc.queryForList(sql,Long.class,a,b,c);if(rows.isEmpty())throw new IllegalArgumentException(message);return rows.getFirst();
+    }
+    private long requiredLong(String sql,Object a,Object b,Object c,Object d,Object e,Object f,String message){
+        List<Long> rows=jdbc.queryForList(sql,Long.class,a,b,c,d,e,f);if(rows.isEmpty())throw new IllegalArgumentException(message);return rows.getFirst();
     }
     private static long number(Map<String,Object> row,String key){return ((Number)row.get(key)).longValue();}
     private static boolean bool(Object v){return v instanceof Boolean b?b: v instanceof Number n&&n.intValue()!=0;}
@@ -584,8 +603,5 @@ public class WmsInterWarehouseTransferService {
     }
     private record ReceiptUpdate(long allocationId,String serialPublicId,String status,BigDecimal good,BigDecimal damaged,BigDecimal shortage){
         ReceiptUpdate(long allocationId,String serialPublicId,String status){this(allocationId,serialPublicId,status,null,null,null);}
-        ReceiptUpdate(long allocationId,String serialPublicId,String status,BigDecimal good,BigDecimal damaged,BigDecimal shortage){
-            this.allocationId=allocationId;this.serialPublicId=serialPublicId;this.status=status;this.good=good;this.damaged=damaged;this.shortage=shortage;
-        }
     }
 }
