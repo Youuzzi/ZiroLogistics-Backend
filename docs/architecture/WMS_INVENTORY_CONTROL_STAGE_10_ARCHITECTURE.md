@@ -126,6 +126,25 @@ The generic `POST /inventory/postings` endpoint must reject `ADJUSTMENT_IN` and 
 
 Serial adjustments use exact serial identities. The current posting boundary supports ADJUSTMENT_OUT from AVAILABLE to LOST and ADJUSTMENT_IN to restore a known LOST serial into AVAILABLE stock. Stage 10 must extend these operations only for stock statuses that have an explicit serial lifecycle mapping, with integration tests proving the matching status transition. V1 has no EXPIRED or BLOCKED serial lifecycle state, so a variance in those serialized buckets may be recorded and reviewed but must not be silently posted as an adjustment. A status reclassification between AVAILABLE, QUARANTINED and DAMAGED must use an explicit STATUS_CHANGE movement rather than being disguised as a quantity correction. Do not create a new serial identity to mask a count discrepancy. Lot identity and stock status must match the allocation; all quantity and serial counts must reconcile before posting.
 
+
+### 5.1 Manual reason-coded adjustment workflow
+
+Manual adjustments are independent of stock counts. They must not create a stock-count link or use the approved-count freeze exception. The adjustment is created as DRAFT with a required reason code/description and immutable allocation baselines captured under the tenant lock. Submission and four-eyes approval remain separate transitions. Approval revalidates every affected bucket against its captured on-hand baseline; posting revalidates again under the inventory posting locks.
+
+The manual API accepts only adjustment types other than PHYSICAL_COUNT. PHYSICAL_COUNT remains exclusively generated from an approved stock count. Each manual allocation is tenant-scoped to one active warehouse, location, stock item, optional matching lot, and stock status. Quantities are DECIMAL(19,4), exact scale 4, non-negative, and the stored delta is always counted_qty - system_qty. Duplicate bucket allocations in one adjustment are rejected by the V1 unique key.
+
+Manual quantity adjustments use the existing typed adjustment posting boundary and exact allocation identity:
+- CORRECTION and OTHER may add or remove quantity from AVAILABLE stock. Positive deltas use ADJUSTMENT_IN and restore only an existing LOST serial identity for serialized items; negative deltas use ADJUSTMENT_OUT and require exact AVAILABLE serial identities which transition to LOST.
+- LOSS is negative-only against AVAILABLE stock and uses ADJUSTMENT_OUT; serialized loss requires exact serial identities.
+- FOUND is positive-only against AVAILABLE stock and uses ADJUSTMENT_IN; serialized found stock must reference an existing LOST serial identity. Unknown serials are not silently created.
+- PHYSICAL_COUNT is rejected by the manual-create API and continues to use the count-linked workflow.
+
+DAMAGE and EXPIRY are stock-status reclassifications, not quantity corrections. They must not be implemented as arbitrary ADJUSTMENT_IN/OUT pairs. DAMAGE uses the existing paired DAMAGE movement from AVAILABLE to DAMAGED in one warehouse/location and must preserve quantity; serial-tracked damage must prove exact serial identity and lifecycle transition. EXPIRY requires an explicit serial lifecycle mapping before serialized expiry can be posted; until that mapping exists, serialized EXPIRY is rejected. Status reclassification remains behind the approved adjustment document and must be validated against exact source and destination allocation rows.
+
+The dedicated manual posting entry point verifies that the adjustment is APPROVED, has no stock-count link, the caller has the adjustment-post permission and the existing WMS_INVENTORY_POST permission, and each posting leg matches an exact allocation on the adjustment line. It does not bypass stock-count freeze checks: any affected location frozen by an active count rejects the posting. Generic POST /inventory/postings continues to reject adjustment movement types. The adjustment header/lines, balance and ledger changes, serial transitions, and audit event commit atomically.
+
+Manual adjustment integration tests must cover reason/type validation, exact baseline revalidation, tenant isolation, permission denial, four-eyes approval, serial identity constraints, frozen-location rejection, non-negative balances, atomic rollback, and audit/ledger references. No manual workflow may write inventory_balances, inventory_ledger, or inventory_serials outside WmsInventoryPostingService.
+
 ## 6. Replenishment rule and task lifecycle
 
 A replenishment rule belongs to one tenant, warehouse, item, source location and destination location. Source and destination must be distinct active locations in the same warehouse. V1 permits MIN_MAX and MANUAL rule types; Stage 10 does not introduce cross-warehouse replenishment because inter-warehouse movement belongs to Stage 9 transfer.
