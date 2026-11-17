@@ -19,6 +19,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -319,7 +320,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         WmsAuthenticatedPrincipal principal = new WmsAuthenticatedPrincipal(userPublicId, tenantId,
                 tenantPublicId, membershipId, membershipPublicId, Set.of());
         return new Fixture(tenantId, warehousePublicId, receivingLocationPublicId,
-                supplierPublicId, customerPublicId, itemPublicId, principal);
+                supplierPublicId, customerPublicId, itemPublicId, membershipPublicId, principal);
     }
 
     private String partner(long tenantId, String role, String name) {
@@ -337,5 +338,5 @@ class WmsOutboundShipmentMySqlIntegrationTest {
 
     private record Fixture(long tenantId, String warehousePublicId, String receivingLocationPublicId,
                            String supplierPublicId, String customerPublicId, String itemPublicId,
-                           WmsAuthenticatedPrincipal principal) {}
+                           String membershipPublicId, WmsAuthenticatedPrincipal principal) {}
 }
