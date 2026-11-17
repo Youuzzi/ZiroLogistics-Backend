@@ -59,7 +59,8 @@ public class WmsPutawayManagementService {
     @Transactional(readOnly = true)
     public Map<String, Object> get(WmsAuthenticatedPrincipal principal, String taskPublicId) {
         Access access = access(principal, "WMS_PUTAWAY_READ");
-        Map<String, Object> task = publicTask(task(access.tenantId(), taskPublicId));
+        Map<String, Object> rawTask = task(access.tenantId(), taskPublicId);
+        Map<String, Object> task = publicTask(rawTask);
         task.put("lines", jdbc.queryForList("""
                 SELECT l.public_id, rl.public_id AS receipt_line_public_id,
                        i.public_id AS item_public_id, i.sku, i.item_name, i.tracking_method,
@@ -77,8 +78,7 @@ public class WmsPutawayManagementService {
                 JOIN warehouse_locations dst ON dst.id = l.destination_location_id AND dst.tenant_id = l.tenant_id
                 WHERE l.tenant_id = ? AND l.putaway_task_id = ?
                 ORDER BY l.created_at, l.id
-                """, access.tenantId(), number(task, "id")));
-        task.remove("id");
+                """, access.tenantId(), number(rawTask, "id")));
         return task;
     }
 
@@ -106,10 +106,6 @@ public class WmsPutawayManagementService {
         }
         long receiptId = number(receipt, "id");
         long warehouseId = number(receipt, "warehouse_id");
-        String sourceLocationPublicId = jdbc.queryForObject(
-                "SELECT public_id FROM warehouse_locations WHERE id = ? AND tenant_id = ?",
-                String.class, number(receipt, "receiving_location_id"), access.tenantId());
-
         String taskPublicId = UUID.randomUUID().toString();
         try {
             jdbc.update("""
