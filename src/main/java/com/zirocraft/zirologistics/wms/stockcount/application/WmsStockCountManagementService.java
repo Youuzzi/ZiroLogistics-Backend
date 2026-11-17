@@ -271,6 +271,230 @@ public class WmsStockCountManagementService {
         return view(access, countPublicId);
     }
 
+
+    @Transactional
+    public Map<String, Object> submit(WmsAuthenticatedPrincipal principal, String countPublicId) {
+        lockTenant(principal);
+        Access access = access(principal, "WMS_STOCK_COUNT_SUBMIT");
+        Map<String, Object> initial = header(access.tenantId(), countPublicId, false);
+        lockWarehouseAndScopes(access, initial, false);
+        Map<String, Object> locked = header(access.tenantId(), countPublicId, true);
+        if (!"IN_PROGRESS".equals(string(locked, "status")) || !bool(locked.get("freeze_stock"))) {
+            throw new IllegalStateException("Only an active frozen stock count can be submitted");
+        }
+        long countId = number(locked, "id");
+        Map<String, Object> lineSummary = requiredRow("""
+                SELECT COUNT(*) AS total_lines,
+                       SUM(CASE WHEN line_status = 'COUNTED' THEN 1 ELSE 0 END) AS counted_lines
+                FROM stock_count_lines
+                WHERE tenant_id = ? AND stock_count_scope_id IN
+                  (SELECT id FROM stock_count_scopes WHERE tenant_id = ? AND stock_count_id = ?)
+                """, access.tenantId(), access.tenantId(), countId);
+        long totalLines = number(lineSummary, "total_lines");
+        long countedLines = lineSummary.get("counted_lines") == null ? 0 : number(lineSummary, "counted_lines");
+        if (totalLines == 0 || countedLines != totalLines) {
+            throw new IllegalStateException("Every stock count line must have a stable final result before submission");
+        }
+        int changed = jdbc.update("""
+                UPDATE stock_counts
+                SET status = 'SUBMITTED', submitted_at = UTC_TIMESTAMP(6),
+                    version = version + 1, updated_at = UTC_TIMESTAMP(6)
+                WHERE id = ? AND tenant_id = ? AND status = 'IN_PROGRESS' AND freeze_stock = 1
+                """, countId, access.tenantId());
+        if (changed != 1) throw new IllegalStateException("Stock count state changed; reload and retry");
+        audit(access, countPublicId, "IN_PROGRESS", "SUBMITTED", "SUBMIT",
+                Map.of("lineCount", totalLines, "freezeStock", true));
+        return view(access, countPublicId);
+    }
+
+    @Transactional
+    public Map<String, Object> reviewLine(
+            WmsAuthenticatedPrincipal principal, String countPublicId, String linePublicId) {
+        lockTenant(principal);
+        Access access = access(principal, "WMS_STOCK_COUNT_REVIEW");
+        Map<String, Object> initial = header(access.tenantId(), countPublicId, false);
+        lockWarehouseAndScopes(access, initial, false);
+        Map<String, Object> locked = header(access.tenantId(), countPublicId, true);
+        String headerStatus = string(locked, "status");
+        if (!Set.of("SUBMITTED", "UNDER_REVIEW").contains(headerStatus) || !bool(locked.get("freeze_stock"))) {
+            throw new IllegalStateException("Only a submitted frozen stock count can be reviewed");
+        }
+        Map<String, Object> line = requiredRowForUpdate("""
+                SELECT l.id, l.line_status
+                FROM stock_count_lines l
+                JOIN stock_count_scopes s ON s.id = l.stock_count_scope_id AND s.tenant_id = l.tenant_id
+                WHERE l.tenant_id = ? AND s.stock_count_id = ? AND l.public_id = ?
+                """, access.tenantId(), number(locked, "id"),
+                required(linePublicId, "Stock count line public ID", 36));
+        if (!"COUNTED".equals(string(line, "line_status"))) {
+            throw new IllegalStateException("Only a stable counted line can be reviewed");
+        }
+        Map<String, Object> latest = requiredRow("""
+                SELECT id, counted_by_membership_id
+                FROM stock_count_results
+                WHERE tenant_id = ? AND stock_count_line_id = ? AND result_status = 'SUBMITTED'
+                ORDER BY count_round DESC LIMIT 1
+                """, access.tenantId(), number(line, "id"));
+        int changedLine = jdbc.update("""
+                UPDATE stock_count_lines
+                SET line_status = 'REVIEWED', reviewed_by_membership_id = ?,
+                    reviewed_at = UTC_TIMESTAMP(6), updated_at = UTC_TIMESTAMP(6)
+                WHERE id = ? AND tenant_id = ? AND line_status = 'COUNTED'
+                """, access.membershipId(), number(line, "id"), access.tenantId());
+        if (changedLine != 1) throw new IllegalStateException("Stock count line changed; reload and retry");
+
+        long remaining = requiredLong("""
+                SELECT COUNT(*) FROM stock_count_lines l
+                JOIN stock_count_scopes s ON s.id = l.stock_count_scope_id AND s.tenant_id = l.tenant_id
+                WHERE l.tenant_id = ? AND s.stock_count_id = ? AND l.line_status <> 'REVIEWED'
+                """, access.tenantId(), number(locked, "id"));
+        jdbc.update("""
+                UPDATE stock_counts
+                SET status = 'UNDER_REVIEW',
+                    reviewed_by_membership_id = CASE WHEN ? = 0 THEN ? ELSE NULL END,
+                    reviewed_at = CASE WHEN ? = 0 THEN UTC_TIMESTAMP(6) ELSE NULL END,
+                    version = version + 1, updated_at = UTC_TIMESTAMP(6)
+                WHERE id = ? AND tenant_id = ? AND status IN ('SUBMITTED','UNDER_REVIEW')
+                """, remaining, access.membershipId(), remaining, number(locked, "id"), access.tenantId());
+        audit(access, countPublicId, headerStatus, "UNDER_REVIEW", "REVIEW_LINE",
+                Map.of("linePublicId", linePublicId,
+                        "finalCounterMembershipId", number(latest, "counted_by_membership_id"),
+                        "remainingLines", remaining));
+        return view(access, countPublicId);
+    }
+
+    @Transactional
+    public Map<String, Object> approve(WmsAuthenticatedPrincipal principal, String countPublicId) {
+        lockTenant(principal);
+        Access access = access(principal, "WMS_STOCK_COUNT_APPROVE");
+        Map<String, Object> initial = header(access.tenantId(), countPublicId, false);
+        lockWarehouseAndScopes(access, initial, false);
+        Map<String, Object> locked = header(access.tenantId(), countPublicId, true);
+        if (!"UNDER_REVIEW".equals(string(locked, "status")) || !bool(locked.get("freeze_stock"))
+                || locked.get("reviewed_at") == null) {
+            throw new IllegalStateException("Stock count must be fully reviewed before approval");
+        }
+        long countId = number(locked, "id");
+        long totalLines = requiredLong("""
+                SELECT COUNT(*) FROM stock_count_lines l
+                JOIN stock_count_scopes s ON s.id = l.stock_count_scope_id AND s.tenant_id = l.tenant_id
+                WHERE l.tenant_id = ? AND s.stock_count_id = ?
+                """, access.tenantId(), countId);
+        long reviewedLines = requiredLong("""
+                SELECT COUNT(*) FROM stock_count_lines l
+                JOIN stock_count_scopes s ON s.id = l.stock_count_scope_id AND s.tenant_id = l.tenant_id
+                WHERE l.tenant_id = ? AND s.stock_count_id = ? AND l.line_status = 'REVIEWED'
+                """, access.tenantId(), countId);
+        if (totalLines == 0 || reviewedLines != totalLines) {
+            throw new IllegalStateException("Every stock count line must be reviewed before approval");
+        }
+        long creatorMembershipId = number(locked, "created_by_membership_id");
+        if (creatorMembershipId == access.membershipId()) {
+            throw new AccessDeniedException("The stock count creator cannot approve their own count");
+        }
+        long reviewerMembershipId = number(locked, "reviewed_by_membership_id");
+        if (reviewerMembershipId == access.membershipId()) {
+            throw new AccessDeniedException("A stock count reviewer cannot approve the same count");
+        }
+        long conflictingReviewers = requiredLong("""
+                SELECT COUNT(*) FROM stock_count_lines
+                WHERE tenant_id = ? AND stock_count_scope_id IN
+                  (SELECT id FROM stock_count_scopes WHERE tenant_id = ? AND stock_count_id = ?)
+                  AND reviewed_by_membership_id = ?
+                """, access.tenantId(), access.tenantId(), countId, access.membershipId());
+        if (conflictingReviewers > 0) {
+            throw new AccessDeniedException("A line reviewer cannot approve the same stock count");
+        }
+        long conflictingCounters = requiredLong("""
+                SELECT COUNT(*) FROM stock_count_results r
+                JOIN (
+                  SELECT stock_count_line_id, MAX(count_round) AS latest_round
+                  FROM stock_count_results
+                  WHERE tenant_id = ? AND result_status = 'SUBMITTED'
+                  GROUP BY stock_count_line_id
+                ) latest ON latest.stock_count_line_id = r.stock_count_line_id
+                       AND latest.latest_round = r.count_round
+                JOIN stock_count_lines l ON l.id = r.stock_count_line_id AND l.tenant_id = r.tenant_id
+                JOIN stock_count_scopes s ON s.id = l.stock_count_scope_id AND s.tenant_id = l.tenant_id
+                WHERE r.tenant_id = ? AND s.stock_count_id = ?
+                  AND r.counted_by_membership_id = ?
+                """, access.tenantId(), access.tenantId(), countId, access.membershipId());
+        if (conflictingCounters > 0) {
+            throw new AccessDeniedException("A final count recorder cannot approve the same stock count");
+        }
+
+        boolean hasVariance = hasVariance(access.tenantId(), countId);
+        jdbc.update("""
+                UPDATE stock_count_lines
+                SET line_status = 'APPROVED', updated_at = UTC_TIMESTAMP(6)
+                WHERE tenant_id = ? AND stock_count_scope_id IN
+                  (SELECT id FROM stock_count_scopes WHERE tenant_id = ? AND stock_count_id = ?)
+                  AND line_status = 'REVIEWED'
+                """, access.tenantId(), access.tenantId(), countId);
+        if (hasVariance) {
+            int changed = jdbc.update("""
+                    UPDATE stock_counts
+                    SET status = 'APPROVED', approved_by_membership_id = ?, approved_at = UTC_TIMESTAMP(6),
+                        version = version + 1, updated_at = UTC_TIMESTAMP(6)
+                    WHERE id = ? AND tenant_id = ? AND status = 'UNDER_REVIEW' AND freeze_stock = 1
+                    """, access.membershipId(), countId, access.tenantId());
+            if (changed != 1) throw new IllegalStateException("Stock count state changed; reload and retry");
+        } else {
+            jdbc.update("""
+                    UPDATE stock_count_scopes
+                    SET scope_status = 'COMPLETED', completed_at = UTC_TIMESTAMP(6)
+                    WHERE tenant_id = ? AND stock_count_id = ? AND scope_status = 'IN_PROGRESS'
+                    """, access.tenantId(), countId);
+            int changed = jdbc.update("""
+                    UPDATE stock_counts
+                    SET status = 'COMPLETED', freeze_stock = 0,
+                        approved_by_membership_id = ?, approved_at = UTC_TIMESTAMP(6),
+                        completed_at = UTC_TIMESTAMP(6), version = version + 1,
+                        updated_at = UTC_TIMESTAMP(6)
+                    WHERE id = ? AND tenant_id = ? AND status = 'UNDER_REVIEW' AND freeze_stock = 1
+                    """, access.membershipId(), countId, access.tenantId());
+            if (changed != 1) throw new IllegalStateException("Stock count state changed; reload and retry");
+        }
+        audit(access, countPublicId, "UNDER_REVIEW", hasVariance ? "APPROVED" : "COMPLETED", "APPROVE",
+                Map.of("hasVariance", hasVariance, "freezeStock", hasVariance));
+        return view(access, countPublicId);
+    }
+
+    private boolean hasVariance(long tenantId, long countId) {
+        List<Map<String, Object>> lines = jdbc.queryForList("""
+                SELECT l.id, l.item_id, l.warehouse_id, l.location_id, l.lot_id,
+                       l.stock_status, l.expected_qty, i.tracking_method,
+                       (SELECT r.counted_qty FROM stock_count_results r
+                        WHERE r.tenant_id = l.tenant_id AND r.stock_count_line_id = l.id
+                          AND r.result_status = 'SUBMITTED'
+                        ORDER BY r.count_round DESC LIMIT 1) AS counted_qty,
+                       (SELECT r.id FROM stock_count_results r
+                        WHERE r.tenant_id = l.tenant_id AND r.stock_count_line_id = l.id
+                          AND r.result_status = 'SUBMITTED'
+                        ORDER BY r.count_round DESC LIMIT 1) AS result_id
+                FROM stock_count_lines l
+                JOIN stock_count_scopes s ON s.id = l.stock_count_scope_id AND s.tenant_id = l.tenant_id
+                JOIN items i ON i.id = l.item_id AND i.tenant_id = l.tenant_id
+                WHERE l.tenant_id = ? AND s.stock_count_id = ?
+                ORDER BY l.id
+                """, tenantId, countId);
+        for (Map<String, Object> line : lines) {
+            if (line.get("counted_qty") == null || decimal(line.get("expected_qty"))
+                    .compareTo(decimal(line.get("counted_qty"))) != 0) return true;
+            if (Set.of("SERIAL", "LOT_AND_SERIAL").contains(string(line, "tracking_method"))) {
+                Set<Long> expected = expectedSerialSerialIds(tenantId, number(line, "item_id"),
+                        nullableNumber(line.get("lot_id")), string(line, "stock_status"),
+                        number(line, "warehouse_id"), number(line, "location_id"));
+                Set<Long> observed = new HashSet<>(jdbc.queryForList("""
+                        SELECT serial_id FROM stock_count_result_serials
+                        WHERE tenant_id = ? AND stock_count_result_id = ?
+                        """, Long.class, tenantId, number(line, "result_id")));
+                if (!expected.equals(observed)) return true;
+            }
+        }
+        return false;
+    }
+
     @Transactional
     public Map<String, Object> cancel(WmsAuthenticatedPrincipal principal, String countPublicId) {
         lockTenant(principal);
@@ -706,20 +930,42 @@ public class WmsStockCountManagementService {
         List<Map<String, Object>> lines = jdbc.queryForList("""
                 SELECT l.public_id, i.public_id AS item_public_id, i.sku, i.item_name,
                        wl.public_id AS location_public_id, wl.location_code,
-                       lot.public_id AS lot_public_id, l.stock_status, l.expected_qty, l.line_status
+                       lot.public_id AS lot_public_id, l.stock_status, l.expected_qty, l.line_status,
+                       l.reviewed_at, reviewer.public_id AS reviewed_by_membership_public_id,
+                       latest.count_round, latest.counted_qty,
+                       latest.counted_by_membership_public_id
                 FROM stock_count_lines l
                 JOIN items i ON i.id = l.item_id AND i.tenant_id = l.tenant_id
                 JOIN warehouse_locations wl
                   ON wl.id = l.location_id AND wl.warehouse_id = l.warehouse_id AND wl.tenant_id = l.tenant_id
                 LEFT JOIN inventory_lots lot
                   ON lot.id = l.lot_id AND lot.tenant_id = l.tenant_id AND lot.item_id = l.item_id
+                LEFT JOIN tenant_memberships reviewer
+                  ON reviewer.id = l.reviewed_by_membership_id AND reviewer.tenant_id = l.tenant_id
+                LEFT JOIN (
+                  SELECT r.stock_count_line_id, r.tenant_id, r.count_round, r.counted_qty,
+                         counter.public_id AS counted_by_membership_public_id
+                  FROM stock_count_results r
+                  JOIN tenant_memberships counter
+                    ON counter.id = r.counted_by_membership_id AND counter.tenant_id = r.tenant_id
+                  JOIN (
+                    SELECT tenant_id, stock_count_line_id, MAX(count_round) AS latest_round
+                    FROM stock_count_results
+                    WHERE result_status = 'SUBMITTED'
+                    GROUP BY tenant_id, stock_count_line_id
+                  ) latest_round
+                    ON latest_round.tenant_id = r.tenant_id
+                   AND latest_round.stock_count_line_id = r.stock_count_line_id
+                   AND latest_round.latest_round = r.count_round
+                  WHERE r.result_status = 'SUBMITTED'
+                ) latest ON latest.tenant_id = l.tenant_id AND latest.stock_count_line_id = l.id
                 JOIN stock_count_scopes s
                   ON s.id = l.stock_count_scope_id AND s.tenant_id = l.tenant_id
                 WHERE l.tenant_id = ? AND s.stock_count_id = ?
                 ORDER BY wl.location_code, i.sku, l.stock_status, l.id
                 """, access.tenantId(), number(row, "id"));
-        boolean exposeExpected = access.canReviewCount()
-                || ("OPEN".equals(string(row, "count_mode")) && access.canRecordCount());
+        boolean exposeExpected = "OPEN".equals(string(row, "count_mode"))
+                && (access.canRecordCount() || access.canReviewCount());
         List<Map<String, Object>> safeLines = new ArrayList<>();
         for (Map<String, Object> line : lines) {
             Map<String, Object> safe = new LinkedHashMap<>();
@@ -733,6 +979,11 @@ public class WmsStockCountManagementService {
             safe.put("stockStatus", line.get("stock_status"));
             if (exposeExpected) safe.put("expectedQty", line.get("expected_qty"));
             safe.put("lineStatus", line.get("line_status"));
+            safe.put("countRound", line.get("count_round"));
+            safe.put("countedQty", line.get("counted_qty"));
+            safe.put("countedByMembershipPublicId", line.get("counted_by_membership_public_id"));
+            safe.put("reviewedAt", line.get("reviewed_at"));
+            safe.put("reviewedByMembershipPublicId", line.get("reviewed_by_membership_public_id"));
             safeLines.add(safe);
         }
         result.put("lines", safeLines);

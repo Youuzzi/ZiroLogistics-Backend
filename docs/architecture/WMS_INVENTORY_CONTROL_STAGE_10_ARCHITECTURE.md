@@ -36,7 +36,7 @@ The frozen V1 schema already contains the principal tables for this stage:
 
 V1 defines count types FULL_COUNT, CYCLE_COUNT, SPOT_COUNT; count modes BLIND, OPEN; the count, line and scope lifecycle states; the adjustment document lifecycle and reason types; and MIN_MAX / MANUAL replenishment rules. Stage 10 must use those allowlists and columns as written.
 
-**V1–V20 are immutable.** Do not edit an existing migration, regenerate the baseline, or create duplicate count/adjustment/replenishment tables. Any required schema extension must be an additive V20+ migration and must identify the exact V1 gap it closes.
+**V1–V21 are immutable.** Do not edit an existing migration, regenerate the baseline, or create duplicate count/adjustment/replenishment tables. Any required schema extension must be an additive V22+ migration and must identify the exact V1 gap it closes.
 
 ### 2.1 Proven schema gap: serialized count observations
 
@@ -102,7 +102,7 @@ For serialized items, the result quantity must equal the number of distinct seri
 
 A discrepancy on the initial round sets the line to RECOUNT_REQUIRED. A recount is a new result round and must be performed by a different active membership from the previous counter. A counter cannot edit or erase prior rounds. If the recount confirms the same quantity and, for serial-tracked items, the same serial identity set as the immediately preceding round, the line becomes COUNTED even when the confirmed value differs from the system snapshot; that stable variance is then eligible for review. If the recount differs, another recount is required from a different membership. The latest stable result is the candidate result for review; voiding a result requires an explicit privileged action with an audit reason.
 
-After all lines have a valid final result, the stock count may be submitted and moved to UNDER_REVIEW. The reviewer checks line variances and recount evidence. Each line is marked REVIEWED and the header may be approved only when all in-scope lines are reviewed. Approval records the reviewer/approver membership and timestamp. The count creator and the membership that recorded the final result for a line cannot approve the count variance for that document; enforce this four-eyes check in the backend.
+After all lines have a valid final result, the stock count is submitted (IN_PROGRESS → SUBMITTED). A reviewer reviews each line independently; the first line review moves the header to UNDER_REVIEW and each line records reviewed_by_membership_id and reviewed_at. The header records the completing reviewer only when all lines have been reviewed. V22 adds these per-line review fields and a tenant-scoped membership foreign key. Approval is a separate command and requires every line to be REVIEWED. The count creator, every final-result recorder and every line reviewer are barred from approving the same count. The approver and decision timestamp are recorded on the header. If the approved count has any quantity or serial-identity variance, it remains APPROVED and frozen for the linked adjustment workflow; if no variance exists, approval completes the count and unfreezes all scopes atomically.
 
 Count header lifecycle uses the existing V1 values: DRAFT → PLANNED → IN_PROGRESS → SUBMITTED → UNDER_REVIEW → APPROVED → COMPLETED, with CANCELLED only on allowed pre-submission paths. Line and scope states must use the exact V1 CHECK allowlists.
 
@@ -144,7 +144,8 @@ Base path: /api/wms/v1/tenants/current.
 
 Stock counts:
 - GET /stock-counts, POST /stock-counts, GET /stock-counts/{countPublicId}.
-- POST /stock-counts/{countPublicId}/plan, /start, /submit, /review, /approve, /cancel.
+- POST /stock-counts/{countPublicId}/plan, /start, /submit, /approve, /cancel.
+- POST /stock-counts/{countPublicId}/lines/{linePublicId}/review reviews one stable count line.
 - POST /stock-counts/{countPublicId}/lines to add a scoped zero-expected bucket for unexpected stock; POST /stock-counts/{countPublicId}/lines/{linePublicId}/results to record a new round; result command includes counted quantity, optional scanned serial public IDs and notes.
 - Recount uses the same results operation with the next count round; the server assigns the next round and validates the prior actor. Client cannot choose or overwrite an old round.
 

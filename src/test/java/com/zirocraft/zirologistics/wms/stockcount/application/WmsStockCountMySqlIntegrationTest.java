@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -183,7 +184,7 @@ class WmsStockCountMySqlIntegrationTest {
                 JOIN membership_roles mr ON mr.role_id = rp.role_id AND mr.tenant_id = ?
                 JOIN tenant_memberships tm ON tm.id = mr.membership_id AND tm.tenant_id = mr.tenant_id
                 WHERE tm.public_id = ?
-                  AND rp.permission_id = (SELECT id FROM permissions WHERE permission_code = 'WMS_STOCK_COUNT_RECORD')
+                  AND rp.permission_id IN (SELECT id FROM permissions WHERE permission_code IN ('WMS_STOCK_COUNT_RECORD', 'WMS_STOCK_COUNT_REVIEW', 'WMS_STOCK_COUNT_APPROVE'))
                 """, fixture.tenantId(), fixture.principal().membershipPublicId());
 
         Map<String, Object> readOnly = stockCountService.get(fixture.principal(), countPublicId);
@@ -296,6 +297,77 @@ class WmsStockCountMySqlIntegrationTest {
                         other.warehousePublicId(), "CROSS-" + UUID.randomUUID(),
                         "CYCLE_COUNT", "BLIND", List.of(other.locationPublicId()), null)));
         assertEquals(0, count("SELECT COUNT(*) FROM stock_counts WHERE tenant_id = ?", fixture.tenantId()));
+    }
+
+
+    @Test
+    void varianceRequiresIndependentReviewAndFourEyesApprovalAndRemainsFrozen() {
+        receive(fixture, "5.0000");
+        String countPublicId = createAndPlan(fixture);
+        Map<String, Object> started = stockCountService.start(fixture.principal(), countPublicId);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> lines = (List<Map<String, Object>>) started.get("lines");
+        String linePublicId = (String) lines.getFirst().get("publicId");
+
+        stockCountService.recordResult(fixture.principal(), countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        new BigDecimal("4.0000"), List.of(), "Initial count"));
+        WmsAuthenticatedPrincipal counter = secondCounter(fixture);
+        Map<String, Object> recounted = stockCountService.recordResult(counter, countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        new BigDecimal("4.0000"), List.of(), "Independent recount"));
+        assertEquals("COUNTED", ((Map<?, ?>) ((List<?>) recounted.get("lines")).getFirst()).get("lineStatus"));
+
+        Map<String, Object> submitted = stockCountService.submit(fixture.principal(), countPublicId);
+        assertEquals("SUBMITTED", submitted.get("status"));
+        WmsAuthenticatedPrincipal reviewer = secondCounter(fixture);
+        Map<String, Object> reviewed = stockCountService.reviewLine(reviewer, countPublicId, linePublicId);
+        assertEquals("UNDER_REVIEW", reviewed.get("status"));
+        assertEquals("REVIEWED", ((Map<?, ?>) ((List<?>) reviewed.get("lines")).getFirst()).get("lineStatus"));
+
+        assertThrows(AccessDeniedException.class, () -> stockCountService.approve(fixture.principal(), countPublicId));
+        assertThrows(AccessDeniedException.class, () -> stockCountService.approve(counter, countPublicId));
+        assertThrows(AccessDeniedException.class, () -> stockCountService.approve(reviewer, countPublicId));
+
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        Map<String, Object> approved = stockCountService.approve(approver, countPublicId);
+        assertEquals("APPROVED", approved.get("status"));
+        assertEquals(Boolean.TRUE, approved.get("freezeStock"));
+        assertThrows(IllegalStateException.class, () -> receive(fixture, "1.0000"));
+        assertEquals(3, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id = ? AND subject_public_id = ?
+                  AND event_type = 'WMS_STOCK_COUNT_UPDATED'
+                  AND JSON_UNQUOTE(JSON_EXTRACT(change_payload, '$.action')) IN ('SUBMIT','REVIEW_LINE','APPROVE')
+                """, fixture.tenantId(), countPublicId));
+    }
+
+    @Test
+    void approvedCountWithoutVarianceCompletesAndReleasesLocationFreeze() {
+        receive(fixture, "3.0000");
+        String countPublicId = createAndPlan(fixture);
+        Map<String, Object> started = stockCountService.start(fixture.principal(), countPublicId);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> lines = (List<Map<String, Object>>) started.get("lines");
+        String linePublicId = (String) lines.getFirst().get("publicId");
+        stockCountService.recordResult(fixture.principal(), countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        new BigDecimal("3.0000"), List.of(), "Exact physical count"));
+        stockCountService.submit(fixture.principal(), countPublicId);
+
+        WmsAuthenticatedPrincipal reviewer = secondCounter(fixture);
+        stockCountService.reviewLine(reviewer, countPublicId, linePublicId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        Map<String, Object> completed = stockCountService.approve(approver, countPublicId);
+        assertEquals("COMPLETED", completed.get("status"));
+        assertEquals(Boolean.FALSE, completed.get("freezeStock"));
+        assertEquals("COMPLETED", jdbc.queryForObject("""
+                SELECT scope_status FROM stock_count_scopes s
+                JOIN stock_counts c ON c.id = s.stock_count_id AND c.tenant_id = s.tenant_id
+                WHERE c.tenant_id = ? AND c.public_id = ?
+                """, String.class, fixture.tenantId(), countPublicId));
+        receive(fixture, "1.0000");
+        assertEquals(new BigDecimal("4.0000"), onHand(fixture));
     }
 
     private String createAndPlan(Fixture f) {
@@ -454,7 +526,8 @@ class WmsStockCountMySqlIntegrationTest {
                 WHERE permission_code IN (
                   'WMS_INVENTORY_POST', 'WMS_STOCK_COUNT_READ', 'WMS_STOCK_COUNT_CREATE',
                   'WMS_STOCK_COUNT_PLAN', 'WMS_STOCK_COUNT_START', 'WMS_STOCK_COUNT_CANCEL',
-                  'WMS_STOCK_COUNT_RECORD'
+                  'WMS_STOCK_COUNT_RECORD', 'WMS_STOCK_COUNT_SUBMIT',
+                  'WMS_STOCK_COUNT_REVIEW', 'WMS_STOCK_COUNT_APPROVE'
                 )
                 """, roleId);
 
