@@ -494,7 +494,7 @@ public class WmsStockCountManagementService {
                 JOIN tenant_memberships m ON m.id = ? AND m.tenant_id = t.id AND m.status = 'ACTIVE'
                 JOIN users u ON u.id = m.user_id AND u.public_id = ? AND u.status = 'ACTIVE'
                 WHERE t.id = ? AND t.status = 'ACTIVE'
-                """, UUID.randomUUID().toString(), countPublicId, countPublicId, json,
+                """, UUID.randomUUID().toString(), UUID.randomUUID().toString(), countPublicId, json,
                 access.membershipId(), access.userPublicId(), access.tenantId());
         if (written != 1) throw new AccessDeniedException("Audit actor is no longer active");
     }
