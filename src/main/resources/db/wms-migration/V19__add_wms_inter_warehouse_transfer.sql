@@ -35,7 +35,7 @@ CREATE TABLE stock_transfer_commands (
   KEY idx_stock_transfer_commands_document (tenant_id, stock_transfer_id, created_at),
   CONSTRAINT fk_stock_transfer_commands_transfer FOREIGN KEY (stock_transfer_id, tenant_id)
     REFERENCES stock_transfers (id, tenant_id) ON DELETE RESTRICT,
-  CONSTRAINT chk_stock_transfer_commands_type CHECK (command_type IN ('RELEASE','DISPATCH','RECEIVE'))
+  CONSTRAINT chk_stock_transfer_commands_type CHECK (command_type IN ('CREATE','RELEASE','DISPATCH','RECEIVE'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ALTER TABLE stock_transfer_lines DROP CHECK chk_stock_transfer_lines_quantities;
 ALTER TABLE stock_transfer_lines ADD CONSTRAINT chk_stock_transfer_lines_quantities CHECK (
