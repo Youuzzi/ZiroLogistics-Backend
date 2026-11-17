@@ -104,6 +104,36 @@ class WmsStockCountMySqlIntegrationTest {
     }
 
     @Test
+    void stockCountCannotStartWhileScopedInventoryHasOutstandingReservations() {
+        receive(fixture, "5.0000");
+        reservationService.reserve(fixture.principal(),
+                new WmsInventoryReservationService.ReservationCommand(
+                        fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                        null, BigDecimal.ONE, List.of()));
+        String countPublicId = createAndPlan(fixture);
+
+        assertThrows(IllegalStateException.class,
+                () -> stockCountService.start(fixture.principal(), countPublicId));
+        assertEquals(Boolean.FALSE, jdbc.queryForObject("""
+                SELECT freeze_stock FROM stock_counts
+                WHERE tenant_id = ? AND public_id = ?
+                """, Boolean.class, fixture.tenantId(), countPublicId));
+        BigDecimal reserved = jdbc.queryForObject("""
+                SELECT reserved_qty FROM inventory_balances
+                WHERE tenant_id = ? AND warehouse_id = (
+                  SELECT id FROM warehouses WHERE tenant_id = ? AND public_id = ?
+                ) AND location_id = (
+                  SELECT id FROM warehouse_locations WHERE tenant_id = ? AND public_id = ?
+                ) AND item_id = (
+                  SELECT id FROM items WHERE tenant_id = ? AND public_id = ?
+                ) AND lot_id IS NULL AND stock_status = 'AVAILABLE'
+                """, BigDecimal.class, fixture.tenantId(), fixture.tenantId(), fixture.warehousePublicId(),
+                fixture.tenantId(), fixture.locationPublicId(), fixture.tenantId(), fixture.itemPublicId());
+        assertEquals(new BigDecimal("1.0000"), reserved);
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+    }
+
+    @Test
     void reservationCannotChangeAvailabilityInsideAFrozenCountLocation() {
         receive(fixture, "5.0000");
         String countPublicId = createAndPlan(fixture);
