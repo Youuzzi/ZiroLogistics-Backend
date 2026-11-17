@@ -994,7 +994,7 @@ public class WmsInventoryPostingService {
             return new NormalizedCommand(requestId, movementType, legs, notes, type, id, lineId);
         }
     }
-    private record AdjustmentPostingContext(long adjustmentId, long stockCountId, long adjustmentLineId,
+    private record AdjustmentPostingContext(long adjustmentId, Long stockCountId, long adjustmentLineId,
                                             BigDecimal expectedSystemQty, BigDecimal expectedOnHandQty) {}
     private record Access(long tenantId, long membershipId, String userPublicId) {}
     private record Balance(long id, BigDecimal onHand, BigDecimal reserved) {}
