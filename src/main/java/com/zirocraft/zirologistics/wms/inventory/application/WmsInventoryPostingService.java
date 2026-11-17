@@ -65,7 +65,8 @@ public class WmsInventoryPostingService {
     @Transactional
     public Map<String, Object> postApprovedAdjustment(
             WmsAuthenticatedPrincipal principal, String adjustmentPublicId, String stockCountPublicId,
-            long adjustmentLineId, BigDecimal expectedOnHandQty, PostingCommand command) {
+            long adjustmentLineId, BigDecimal expectedSystemQty, BigDecimal expectedOnHandQty,
+            PostingCommand command) {
         if (command == null || !Set.of("ADJUSTMENT_IN", "ADJUSTMENT_OUT")
                 .contains(command.movementType() == null ? "" : command.movementType().toUpperCase(Locale.ROOT))) {
             throw new IllegalArgumentException("Adjustment posting type is required");
@@ -90,15 +91,20 @@ public class WmsInventoryPostingService {
                 FOR UPDATE
                 """, Long.class, adjustmentLineId, access.tenantId(), number(context, "adjustment_id"));
         if (lines.isEmpty()) throw new AccessDeniedException("Adjustment line does not belong to the approved adjustment");
-        if (expectedOnHandQty == null) throw new IllegalArgumentException("Adjustment baseline quantity is required");
-        BigDecimal baseline;
+        if (expectedSystemQty == null || expectedOnHandQty == null) {
+            throw new IllegalArgumentException("Adjustment system and current baseline quantities are required");
+        }
+        BigDecimal systemBaseline;
+        BigDecimal currentBaseline;
         try {
-            baseline = expectedOnHandQty.setScale(4, RoundingMode.UNNECESSARY);
+            systemBaseline = expectedSystemQty.setScale(4, RoundingMode.UNNECESSARY);
+            currentBaseline = expectedOnHandQty.setScale(4, RoundingMode.UNNECESSARY);
         } catch (ArithmeticException invalidScale) {
             throw new IllegalArgumentException("Adjustment baseline must fit DECIMAL(19,4)", invalidScale);
         }
         AdjustmentPostingContext postingContext = new AdjustmentPostingContext(
-                number(context, "adjustment_id"), number(context, "count_id"), adjustmentLineId, baseline);
+                number(context, "adjustment_id"), number(context, "count_id"), adjustmentLineId,
+                systemBaseline, currentBaseline);
         return postInternal(principal, command, false, postingContext);
     }
 
@@ -148,6 +154,7 @@ public class WmsInventoryPostingService {
         if (adjustmentContext != null) {
             normalized = normalized.withReference("INVENTORY_ADJUSTMENT",
                     adjustmentContext.adjustmentId(), adjustmentContext.adjustmentLineId());
+            validateAdjustmentPostingAllocation(access.tenantId(), adjustmentContext, normalized);
         }
         boolean transferMovement = Set.of("TRANSFER_DISPATCH", "TRANSFER_RECEIPT").contains(normalized.movementType());
         if (transferMovement != transferBoundary) {
@@ -356,6 +363,63 @@ public class WmsInventoryPostingService {
         return rows.getFirst();
     }
 
+
+    private void validateAdjustmentPostingAllocation(long tenantId, AdjustmentPostingContext context,
+                                                      NormalizedCommand command) {
+        if (command.legs().isEmpty()) throw new IllegalArgumentException("Adjustment posting requires allocation legs");
+        for (PostingLeg leg : command.legs()) {
+            Map<String, Object> allocation = requiredRow("""
+                    SELECT al.id, al.system_qty, al.adjustment_qty, al.stock_status, i.tracking_method
+                    FROM inventory_adjustment_allocations al
+                    JOIN inventory_adjustment_lines ln
+                      ON ln.id = al.inventory_adjustment_line_id AND ln.tenant_id = al.tenant_id
+                    JOIN warehouses w ON w.id = al.warehouse_id AND w.tenant_id = al.tenant_id
+                    JOIN warehouse_locations wl
+                      ON wl.id = al.location_id AND wl.warehouse_id = al.warehouse_id AND wl.tenant_id = al.tenant_id
+                    JOIN items i ON i.id = al.item_id AND i.tenant_id = al.tenant_id
+                    LEFT JOIN inventory_lots lot
+                      ON lot.id = al.lot_id AND lot.item_id = al.item_id AND lot.tenant_id = al.tenant_id
+                    WHERE al.tenant_id = ? AND ln.id = ? AND ln.inventory_adjustment_id = ?
+                      AND w.public_id = ? AND wl.public_id = ? AND i.public_id = ?
+                      AND lot.public_id <=> ? AND al.stock_status = ?
+                    """, tenantId, context.adjustmentLineId(), context.adjustmentId(),
+                    leg.warehousePublicId(), leg.locationPublicId(), leg.itemPublicId(),
+                    leg.lotPublicId(), leg.stockStatus());
+            if (decimal(allocation.get("system_qty")).compareTo(context.expectedSystemQty()) != 0) {
+                throw new AccessDeniedException("Posting baseline does not match the approved adjustment allocation");
+            }
+            BigDecimal variance = decimal(allocation.get("adjustment_qty"));
+            boolean serialTracked = Set.of("SERIAL", "LOT_AND_SERIAL").contains(string(allocation, "tracking_method"));
+            if (serialTracked) {
+                if (leg.serialPublicId() == null || leg.serialNumber() != null
+                        || leg.quantity().compareTo(BigDecimal.ONE) != 0) {
+                    throw new AccessDeniedException("Serialized adjustment must use exact existing serial identities");
+                }
+                String observation = "ADJUSTMENT_IN".equals(command.movementType()) ? "PRESENT" : "MISSING";
+                Integer matching = jdbc.queryForObject("""
+                        SELECT COUNT(*)
+                        FROM inventory_adjustment_line_serials x
+                        JOIN inventory_serials s
+                          ON s.id = x.serial_id AND s.tenant_id = x.tenant_id
+                        WHERE x.tenant_id = ? AND x.inventory_adjustment_allocation_id = ?
+                          AND s.public_id = ? AND x.observation_status = ?
+                        """, Integer.class, tenantId, number(allocation, "id"), leg.serialPublicId(), observation);
+                if (matching == null || matching != 1) {
+                    throw new AccessDeniedException("Serial identity is not part of this adjustment allocation");
+                }
+            } else {
+                if (leg.serialPublicId() != null || leg.serialNumber() != null || command.legs().size() != 1) {
+                    throw new AccessDeniedException("Quantity adjustment must contain one non-serialized allocation leg");
+                }
+                boolean directionMatches = "ADJUSTMENT_IN".equals(command.movementType())
+                        ? variance.signum() > 0 && leg.quantity().compareTo(variance) == 0
+                        : variance.signum() < 0 && leg.quantity().compareTo(variance.abs()) == 0;
+                if (!directionMatches) {
+                    throw new AccessDeniedException("Posting quantity does not match the approved adjustment allocation");
+                }
+            }
+        }
+    }
 
     /**
      * Every stock posting checks both source and destination locations after
@@ -878,7 +942,7 @@ public class WmsInventoryPostingService {
         }
     }
     private record AdjustmentPostingContext(long adjustmentId, long stockCountId, long adjustmentLineId,
-                                            BigDecimal expectedOnHandQty) {}
+                                            BigDecimal expectedSystemQty, BigDecimal expectedOnHandQty) {}
     private record Access(long tenantId, long membershipId, String userPublicId) {}
     private record Balance(long id, BigDecimal onHand, BigDecimal reserved) {}
 

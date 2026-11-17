@@ -360,18 +360,20 @@ public class WmsInventoryAdjustmentService {
                 }
                 BigDecimal baseline = decimal(allocation.get("system_qty"));
                 postLegs(principal, adjustmentPublicId, string(link, "count_public_id"), lineId,
-                        "ADJUSTMENT_IN", inbound, baseline, "Physical count found serial stock");
+                        "ADJUSTMENT_IN", inbound, baseline, baseline, "Physical count found serial stock");
                 postLegs(principal, adjustmentPublicId, string(link, "count_public_id"), lineId,
-                        "ADJUSTMENT_OUT", outbound, baseline.add(BigDecimal.valueOf(inbound.size())),
+                        "ADJUSTMENT_OUT", outbound, baseline, baseline.add(BigDecimal.valueOf(inbound.size())),
                         "Physical count missing serial stock");
             } else if (delta.signum() > 0) {
                 postLegs(principal, adjustmentPublicId, string(link, "count_public_id"), lineId,
                         "ADJUSTMENT_IN", List.of(postingLeg(allocation, null, delta)),
-                        decimal(allocation.get("system_qty")), "Physical count positive variance");
+                        decimal(allocation.get("system_qty")), decimal(allocation.get("system_qty")),
+                        "Physical count positive variance");
             } else if (delta.signum() < 0) {
                 postLegs(principal, adjustmentPublicId, string(link, "count_public_id"), lineId,
                         "ADJUSTMENT_OUT", List.of(postingLeg(allocation, null, delta.abs())),
-                        decimal(allocation.get("system_qty")), "Physical count negative variance");
+                        decimal(allocation.get("system_qty")), decimal(allocation.get("system_qty")),
+                        "Physical count negative variance");
             }
         }
 
@@ -407,11 +409,21 @@ public class WmsInventoryAdjustmentService {
 
     private void postLegs(WmsAuthenticatedPrincipal principal, String adjustmentPublicId,
                           String countPublicId, long lineId, String movement,
-                          List<WmsInventoryPostingService.PostingLeg> legs, BigDecimal expectedOnHandQty,
-                          String notes) {
+                          List<WmsInventoryPostingService.PostingLeg> legs,
+                          BigDecimal expectedSystemQty, BigDecimal expectedOnHandQty, String notes) {
         if (legs.isEmpty()) return;
-        postingService.postApprovedAdjustment(principal, adjustmentPublicId, countPublicId,
-                lineId, expectedOnHandQty, new WmsInventoryPostingService.PostingCommand(UUID.randomUUID(), movement, legs, notes));
+        BigDecimal currentBaseline = expectedOnHandQty;
+        for (int offset = 0; offset < legs.size(); offset += 200) {
+            List<WmsInventoryPostingService.PostingLeg> batch =
+                    legs.subList(offset, Math.min(offset + 200, legs.size()));
+            postingService.postApprovedAdjustment(principal, adjustmentPublicId, countPublicId,
+                    lineId, expectedSystemQty, currentBaseline,
+                    new WmsInventoryPostingService.PostingCommand(UUID.randomUUID(), movement, batch, notes));
+            BigDecimal moved = batch.stream().map(WmsInventoryPostingService.PostingLeg::quantity)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            currentBaseline = "ADJUSTMENT_IN".equals(movement)
+                    ? currentBaseline.add(moved) : currentBaseline.subtract(moved);
+        }
     }
 
     private static WmsInventoryPostingService.PostingLeg postingLeg(Map<String, Object> allocation,
