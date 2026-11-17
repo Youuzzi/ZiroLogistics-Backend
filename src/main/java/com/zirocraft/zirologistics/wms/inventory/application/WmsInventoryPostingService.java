@@ -34,12 +34,12 @@ import java.util.UUID;
 @Profile("wms")
 public class WmsInventoryPostingService {
     private static final Set<String> MOVEMENTS = Set.of(
-            "RECEIPT", "ISSUE", "TRANSFER", "ADJUSTMENT_IN", "ADJUSTMENT_OUT",
-            "RETURN", "DAMAGE", "STATUS_CHANGE", "OPENING_BALANCE");
+            "RECEIPT", "ISSUE", "TRANSFER", "TRANSFER_DISPATCH", "TRANSFER_RECEIPT",
+            "ADJUSTMENT_IN", "ADJUSTMENT_OUT", "RETURN", "DAMAGE", "STATUS_CHANGE", "OPENING_BALANCE");
     private static final Set<String> STOCK_STATUSES =
             Set.of("AVAILABLE", "QUARANTINED", "DAMAGED", "EXPIRED", "BLOCKED");
     private static final Set<String> SERIAL_STATUSES =
-            Set.of("AVAILABLE", "RESERVED", "PICKED", "SHIPPED", "DAMAGED",
+            Set.of("AVAILABLE", "RESERVED", "PICKED", "IN_TRANSIT", "SHIPPED", "DAMAGED",
                     "QUARANTINED", "RETURNED", "LOST");
 
     private final WmsMembershipAccessService accessService;
@@ -55,12 +55,55 @@ public class WmsInventoryPostingService {
 
     @Transactional
     public Map<String, Object> post(WmsAuthenticatedPrincipal principal, PostingCommand command) {
+        return postInternal(principal, command, false);
+    }
+
+    @Transactional
+    public Map<String, Object> postTransferDispatch(WmsAuthenticatedPrincipal principal, PostingCommand command) {
+        if (command == null || !"TRANSFER_DISPATCH".equalsIgnoreCase(command.movementType())) {
+            throw new IllegalArgumentException("Transfer dispatch posting type is required");
+        }
+        return postInternal(principal, command, true);
+    }
+
+    @Transactional
+    public Map<String, Object> postTransferReceipt(WmsAuthenticatedPrincipal principal, PostingCommand command) {
+        if (command == null || !"TRANSFER_RECEIPT".equalsIgnoreCase(command.movementType())) {
+            throw new IllegalArgumentException("Transfer receipt posting type is required");
+        }
+        return postInternal(principal, command, true);
+    }
+
+    @Transactional
+    public void markTransferSerialLost(WmsAuthenticatedPrincipal principal, String serialPublicId) {
+        if (principal == null) throw new AccessDeniedException("Tenant context is required");
+        lockTenant(principal.tenantId());
+        Access access = access(principal);
+        Map<String,Object> serial = requiredRowForUpdate(
+                "SELECT id, status FROM inventory_serials WHERE tenant_id = ? AND public_id = ?",
+                access.tenantId(), required(serialPublicId, "serial public ID"));
+        if (!"IN_TRANSIT".equals(string(serial, "status"))) {
+            throw new IllegalStateException("Only an in-transit serial can be reconciled as lost");
+        }
+        int changed = jdbc.update("""
+                UPDATE inventory_serials SET status='LOST', version=version+1, updated_at=UTC_TIMESTAMP(6)
+                WHERE id=? AND tenant_id=? AND status='IN_TRANSIT'
+                """, number(serial, "id"), access.tenantId());
+        if (changed != 1) throw new IllegalStateException("Serial loss reconciliation failed");
+    }
+
+    private Map<String, Object> postInternal(WmsAuthenticatedPrincipal principal, PostingCommand command,
+                                             boolean transferBoundary) {
         if (principal == null) throw new AccessDeniedException("Tenant context is required");
         // Lock the tenant before resolving effective permissions so role/membership mutations
         // that share the tenant lock cannot race authorization with this posting transaction.
         lockTenant(principal.tenantId());
         Access access = access(principal);
         NormalizedCommand normalized = normalize(command);
+        boolean transferMovement = Set.of("TRANSFER_DISPATCH", "TRANSFER_RECEIPT").contains(normalized.movementType());
+        if (transferMovement != transferBoundary) {
+            throw new AccessDeniedException("Transfer movements are available only through the transfer workflow");
+        }
 
         // Resolve and lock reference rows in the shared warehouse -> location -> item -> lot -> serial order.
         List<ResolvedLeg> legs = resolveAndLockReferences(access.tenantId(), normalized);
@@ -331,6 +374,8 @@ public class WmsInventoryPostingService {
             if (leg.serialId() != null) {
                 boolean validState = switch (type) {
                     case "RETURN" -> "SHIPPED".equals(leg.serialStatus());
+                    case "TRANSFER_DISPATCH" -> "AVAILABLE".equals(leg.serialStatus());
+                    case "TRANSFER_RECEIPT" -> "IN_TRANSIT".equals(leg.serialStatus());
                     case "ADJUSTMENT_IN", "OPENING_BALANCE" -> "LOST".equals(leg.serialStatus());
                     case "STATUS_CHANGE" -> Objects.equals(
                             serialStatusForStock(legs.getFirst().stockStatus()), leg.serialStatus())
@@ -343,7 +388,7 @@ public class WmsInventoryPostingService {
             boolean restoringLostSerial = leg.serialId() != null
                     && Set.of("ADJUSTMENT_IN", "OPENING_BALANCE").contains(type)
                     && "LOST".equals(leg.serialStatus());
-            if (leg.serialId() != null && !"RETURN".equals(type) && !restoringLostSerial
+            if (leg.serialId() != null && !Set.of("RETURN", "TRANSFER_RECEIPT").contains(type) && !restoringLostSerial
                     && (!"TRANSFER".equals(type) || leg.index() == 0)
                     && (!Objects.equals(leg.serialWarehouse(), leg.warehouseId())
                     || !Objects.equals(leg.serialLocation(), leg.locationId()))) {
@@ -453,7 +498,22 @@ public class WmsInventoryPostingService {
 
     private void transitionSerial(String movement, List<ResolvedLeg> legs, ResolvedLeg leg) {
         if (leg.serialId() == null) return;
-        if ("TRANSFER".equals(movement) && leg.index() == 1) {
+        if ("TRANSFER_DISPATCH".equals(movement)) {
+            int changed = jdbc.update("""
+                    UPDATE inventory_serials SET status='IN_TRANSIT', current_warehouse_id=NULL,
+                        current_location_id=NULL, version=version+1, updated_at=UTC_TIMESTAMP(6)
+                    WHERE id=? AND status='AVAILABLE' AND current_warehouse_id=? AND current_location_id=?
+                    """, leg.serialId(), leg.warehouseId(), leg.locationId());
+            if (changed != 1) throw new IllegalStateException("Serial dispatch transition failed");
+        } else if ("TRANSFER_RECEIPT".equals(movement)) {
+            String targetStatus = "DAMAGED".equals(leg.stockStatus()) ? "DAMAGED" : "AVAILABLE";
+            int changed = jdbc.update("""
+                    UPDATE inventory_serials SET status=?, current_warehouse_id=?, current_location_id=?,
+                        version=version+1, updated_at=UTC_TIMESTAMP(6)
+                    WHERE id=? AND status='IN_TRANSIT' AND current_warehouse_id IS NULL AND current_location_id IS NULL
+                    """, targetStatus, leg.warehouseId(), leg.locationId(), leg.serialId());
+            if (changed != 1) throw new IllegalStateException("Serial receipt transition failed");
+        } else if ("TRANSFER".equals(movement) && leg.index() == 1) {
             int changed = jdbc.update("""
                     UPDATE inventory_serials
                     SET current_warehouse_id = ?, current_location_id = ?, version = version + 1,
@@ -672,7 +732,8 @@ public class WmsInventoryPostingService {
     static BigDecimal signedDelta(String movement, int index, BigDecimal quantity) {
         return switch (movement) {
             case "RECEIPT", "RETURN", "OPENING_BALANCE", "ADJUSTMENT_IN" -> quantity;
-            case "ISSUE", "ADJUSTMENT_OUT" -> quantity.negate();
+            case "ISSUE", "ADJUSTMENT_OUT", "TRANSFER_DISPATCH" -> quantity.negate();
+            case "TRANSFER_RECEIPT" -> quantity;
             case "TRANSFER", "DAMAGE", "STATUS_CHANGE" -> index == 0 ? quantity.negate() : quantity;
             default -> throw new IllegalArgumentException("Movement type is unsupported");
         };
