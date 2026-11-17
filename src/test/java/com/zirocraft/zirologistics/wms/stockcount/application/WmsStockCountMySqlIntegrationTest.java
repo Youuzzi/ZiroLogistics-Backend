@@ -156,6 +156,34 @@ class WmsStockCountMySqlIntegrationTest {
 
 
     @Test
+    void openCountExposesExpectedQuantityOnlyToAnAuthorizedCounter() {
+        receive(fixture, "6.0000");
+        Map<String, Object> created = stockCountService.create(fixture.principal(),
+                new WmsStockCountManagementService.CreateCountCommand(
+                        fixture.warehousePublicId(), "SC-OPEN-" + UUID.randomUUID().toString().substring(0, 8),
+                        "CYCLE_COUNT", "OPEN", List.of(fixture.locationPublicId()), null));
+        String countPublicId = (String) created.get("publicId");
+        stockCountService.plan(fixture.principal(), countPublicId);
+        Map<String, Object> started = stockCountService.start(fixture.principal(), countPublicId);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> counterLines = (List<Map<String, Object>>) started.get("lines");
+        assertTrue(counterLines.getFirst().containsKey("expectedQty"));
+
+        jdbc.update("""
+                DELETE rp FROM role_permissions rp
+                JOIN membership_roles mr ON mr.role_id = rp.role_id AND mr.tenant_id = ?
+                JOIN tenant_memberships tm ON tm.id = mr.membership_id AND tm.tenant_id = mr.tenant_id
+                WHERE tm.public_id = ?
+                  AND rp.permission_id = (SELECT id FROM permissions WHERE permission_code = 'WMS_STOCK_COUNT_RECORD')
+                """, fixture.tenantId(), fixture.principal().membershipPublicId());
+
+        Map<String, Object> readOnly = stockCountService.get(fixture.principal(), countPublicId);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> readOnlyLines = (List<Map<String, Object>>) readOnly.get("lines");
+        assertFalse(readOnlyLines.getFirst().containsKey("expectedQty"));
+    }
+
+    @Test
     void discrepancyRequiresIndependentStableRecount() {
         receive(fixture, "5.0000");
         String countPublicId = createAndPlan(fixture);
