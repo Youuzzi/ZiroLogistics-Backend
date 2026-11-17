@@ -2,6 +2,7 @@ package com.zirocraft.zirologistics.wms.stockcount.application;
 
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.inventory.application.WmsInventoryPostingService;
+import com.zirocraft.zirologistics.wms.inventory.application.WmsInventoryReservationService;
 import com.zirocraft.zirologistics.wms.adjustment.application.WmsInventoryAdjustmentService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +50,7 @@ class WmsStockCountMySqlIntegrationTest {
 
     @Autowired private WmsStockCountManagementService stockCountService;
     @Autowired private WmsInventoryPostingService postingService;
+    @Autowired private WmsInventoryReservationService reservationService;
     @Autowired private WmsInventoryAdjustmentService adjustmentService;
     @Autowired private JdbcTemplate jdbc;
 
@@ -99,6 +101,32 @@ class WmsStockCountMySqlIntegrationTest {
 
         receive(fixture, "1.0000");
         assertEquals(new BigDecimal("13.5000"), onHand(fixture));
+    }
+
+    @Test
+    void reservationCannotChangeAvailabilityInsideAFrozenCountLocation() {
+        receive(fixture, "5.0000");
+        String countPublicId = createAndPlan(fixture);
+        stockCountService.start(fixture.principal(), countPublicId);
+
+        assertThrows(IllegalStateException.class, () -> reservationService.reserve(fixture.principal(),
+                new WmsInventoryReservationService.ReservationCommand(
+                        fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                        null, BigDecimal.ONE, List.of())));
+
+        BigDecimal reserved = jdbc.queryForObject("""
+                SELECT reserved_qty FROM inventory_balances
+                WHERE tenant_id = ? AND warehouse_id = (
+                  SELECT id FROM warehouses WHERE tenant_id = ? AND public_id = ?
+                ) AND location_id = (
+                  SELECT id FROM warehouse_locations WHERE tenant_id = ? AND public_id = ?
+                ) AND item_id = (
+                  SELECT id FROM items WHERE tenant_id = ? AND public_id = ?
+                ) AND lot_id IS NULL AND stock_status = 'AVAILABLE'
+                """, BigDecimal.class, fixture.tenantId(), fixture.tenantId(), fixture.warehousePublicId(),
+                fixture.tenantId(), fixture.locationPublicId(), fixture.tenantId(), fixture.itemPublicId());
+        assertEquals(new BigDecimal("0.0000"), reserved);
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
     }
 
     @Test
@@ -658,7 +686,8 @@ class WmsStockCountMySqlIntegrationTest {
                 INSERT INTO role_permissions (role_id, permission_id)
                 SELECT ?, id FROM permissions
                 WHERE permission_code IN (
-                  'WMS_INVENTORY_POST', 'WMS_STOCK_COUNT_READ', 'WMS_STOCK_COUNT_CREATE',
+                  'WMS_INVENTORY_POST', 'WMS_INVENTORY_RESERVE',
+                  'WMS_STOCK_COUNT_READ', 'WMS_STOCK_COUNT_CREATE',
                   'WMS_STOCK_COUNT_PLAN', 'WMS_STOCK_COUNT_START', 'WMS_STOCK_COUNT_CANCEL',
                   'WMS_STOCK_COUNT_RECORD', 'WMS_STOCK_COUNT_SUBMIT',
                   'WMS_STOCK_COUNT_REVIEW', 'WMS_STOCK_COUNT_APPROVE',
