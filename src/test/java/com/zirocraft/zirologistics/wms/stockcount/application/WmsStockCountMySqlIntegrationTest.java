@@ -821,6 +821,30 @@ class WmsStockCountMySqlIntegrationTest {
     }
 
     @Test
+    void manualAdjustmentRevalidatesBaselineAgainAtPosting() {
+        receive(fixture, "5.0000");
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-POST-STALE-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Posting-time baseline test", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("7.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, adjustmentId, "Baseline valid at approval");
+        receive(fixture, "1.0000");
+        long ledgerBefore = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId());
+        assertThrows(IllegalStateException.class, () -> adjustmentService.post(approver, adjustmentId));
+        assertEquals(ledgerBefore, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals("APPROVED", jdbc.queryForObject("""
+                SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), adjustmentId));
+        assertEquals(new BigDecimal("6.0000"), onHand(fixture));
+    }
+
+    @Test
     void manualAdjustmentPostingIsBlockedByActiveFrozenStockCount() {
         receive(fixture, "5.0000");
         Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
@@ -836,6 +860,13 @@ class WmsStockCountMySqlIntegrationTest {
         adjustmentService.approve(approver, adjustmentId, "Approved before count freeze");
         String countId = createAndPlan(fixture);
         stockCountService.start(fixture.principal(), countId);
+        assertThrows(IllegalStateException.class, () -> adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-CREATE-FROZEN-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Cannot create against frozen location", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("7.0000"))))));
         long ledgerBefore = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId());
         assertThrows(IllegalStateException.class, () -> adjustmentService.post(approver, adjustmentId));
         assertEquals(ledgerBefore, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
