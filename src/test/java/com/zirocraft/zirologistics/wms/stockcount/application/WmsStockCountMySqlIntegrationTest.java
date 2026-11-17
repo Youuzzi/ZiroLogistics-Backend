@@ -184,7 +184,7 @@ class WmsStockCountMySqlIntegrationTest {
                 JOIN membership_roles mr ON mr.role_id = rp.role_id AND mr.tenant_id = ?
                 JOIN tenant_memberships tm ON tm.id = mr.membership_id AND tm.tenant_id = mr.tenant_id
                 WHERE tm.public_id = ?
-                  AND rp.permission_id = (SELECT id FROM permissions WHERE permission_code = 'WMS_STOCK_COUNT_RECORD')
+                  AND rp.permission_id IN (SELECT id FROM permissions WHERE permission_code IN ('WMS_STOCK_COUNT_RECORD', 'WMS_STOCK_COUNT_REVIEW', 'WMS_STOCK_COUNT_APPROVE'))
                 """, fixture.tenantId(), fixture.principal().membershipPublicId());
 
         Map<String, Object> readOnly = stockCountService.get(fixture.principal(), countPublicId);
