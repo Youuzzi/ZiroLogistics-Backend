@@ -439,7 +439,8 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                   'WMS_PICKING_START', 'WMS_PICKING_CONFIRM',
                   'WMS_PACKING_READ', 'WMS_PACKING_CREATE', 'WMS_PACKING_READY',
                   'WMS_PACKING_ASSIGN', 'WMS_PACKING_START', 'WMS_PACKING_PACKAGE',
-                  'WMS_PACKING_SEAL', 'WMS_PACKING_COMPLETE'
+                  'WMS_PACKING_SEAL', 'WMS_PACKING_COMPLETE',
+                  'WMS_SHIPPING_READ', 'WMS_SHIPPING_SHIP'
                 )
                 """, roleId);
 
