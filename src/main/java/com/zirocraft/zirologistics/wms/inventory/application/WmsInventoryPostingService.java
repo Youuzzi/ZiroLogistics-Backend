@@ -88,6 +88,7 @@ public class WmsInventoryPostingService {
         int changed = jdbc.update("""
                 UPDATE inventory_serials SET status='LOST', version=version+1, updated_at=UTC_TIMESTAMP(6)
                 WHERE id=? AND tenant_id=? AND status='IN_TRANSIT'
+                  AND current_warehouse_id IS NULL AND current_location_id IS NULL
                 """, number(serial, "id"), access.tenantId());
         if (changed != 1) throw new IllegalStateException("Serial loss reconciliation failed");
     }
@@ -358,6 +359,12 @@ public class WmsInventoryPostingService {
                     throw new IllegalArgumentException("Target stock status is not supported for serial-tracked items");
                 }
             }
+        }
+        if ("TRANSFER_DISPATCH".equals(type) && legs.stream().anyMatch(l -> !"AVAILABLE".equals(l.stockStatus()))) {
+            throw new IllegalArgumentException("Transfer dispatch can only consume AVAILABLE stock");
+        }
+        if ("TRANSFER_RECEIPT".equals(type) && legs.stream().anyMatch(l -> !Set.of("AVAILABLE", "DAMAGED").contains(l.stockStatus()))) {
+            throw new IllegalArgumentException("Transfer receipt can only receive AVAILABLE or DAMAGED stock");
         }
         if ("ISSUE".equals(type) && legs.stream().anyMatch(l -> !"AVAILABLE".equals(l.stockStatus()))) {
             throw new IllegalArgumentException("Issue can only consume AVAILABLE stock");
