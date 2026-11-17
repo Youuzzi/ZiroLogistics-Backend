@@ -98,6 +98,18 @@ Shipment statuses are constrained by V1: DRAFT, RELEASED, PICKING, PICKED, PACKE
 - V15 adds the outbound shipment permissions, `WMS_INVENTORY_RESERVE`, and outbound audit event allowlist. V1–V14 remain immutable.
 - This first delivery does not pick, pack, issue stock, or mark shipments SHIPPED. Reservation release and the picked-stock transfer are implemented with Picking Management; final ISSUE remains Shipping Management. Payload-hash replay semantics remain Stage 11.
 
+#### Picking implementation boundary (first delivery)
+
+- `GET /api/wms/v1/tenants/current/picking-tasks` and `GET /{taskPublicId}` provide tenant-scoped task reads.
+- `POST /api/wms/v1/tenants/current/picking-tasks` creates one READY task from a RELEASED shipment's remaining ALLOCATED shipment allocations. A shipment cannot have more than one non-cancelled task in this first delivery.
+- `POST /{taskPublicId}/assign`, `/start`, and `/lines/{lineNumber}/confirm` enforce READY → ASSIGNED → IN_PROGRESS → COMPLETED. Only the assigned active membership may start or confirm the task.
+- Each task line is created from a shipment allocation and retains its source location, item, lot and allocation references. Assigned serial identities are copied from the shipment allocation's serial rows.
+- Confirmation accepts partial quantities but never beyond the task line's remaining planned quantity. The caller must identify an active STAGING location in the same warehouse.
+- The reservation application boundary consumes the matching reserved quantity; the inventory posting boundary then transfers the picked quantity from source to STAGING. Both calls, serial state/location changes, picking confirmation, task/allocation/shipment quantities and audit commit in one transaction. If any step fails, all steps roll back.
+- Serial-tracked confirmation requires an exact whole-unit serial list allocated to that task line. Each serial is transferred through its own paired TRANSFER posting because the inventory posting contract models a serial transfer as exactly two legs.
+- The first delivery intentionally does not issue stock or mark the shipment SHIPPED; packing and final shipping ISSUE remain separate workflows. Picking task/confirmation UUIDs are tenant-scoped and single-use; broader payload-hash replay protection remains Stage 11.
+- V16 adds `WMS_PICKING_READ`, `WMS_PICKING_CREATE`, `WMS_PICKING_ASSIGN`, `WMS_PICKING_START`, and `WMS_PICKING_CONFIRM`, plus picking audit event allowlist. V1–V15 remain immutable.
+
 ### 2.4 Inter-warehouse transfer
 
 Tables: `stock_transfers`, `stock_transfer_lines`, `stock_transfer_allocations`, `stock_transfer_line_serials`.
