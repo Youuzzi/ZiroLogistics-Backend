@@ -868,7 +868,7 @@ class WmsStockCountMySqlIntegrationTest {
                   AND reference_type = 'INVENTORY_ADJUSTMENT'
                   AND reference_id = (SELECT id FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?)
                 """, fixture.tenantId(), fixture.tenantId(), adjustmentPublicId));
-        assertEquals(3, count("""
+        assertEquals(4, count("""
                 SELECT COUNT(*) FROM tenant_audit_events
                 WHERE tenant_id = ? AND subject_public_id = ?
                   AND event_type = 'WMS_INVENTORY_ADJUSTMENT_UPDATED'
