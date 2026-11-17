@@ -427,6 +427,38 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         assertNull(serialWarehouse(serialFixture, serialIds.get(2)));
     }
 
+    @Test
+    void interWarehouseTransfersAreIsolatedAcrossTenantsForReadAndCreation() {
+        Destination destination = destination(fixture);
+        String transferId = createTransfer(fixture, destination, "5.0000", List.of());
+
+        Fixture otherTenant = fixture("NONE");
+
+        assertTrue(transferService.list(fixture.principal()).stream()
+                .anyMatch(row -> transferId.equals(row.get("public_id"))));
+        assertFalse(transferService.list(otherTenant.principal()).stream()
+                .anyMatch(row -> transferId.equals(row.get("public_id"))));
+        assertThrows(IllegalArgumentException.class,
+                () -> transferService.get(otherTenant.principal(), transferId));
+
+        assertThrows(IllegalArgumentException.class, () -> transferService.create(
+                otherTenant.principal(),
+                new WmsInterWarehouseTransferService.TransferCommand(
+                        UUID.randomUUID(), fixture.warehousePublicId(), destination.warehousePublicId(),
+                        "CROSS-" + UUID.randomUUID().toString().substring(0, 8), null, "STANDARD",
+                        null, null,
+                        List.of(new WmsInterWarehouseTransferService.LineCommand(
+                                otherTenant.itemPublicId(), new BigDecimal("1.0000"), null,
+                                List.of(new WmsInterWarehouseTransferService.AllocationCommand(
+                                        otherTenant.receivingLocationPublicId(), destination.locationPublicId(),
+                                        null, new BigDecimal("1.0000"), List.of())))),
+                        null)));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM stock_transfers
+                WHERE tenant_id=? AND document_number LIKE 'CROSS-%'
+                """, otherTenant.tenantId()));
+    }
+
     private String createTransfer(Fixture f, Destination d, String qty, List<String> serialIds) {
         String id = (String) transferService.create(f.principal(),
                 new WmsInterWarehouseTransferService.TransferCommand(UUID.randomUUID(),
