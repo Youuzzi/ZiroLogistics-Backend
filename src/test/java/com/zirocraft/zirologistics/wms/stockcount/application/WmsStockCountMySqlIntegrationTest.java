@@ -690,6 +690,100 @@ class WmsStockCountMySqlIntegrationTest {
         assertEquals(new BigDecimal("4.0000"), onHand(fixture));
     }
 
+    @Test
+    void manualCorrectionPostsOnlyAfterIndependentApprovalThroughTypedBoundary() {
+        receive(fixture, "5.0000");
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-COR-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "CYCLE_FIX", "Reconcile verified shelf discrepancy", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("7.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        assertEquals("DRAFT", created.get("status"));
+        assertEquals("CORRECTION", created.get("adjustment_type"));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, adjustmentId, "Evidence reviewed independently");
+        Map<String, Object> posted = adjustmentService.post(approver, adjustmentId);
+
+        assertEquals("POSTED", posted.get("status"));
+        assertEquals(new BigDecimal("7.0000"), onHand(fixture));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND movement_type = 'ADJUSTMENT_IN'
+                  AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM stock_count_adjustment_links
+                WHERE tenant_id = ? AND inventory_adjustment_id = (
+                  SELECT id FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                )
+                """, fixture.tenantId(), fixture.tenantId(), adjustmentId));
+    }
+
+    @Test
+    void manualLossAndFoundRequireCorrectVarianceDirection() {
+        receive(fixture, "5.0000");
+        Map<String, Object> invalidLoss = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-LOSS-INVALID-" + UUID.randomUUID().toString().substring(0, 6), "LOSS",
+                        "LOSS", "Loss reason", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("6.0000")))));
+        assertNotNull(invalidLoss);
+    }
+
+    @Test
+    void manualAdjustmentRejectsStaleBaselineAtApproval() {
+        receive(fixture, "5.0000");
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-STALE-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Baseline stale test", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("7.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        receive(fixture, "1.0000");
+        assertThrows(IllegalStateException.class,
+                () -> adjustmentService.approve(secondCounter(fixture), adjustmentId, "Stale baseline"));
+        assertEquals("SUBMITTED", jdbc.queryForObject("""
+                SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), adjustmentId));
+        assertEquals(new BigDecimal("6.0000"), onHand(fixture));
+    }
+
+    @Test
+    void manualAdjustmentPostingIsBlockedByActiveFrozenStockCount() {
+        receive(fixture, "5.0000");
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-FROZEN-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Frozen location test", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("7.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, adjustmentId, "Approved before count freeze");
+        String countId = createAndPlan(fixture);
+        stockCountService.start(fixture.principal(), countId);
+        long ledgerBefore = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId());
+        assertThrows(IllegalStateException.class, () -> adjustmentService.post(approver, adjustmentId));
+        assertEquals(ledgerBefore, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals("APPROVED", jdbc.queryForObject("""
+                SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), adjustmentId));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+    }
+
     private String createAndPlan(Fixture f) {
         return createAndPlan(f, f.locationPublicId());
     }
