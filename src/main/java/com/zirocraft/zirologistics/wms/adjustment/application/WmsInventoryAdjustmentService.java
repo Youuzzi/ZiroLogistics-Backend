@@ -707,7 +707,7 @@ public class WmsInventoryAdjustmentService {
                 """, tenantId, adjustmentId);
         for (Map<String, Object> allocation : allocations) {
             List<Map<String, Object>> rows = jdbc.queryForList("""
-                    SELECT on_hand_qty FROM inventory_balances
+                    SELECT on_hand_qty, reserved_qty FROM inventory_balances
                     WHERE tenant_id = ? AND warehouse_id = ? AND location_id = ? AND item_id = ?
                       AND lot_id <=> ? AND stock_status = ?
                     FOR UPDATE
