@@ -101,6 +101,22 @@ class WmsStockCountMySqlIntegrationTest {
     }
 
     @Test
+    void cancellationStillReleasesFreezeWhenScopedLocationBecomesInactive() {
+        receive(fixture, "2.0000");
+        String countPublicId = createAndPlan(fixture);
+        stockCountService.start(fixture.principal(), countPublicId);
+
+        jdbc.update("""
+                UPDATE warehouse_locations SET status = 'INACTIVE'
+                WHERE tenant_id = ? AND public_id = ?
+                """, fixture.tenantId(), fixture.locationPublicId());
+
+        Map<String, Object> cancelled = stockCountService.cancel(fixture.principal(), countPublicId);
+        assertEquals("CANCELLED", cancelled.get("status"));
+        assertEquals(Boolean.FALSE, cancelled.get("freezeStock"));
+    }
+
+    @Test
     void transferIsBlockedWhenEitherSourceOrDestinationLocationIsFrozen() {
         receive(fixture, "9.0000");
         String destinationLocation = createLocation(fixture);
