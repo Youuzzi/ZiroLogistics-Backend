@@ -429,7 +429,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
 
     private String createTransfer(Fixture f, Destination d, String qty, List<String> serialIds) {
         String id = (String) transferService.create(f.principal(),
-                new WmsInterWarehouseTransferService.TransferCommand(
+                new WmsInterWarehouseTransferService.TransferCommand(UUID.randomUUID(),
                         f.warehousePublicId(), d.warehousePublicId(), "TR-" + UUID.randomUUID().toString().substring(0,12),
                         null, "STANDARD", null, null,
                         List.of(new WmsInterWarehouseTransferService.LineCommand(
