@@ -21,6 +21,10 @@ CREATE TABLE stock_count_result_serials (
     (tenant_id, stock_count_line_id, stock_count_result_id),
   KEY idx_stock_count_result_serials_serial
     (tenant_id, serial_id, stock_count_result_id),
+  KEY fk_stock_count_result_serials_result
+    (stock_count_result_id, tenant_id, stock_count_line_id, item_id, warehouse_id),
+  KEY fk_stock_count_result_serials_serial
+    (serial_id, tenant_id, item_id),
   CONSTRAINT fk_stock_count_result_serials_result
     FOREIGN KEY (stock_count_result_id, tenant_id, stock_count_line_id, item_id, warehouse_id)
     REFERENCES stock_count_results (id, tenant_id, stock_count_line_id, item_id, warehouse_id)
