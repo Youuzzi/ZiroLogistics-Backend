@@ -15,11 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -178,7 +176,7 @@ public class WmsInventoryAdjustmentService {
                 List<Long> expectedSerials = jdbc.queryForList("""
                         SELECT id FROM inventory_serials
                         WHERE tenant_id = ? AND item_id = ? AND lot_id <=> ?
-                          AND current_warehouse_id = ? AND current_location_id = ? AND status = 'AVAILABLE'
+                          AND current_warehouse_id = ? AND current_location_id = ? AND status IN ('AVAILABLE','RESERVED')
                         ORDER BY id FOR UPDATE
                         """, Long.class, access.tenantId(), itemId, nullableNumber(line.get("lot_id")),
                         warehouseId, number(line, "location_id"));
