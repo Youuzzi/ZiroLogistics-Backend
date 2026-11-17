@@ -691,6 +691,28 @@ class WmsStockCountMySqlIntegrationTest {
     }
 
     @Test
+    void manualAdjustmentRejectsUnsupportedTypesAndSerialTrackedItems() {
+        assertThrows(IllegalArgumentException.class, () -> adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-DAMAGE-" + UUID.randomUUID().toString().substring(0, 8), "DAMAGE",
+                        "DAMAGE", "Status reclassification is not enabled yet", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", BigDecimal.ONE)))));
+
+        Fixture serialFixture = fixture("SERIAL");
+        assertThrows(IllegalArgumentException.class, () -> adjustmentService.createManual(serialFixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-SERIAL-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Serial evidence workflow not yet enabled", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                serialFixture.warehousePublicId(), serialFixture.locationPublicId(),
+                                serialFixture.itemPublicId(), null, "AVAILABLE", BigDecimal.ONE)))));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_adjustments WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_adjustments WHERE tenant_id = ?", serialFixture.tenantId()));
+    }
+
+    @Test
     void manualCorrectionPostsOnlyAfterIndependentApprovalThroughTypedBoundary() {
         receive(fixture, "5.0000");
         Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
