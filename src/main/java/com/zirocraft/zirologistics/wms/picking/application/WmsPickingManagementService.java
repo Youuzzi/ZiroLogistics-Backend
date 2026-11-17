@@ -229,7 +229,7 @@ public class WmsPickingManagementService {
                     INSERT INTO picking_confirmations(public_id,tenant_id,picking_task_line_id,
                       outbound_shipment_allocation_id,item_id,confirmation_type,confirmed_qty,
                       request_id,confirmed_by_membership_id,notes)
-                    VALUES(?,?,?,?,?,'PICK',?,?,?,?,?)
+                    VALUES(?,?,?,?,?,'PICK',?,?,?,?)
                     """,UUID.randomUUID().toString(),a.tenantId(),lineId,allocationId,number(line,"item_id"),
                     qty,command.requestId().toString(),a.membershipId(),optional(command.notes(),1000));
         } catch(DuplicateKeyException ex){throw new IllegalStateException("Picking request UUID has already been used",ex);}
@@ -334,7 +334,7 @@ public class WmsPickingManagementService {
         final String json;try{json=mapper.writeValueAsString(payload);}catch(JsonProcessingException e){throw new IllegalStateException("Picking audit payload serialization failed",e);}
         int rows=jdbc.update("""
                 INSERT INTO tenant_audit_events(public_id,tenant_id,actor_membership_id,actor_type,operation_ref,event_type,subject_public_id,change_payload)
-                SELECT ?,t.id,m.id,'TENANT_MEMBER',?,?,?,?,? FROM tenants t
+                SELECT ?,t.id,m.id,'TENANT_MEMBER',?,?,?,? FROM tenants t
                 JOIN tenant_memberships m ON m.id=? AND m.tenant_id=t.id AND m.status='ACTIVE'
                 JOIN users u ON u.id=m.user_id AND u.public_id=? AND u.status='ACTIVE'
                 WHERE t.id=? AND t.status='ACTIVE'
