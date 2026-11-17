@@ -484,6 +484,61 @@ class WmsStockCountMySqlIntegrationTest {
     }
 
     @Test
+    void rejectedAdjustmentDoesNotPostAndAllowsAReplacementDraft() {
+        receive(fixture, "5.0000");
+        String countPublicId = createAndPlan(fixture);
+        Map<String, Object> started = stockCountService.start(fixture.principal(), countPublicId);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> lines = (List<Map<String, Object>>) started.get("lines");
+        String linePublicId = (String) lines.getFirst().get("publicId");
+
+        stockCountService.recordResult(fixture.principal(), countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        new BigDecimal("4.0000"), List.of(), "Initial physical count"));
+        stockCountService.recordResult(secondCounter(fixture), countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        new BigDecimal("4.0000"), List.of(), "Independent recount"));
+        stockCountService.submit(fixture.principal(), countPublicId);
+        stockCountService.reviewLine(secondCounter(fixture), countPublicId, linePublicId);
+        stockCountService.approve(secondCounter(fixture), countPublicId);
+
+        Map<String, Object> created = adjustmentService.createFromApprovedCount(fixture.principal(), countPublicId,
+                new WmsInventoryAdjustmentService.CreateFromCountCommand(
+                        "ADJ-REJ-" + UUID.randomUUID().toString().substring(0, 10), null));
+        String rejectedPublicId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), rejectedPublicId);
+        Map<String, Object> rejected = adjustmentService.reject(
+                secondCounter(fixture), rejectedPublicId, "Variance evidence requires correction");
+        assertEquals("REJECTED", rejected.get("status"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rejectedLines = (List<Map<String, Object>>) rejected.get("lines");
+        assertEquals("CANCELLED", rejectedLines.getFirst().get("status"));
+
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+        assertEquals("APPROVED", jdbc.queryForObject("""
+                SELECT status FROM stock_counts WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), countPublicId));
+        assertEquals(Boolean.TRUE, jdbc.queryForObject("""
+                SELECT freeze_stock FROM stock_counts WHERE tenant_id = ? AND public_id = ?
+                """, Boolean.class, fixture.tenantId(), countPublicId));
+
+        Map<String, Object> replacement = adjustmentService.createFromApprovedCount(fixture.principal(), countPublicId,
+                new WmsInventoryAdjustmentService.CreateFromCountCommand(
+                        "ADJ-RETRY-" + UUID.randomUUID().toString().substring(0, 10), null));
+        assertEquals("DRAFT", replacement.get("status"));
+        assertEquals(2, count("""
+                SELECT COUNT(*) FROM stock_count_adjustment_links
+                WHERE tenant_id = ? AND stock_count_id = (
+                  SELECT id FROM stock_counts WHERE tenant_id = ? AND public_id = ?
+                )
+                """, fixture.tenantId(), fixture.tenantId(), countPublicId));
+    }
+
+    @Test
     void serializedCountVariancePostsTheExactMissingSerialThroughAdjustmentWorkflow() {
         fixture = fixture("SERIAL");
         receiveSerials(fixture, List.of("SERIAL-ADJUST-001", "SERIAL-ADJUST-002"));
