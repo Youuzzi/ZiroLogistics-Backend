@@ -346,6 +346,96 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                 fixture.tenantId()));
     }
 
+    @Test
+    void manualTaskCreationPersistsReadyTaskAndLinesWithoutChangingInventory() {
+        receive(fixture, fixture.sourceLocationPublicId(), "8.0000");
+        BigDecimal sourceBefore = onHand(fixture, fixture.sourceLocationPublicId());
+        BigDecimal destinationBefore = onHand(fixture, fixture.destinationLocationPublicId());
+        int ledgerBefore = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?", fixture.tenantId());
+        int auditBefore = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id=?", fixture.tenantId());
+
+        Map<String, Object> task = taskService.createManual(fixture.principal(),
+                new WmsReplenishmentTaskService.ManualTaskCommand(
+                        fixture.warehousePublicId(), "HIGH", "Urgent manual move",
+                        List.of(new WmsReplenishmentTaskService.ManualTaskLine(
+                                fixture.itemPublicId(), fixture.sourceLocationPublicId(),
+                                fixture.destinationLocationPublicId(), null,
+                                new BigDecimal("3.5000"), "Move fast"))));
+
+        assertEquals("MANUAL", task.get("task_type"));
+        assertEquals("READY", task.get("status"));
+        assertEquals("HIGH", task.get("priority"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> lines = (List<Map<String, Object>>) task.get("lines");
+        assertEquals(1, lines.size());
+        assertEquals(new BigDecimal("3.5000"), lines.getFirst().get("planned_qty"));
+        assertEquals(sourceBefore, onHand(fixture, fixture.sourceLocationPublicId()));
+        assertEquals(destinationBefore, onHand(fixture, fixture.destinationLocationPublicId()));
+        assertEquals(ledgerBefore, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?", fixture.tenantId()));
+        assertEquals(auditBefore + 1, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id=?", fixture.tenantId()));
+    }
+
+    @Test
+    void manualTaskRejectsInsufficientStockAndCrossTenantResourcesWithoutCreatingHeader() {
+        receive(fixture, fixture.sourceLocationPublicId(), "2.0000");
+        int before = count("SELECT COUNT(*) FROM replenishment_tasks WHERE tenant_id=?", fixture.tenantId());
+        var insufficient = new WmsReplenishmentTaskService.ManualTaskCommand(
+                fixture.warehousePublicId(), null, null,
+                List.of(new WmsReplenishmentTaskService.ManualTaskLine(
+                        fixture.itemPublicId(), fixture.sourceLocationPublicId(),
+                        fixture.destinationLocationPublicId(), null, new BigDecimal("3.0000"), null)));
+        assertThrows(IllegalArgumentException.class, () -> taskService.createManual(fixture.principal(), insufficient));
+
+        Fixture otherTenant = fixture("NONE");
+        var crossTenant = new WmsReplenishmentTaskService.ManualTaskCommand(
+                fixture.warehousePublicId(), null, null,
+                List.of(new WmsReplenishmentTaskService.ManualTaskLine(
+                        otherTenant.itemPublicId(), fixture.sourceLocationPublicId(),
+                        fixture.destinationLocationPublicId(), null, BigDecimal.ONE, null)));
+        assertThrows(IllegalArgumentException.class, () -> taskService.createManual(fixture.principal(), crossTenant));
+        assertEquals(before, count("SELECT COUNT(*) FROM replenishment_tasks WHERE tenant_id=?", fixture.tenantId()));
+    }
+
+    @Test
+    void manualTaskRequiresLotForLotTrackedItemsAndRejectsForeignLot() {
+        Fixture lotFixture = fixture("LOT");
+        receiveLot(lotFixture, lotFixture.sourceLocationPublicId(),
+                createLot(lotFixture, "MANUAL-LOT"), "5.0000");
+        var missingLot = new WmsReplenishmentTaskService.ManualTaskCommand(
+                lotFixture.warehousePublicId(), null, null,
+                List.of(new WmsReplenishmentTaskService.ManualTaskLine(
+                        lotFixture.itemPublicId(), lotFixture.sourceLocationPublicId(),
+                        lotFixture.destinationLocationPublicId(), null, BigDecimal.ONE, null)));
+        assertThrows(IllegalArgumentException.class, () -> taskService.createManual(lotFixture.principal(), missingLot));
+
+        Fixture foreign = fixture("LOT");
+        String foreignLot = createLot(foreign, "FOREIGN-LOT");
+        var wrongLot = new WmsReplenishmentTaskService.ManualTaskCommand(
+                lotFixture.warehousePublicId(), null, null,
+                List.of(new WmsReplenishmentTaskService.ManualTaskLine(
+                        lotFixture.itemPublicId(), lotFixture.sourceLocationPublicId(),
+                        lotFixture.destinationLocationPublicId(), foreignLot, BigDecimal.ONE, null)));
+        assertThrows(IllegalArgumentException.class, () -> taskService.createManual(lotFixture.principal(), wrongLot));
+    }
+
+    @Test
+    void manualTaskCreationRequiresPersistedTaskCreatePermission() {
+        Fixture restricted = fixture("NONE");
+        jdbc.update("""
+                DELETE rp FROM role_permissions rp
+                JOIN permissions p ON p.id=rp.permission_id
+                JOIN membership_roles mr ON mr.role_id=rp.role_id
+                WHERE mr.tenant_id=? AND mr.membership_id=?
+                  AND p.permission_code='WMS_REPLENISHMENT_TASK_CREATE'
+                """, restricted.tenantId(), restricted.principal().membershipId());
+        var command = new WmsReplenishmentTaskService.ManualTaskCommand(
+                restricted.warehousePublicId(), null, null,
+                List.of(new WmsReplenishmentTaskService.ManualTaskLine(
+                        restricted.itemPublicId(), restricted.sourceLocationPublicId(),
+                        restricted.destinationLocationPublicId(), null, BigDecimal.ONE, null)));
+        assertThrows(AccessDeniedException.class, () -> taskService.createManual(restricted.principal(), command));
+    }
+
     private String createRule(Fixture f, String type, String minimum, String target, String maximum) {
         Map<String, Object> rule = service.create(f.principal(),
                 ruleCommand(f, type, minimum, target, maximum));
