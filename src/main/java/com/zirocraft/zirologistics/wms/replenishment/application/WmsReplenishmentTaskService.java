@@ -123,6 +123,10 @@ public class WmsReplenishmentTaskService {
                 WHERE id=? AND tenant_id=? AND status='ASSIGNED' AND version=?
                 """, number(task, "id"), a.tenantId(), expectedVersion);
         if (changed != 1) throw new IllegalStateException("Replenishment task changed; reload and retry");
+        jdbc.update("""
+                UPDATE replenishment_task_lines SET status='IN_PROGRESS', updated_at=UTC_TIMESTAMP(6)
+                WHERE tenant_id=? AND replenishment_task_id=? AND status='PENDING'
+                """, a.tenantId(), number(task, "id"));
         audit(a, taskPublicId, "START", Map.of("status", "ASSIGNED"),
                 Map.of("status", "IN_PROGRESS"));
         return taskView(a.tenantId(), taskPublicId);
@@ -328,7 +332,7 @@ public class WmsReplenishmentTaskService {
         BigDecimal adjusted = decimal(original.get("line_confirmed_qty"))
                 .subtract(decimal(original.get("confirmed_qty")));
         if (adjusted.signum() < 0) throw new IllegalStateException("Reversal would make confirmed quantity negative");
-        String status = adjusted.signum() == 0 ? "PENDING" :
+        String status = adjusted.signum() == 0 ? "IN_PROGRESS" :
                 adjusted.compareTo(decimal(original.get("planned_qty"))) == 0 ? "COMPLETED" : "PARTIALLY_COMPLETED";
         jdbc.update("""
                 UPDATE replenishment_task_lines SET confirmed_qty=?, status=?, updated_at=UTC_TIMESTAMP(6)
