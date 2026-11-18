@@ -173,7 +173,7 @@ public class WmsReplenishmentPlanningService {
         if ("MANUAL".equals(type) && requested == null) {
             throw new IllegalArgumentException("MANUAL rule planning requires requestedQty");
         }
-        if (OPEN_TASK_STATES.contains("READY")) {
+        {
             List<Long> open = jdbc.queryForList("""
                     SELECT id FROM replenishment_tasks
                     WHERE tenant_id=? AND replenishment_rule_id=?
@@ -272,9 +272,9 @@ public class WmsReplenishmentPlanningService {
                 INSERT INTO replenishment_tasks
                   (public_id, tenant_id, warehouse_id, replenishment_rule_id, task_number,
                    task_type, status, priority, created_by_membership_id, planned_at, notes)
-                VALUES (?, ?, ?, ?, ?, 'AUTOMATIC', 'READY', ?, ?, UTC_TIMESTAMP(6), ?)
+                VALUES (?, ?, ?, ?, ?, ?, 'READY', ?, ?, UTC_TIMESTAMP(6), ?)
                 """, taskPublicId, access.tenantId(), warehouseId, number(rule, "id"),
-                taskNumber, string(scope, "priority"), access.membershipId(),
+                taskNumber, "MIN_MAX".equals(type) ? "AUTOMATIC" : "MANUAL",\n                string(scope, "priority"), access.membershipId(),
                 command == null ? null : optional(command.notes(), 1000));
         long taskId = requiredLong("SELECT id FROM replenishment_tasks WHERE tenant_id=? AND public_id=?",
                 access.tenantId(), taskPublicId);
