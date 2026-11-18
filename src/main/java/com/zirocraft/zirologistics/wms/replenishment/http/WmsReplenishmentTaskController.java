@@ -6,6 +6,7 @@ import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityH
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -90,7 +91,7 @@ public class WmsReplenishmentTaskController {
 
     public record VersionRequest(@NotNull Long version) {}
     public record AssignRequest(@NotNull Long version,
-                                @Size(min = 1, max = 36) String assigneeMembershipPublicId) {}
+                                @NotBlank @Size(max = 36) String assigneeMembershipPublicId) {}
     public record ConfirmRequest(@NotNull UUID requestId, @NotNull Integer lineNumber,
                                  @NotNull @DecimalMin("0.0001") @Digits(integer = 15, fraction = 4)
                                  BigDecimal quantity,
