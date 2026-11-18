@@ -258,6 +258,10 @@ public class WmsReplenishmentPlanningService {
             if (remaining.signum() <= 0) break;
             BigDecimal available = decimal(bucket.get("available_qty"));
             BigDecimal quantity = available.min(remaining);
+            if (Set.of("SERIAL", "LOT_AND_SERIAL").contains(tracking)
+                    && quantity.stripTrailingZeros().scale() > 0) {
+                throw new IllegalStateException("Serial-tracked source bucket quantity is not a whole number");
+            }
             if (quantity.signum() > 0) {
                 allocations.add(new PlannedBucket(nullableNumber(bucket.get("lot_id")), quantity));
                 remaining = remaining.subtract(quantity);
