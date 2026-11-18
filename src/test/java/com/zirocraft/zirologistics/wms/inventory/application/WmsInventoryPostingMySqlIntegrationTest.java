@@ -2,6 +2,7 @@ package com.zirocraft.zirologistics.wms.inventory.application;
 
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
+import com.zirocraft.zirologistics.wms.transfer.application.WmsInterWarehouseTransferService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +19,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -49,6 +51,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
 
     @Autowired private WmsInventoryPostingService postingService;
     @Autowired private WmsInventoryReservationService reservationService;
+    @Autowired private WmsInterWarehouseTransferService transferService;
     @Autowired private JdbcTemplate jdbc;
     private Fixture fixture;
 
@@ -240,6 +243,74 @@ class WmsInventoryPostingMySqlIntegrationTest {
     }
 
     @Test
+    void simultaneousTransferDispatchAndIssueCannotMoveTheSameSerialTwice() throws Exception {
+        Fixture serialFixture = fixture("SERIAL");
+        String serialNumber = "SN-DISPATCH-RACE-" + UUID.randomUUID();
+        post(serialFixture, UUID.randomUUID(), "RECEIPT",
+                leg(serialFixture, null, serialNumber, "AVAILABLE", "1.0000"));
+        String serialPublicId = jdbc.queryForObject(
+                "SELECT public_id FROM inventory_serials WHERE tenant_id = ? AND serial_number = ?",
+                String.class, serialFixture.tenantId(), serialNumber);
+        TransferFixture transfer = createReleasedSerialTransfer(serialFixture, serialPublicId);
+
+        boolean[] outcomes = race(
+                () -> dispatchSerialSucceeds(serialFixture, transfer, serialPublicId),
+                () -> issueSerialSucceeds(serialFixture, serialPublicId));
+
+        assertNotEquals(outcomes[0], outcomes[1],
+                "Exactly one of transfer dispatch or issue may move the serial");
+        assertEquals(outcomes[0] ? "IN_TRANSIT" : "SHIPPED", serialStatus(serialFixture, serialPublicId));
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(serialFixture));
+        assertEquals(outcomes[0] ? "IN_TRANSIT" : "RELEASED",
+                transferStatus(serialFixture, transfer.transferPublicId()));
+        assertEquals(outcomes[0] ? "IN_TRANSIT" : "PLANNED",
+                transferLineSerialStatus(serialFixture, transfer.allocationPublicId(), serialPublicId));
+        assertEquals(2, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?",
+                serialFixture.tenantId()));
+    }
+
+    @Test
+    void simultaneousTransferReceiptAndShortageReconciliationResolveTheSameSerialOnlyOnce() throws Exception {
+        Fixture serialFixture = fixture("SERIAL");
+        String serialNumber = "SN-RECEIPT-RACE-" + UUID.randomUUID();
+        post(serialFixture, UUID.randomUUID(), "RECEIPT",
+                leg(serialFixture, null, serialNumber, "AVAILABLE", "1.0000"));
+        String serialPublicId = jdbc.queryForObject(
+                "SELECT public_id FROM inventory_serials WHERE tenant_id = ? AND serial_number = ?",
+                String.class, serialFixture.tenantId(), serialNumber);
+        TransferFixture transfer = createReleasedSerialTransfer(serialFixture, serialPublicId);
+        transferService.dispatch(serialFixture.principal(), transfer.transferPublicId(),
+                new WmsInterWarehouseTransferService.DispatchCommand(UUID.randomUUID(), List.of(
+                        new WmsInterWarehouseTransferService.DispatchAllocation(
+                                transfer.allocationPublicId(), BigDecimal.ONE, List.of(serialPublicId))), "dispatch before receipt race"));
+
+        boolean[] outcomes = race(
+                () -> receiveSerialSucceeds(serialFixture, transfer, serialPublicId),
+                () -> reconcileSerialAsShortageSucceeds(serialFixture, transfer, serialPublicId));
+
+        assertNotEquals(outcomes[0], outcomes[1],
+                "Exactly one of receipt or shortage reconciliation may resolve the in-transit serial");
+        if (outcomes[0]) {
+            assertEquals("AVAILABLE", serialStatus(serialFixture, serialPublicId));
+            assertEquals(new BigDecimal("1.0000"),
+                    bucketBalance(serialFixture, transfer.destinationLocationPublicId(), "AVAILABLE"));
+            assertEquals("RECEIVED",
+                    transferLineSerialStatus(serialFixture, transfer.allocationPublicId(), serialPublicId));
+            assertEquals(3, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?",
+                    serialFixture.tenantId()));
+        } else {
+            assertEquals("LOST", serialStatus(serialFixture, serialPublicId));
+            assertEquals(BigDecimal.ZERO.setScale(4),
+                    bucketBalance(serialFixture, transfer.destinationLocationPublicId(), "AVAILABLE"));
+            assertEquals("LOST",
+                    transferLineSerialStatus(serialFixture, transfer.allocationPublicId(), serialPublicId));
+            assertEquals(2, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?",
+                    serialFixture.tenantId()));
+        }
+        assertEquals("RECEIVED", transferStatus(serialFixture, transfer.transferPublicId()));
+    }
+
+    @Test
     void rejectsCrossTenantWarehouseReference() {
         Fixture otherTenant = fixture("NONE");
         WmsInventoryPostingService.PostingLeg crossTenantLeg = new WmsInventoryPostingService.PostingLeg(
@@ -380,6 +451,123 @@ class WmsInventoryPostingMySqlIntegrationTest {
         return jdbc.queryForObject(sql, Integer.class, args);
     }
 
+    private TransferFixture createReleasedSerialTransfer(Fixture f, String serialPublicId) {
+        String destinationWarehousePublicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO warehouses (public_id, tenant_id, warehouse_code, warehouse_name, status)
+                VALUES (?, ?, ?, 'Transfer Destination Warehouse', 'ACTIVE')
+                """, destinationWarehousePublicId, f.tenantId(),
+                "WH_DST_" + UUID.randomUUID().toString().substring(0, 8));
+        long destinationWarehouseId = jdbc.queryForObject(
+                "SELECT id FROM warehouses WHERE public_id = ?", Long.class, destinationWarehousePublicId);
+        String destinationLocationPublicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO warehouse_locations
+                  (public_id, tenant_id, warehouse_id, location_code, location_name, location_type, status)
+                VALUES (?, ?, ?, ?, 'Transfer Destination Bin', 'BIN', 'ACTIVE')
+                """, destinationLocationPublicId, f.tenantId(), destinationWarehouseId,
+                "BIN_DST_" + UUID.randomUUID().toString().substring(0, 8));
+
+        Map<String, Object> created = transferService.create(f.principal(),
+                new WmsInterWarehouseTransferService.TransferCommand(UUID.randomUUID(),
+                        f.warehousePublicId(), destinationWarehousePublicId,
+                        "TR-" + UUID.randomUUID().toString().substring(0, 12),
+                        null, "STANDARD", null, "serial concurrency integration test",
+                        List.of(new WmsInterWarehouseTransferService.LineCommand(
+                                f.itemPublicId(), BigDecimal.ONE, null,
+                                List.of(new WmsInterWarehouseTransferService.AllocationCommand(
+                                        f.locationPublicId(), destinationLocationPublicId, null,
+                                        BigDecimal.ONE, List.of(serialPublicId)))))));
+        String transferPublicId = Objects.toString(created.get("public_id"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> line = (Map<String, Object>) ((List<?>) created.get("lines")).getFirst();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> allocation = (Map<String, Object>) ((List<?>) line.get("allocations")).getFirst();
+        String allocationPublicId = Objects.toString(allocation.get("public_id"));
+        transferService.release(f.principal(), transferPublicId, UUID.randomUUID());
+        return new TransferFixture(transferPublicId, allocationPublicId,
+                destinationWarehousePublicId, destinationLocationPublicId);
+    }
+
+    private boolean dispatchSerialSucceeds(Fixture f, TransferFixture transfer, String serialPublicId) {
+        try {
+            transferService.dispatch(f.principal(), transfer.transferPublicId(),
+                    new WmsInterWarehouseTransferService.DispatchCommand(UUID.randomUUID(), List.of(
+                            new WmsInterWarehouseTransferService.DispatchAllocation(
+                                    transfer.allocationPublicId(), BigDecimal.ONE, List.of(serialPublicId))), "dispatch race"));
+            return true;
+        } catch (IllegalStateException | IllegalArgumentException expectedConflict) {
+            return false;
+        }
+    }
+
+    private boolean issueSerialSucceeds(Fixture f, String serialPublicId) {
+        try {
+            post(f, UUID.randomUUID(), "ISSUE", leg(f, serialPublicId, null, "AVAILABLE", "1.0000"));
+            return true;
+        } catch (IllegalStateException | IllegalArgumentException expectedConflict) {
+            return false;
+        }
+    }
+
+    private boolean receiveSerialSucceeds(Fixture f, TransferFixture transfer, String serialPublicId) {
+        try {
+            transferService.receive(f.principal(), transfer.transferPublicId(),
+                    new WmsInterWarehouseTransferService.ReceiveCommand(UUID.randomUUID(), List.of(
+                            new WmsInterWarehouseTransferService.ReceiveAllocation(
+                                    transfer.allocationPublicId(), BigDecimal.ONE, BigDecimal.ZERO, BigDecimal.ZERO,
+                                    List.of(serialPublicId), List.of(), List.of())), "good receipt race"));
+            return true;
+        } catch (IllegalStateException | IllegalArgumentException expectedConflict) {
+            return false;
+        }
+    }
+
+    private boolean reconcileSerialAsShortageSucceeds(Fixture f, TransferFixture transfer, String serialPublicId) {
+        try {
+            transferService.receive(f.principal(), transfer.transferPublicId(),
+                    new WmsInterWarehouseTransferService.ReceiveCommand(UUID.randomUUID(), List.of(
+                            new WmsInterWarehouseTransferService.ReceiveAllocation(
+                                    transfer.allocationPublicId(), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ONE,
+                                    List.of(), List.of(), List.of(serialPublicId))), "shortage reconciliation race"));
+            return true;
+        } catch (IllegalStateException | IllegalArgumentException expectedConflict) {
+            return false;
+        }
+    }
+
+    private boolean[] race(java.util.function.BooleanSupplier firstAction,
+                           java.util.function.BooleanSupplier secondAction) throws Exception {
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        CompletableFuture<Boolean> first = CompletableFuture.supplyAsync(() -> {
+            awaitStart(ready, start);
+            return firstAction.getAsBoolean();
+        });
+        CompletableFuture<Boolean> second = CompletableFuture.supplyAsync(() -> {
+            awaitStart(ready, start);
+            return secondAction.getAsBoolean();
+        });
+        assertTrue(ready.await(10, TimeUnit.SECONDS), "Both transfer workers must reach the start barrier");
+        start.countDown();
+        return new boolean[]{first.get(30, TimeUnit.SECONDS), second.get(30, TimeUnit.SECONDS)};
+    }
+
+    private String transferStatus(Fixture f, String transferPublicId) {
+        return jdbc.queryForObject("SELECT status FROM stock_transfers WHERE tenant_id = ? AND public_id = ?",
+                String.class, f.tenantId(), transferPublicId);
+    }
+
+    private String transferLineSerialStatus(Fixture f, String allocationPublicId, String serialPublicId) {
+        return jdbc.queryForObject("""
+                SELECT ts.status FROM stock_transfer_line_serials ts
+                JOIN stock_transfer_allocations a ON a.id = ts.stock_transfer_allocation_id
+                    AND a.tenant_id = ts.tenant_id
+                JOIN inventory_serials s ON s.id = ts.serial_id AND s.tenant_id = ts.tenant_id
+                WHERE ts.tenant_id = ? AND a.public_id = ? AND s.public_id = ?
+                """, String.class, f.tenantId(), allocationPublicId, serialPublicId);
+    }
+
     private Fixture fixture(String trackingMethod) {
         String tenantPublicId = UUID.randomUUID().toString();
         jdbc.update("""
@@ -414,7 +602,8 @@ class WmsInventoryPostingMySqlIntegrationTest {
         jdbc.update("""
                 INSERT INTO role_permissions (role_id, permission_id)
                 SELECT ?, id FROM permissions
-                WHERE permission_code IN ('WMS_INVENTORY_POST', 'WMS_INVENTORY_RESERVE')
+                WHERE permission_code IN ('WMS_INVENTORY_POST', 'WMS_INVENTORY_RESERVE', 'WMS_TRANSFER_READ',
+                  'WMS_TRANSFER_CREATE', 'WMS_TRANSFER_RELEASE', 'WMS_TRANSFER_DISPATCH', 'WMS_TRANSFER_RECEIVE')
                 """, roleId);
 
         String warehousePublicId = UUID.randomUUID().toString();
@@ -439,10 +628,15 @@ class WmsInventoryPostingMySqlIntegrationTest {
 
         WmsAuthenticatedPrincipal principal = new WmsAuthenticatedPrincipal(userPublicId, tenantId,
                 jdbc.queryForObject("SELECT public_id FROM tenants WHERE id = ?", String.class, tenantId),
-                membershipId, membershipPublicId, Set.of("WMS_INVENTORY_POST", "WMS_INVENTORY_RESERVE"));
+                membershipId, membershipPublicId, Set.of("WMS_INVENTORY_POST", "WMS_INVENTORY_RESERVE",
+                "WMS_TRANSFER_READ", "WMS_TRANSFER_CREATE", "WMS_TRANSFER_RELEASE",
+                "WMS_TRANSFER_DISPATCH", "WMS_TRANSFER_RECEIVE"));
         return new Fixture(tenantId, tenantPublicId, userPublicId, membershipId, membershipPublicId,
                 warehousePublicId, locationPublicId, itemPublicId, principal);
     }
+
+    private record TransferFixture(String transferPublicId, String allocationPublicId,
+                                   String destinationWarehousePublicId, String destinationLocationPublicId) {}
 
     private record Fixture(long tenantId, String tenantPublicId, String userPublicId, long membershipId,
                            String membershipPublicId, String warehousePublicId, String locationPublicId,
