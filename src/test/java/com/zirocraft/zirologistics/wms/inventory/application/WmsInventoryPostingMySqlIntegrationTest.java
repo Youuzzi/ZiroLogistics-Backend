@@ -119,6 +119,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
         post(fixture, UUID.randomUUID(), "RECEIPT",
                 leg(fixture, null, null, "AVAILABLE", "5.0000"));
 
+        String destinationLocation = createLocation(fixture);
         long beforeLedger = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId());
         long beforeAudit = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ?",
                 fixture.tenantId());
@@ -135,7 +136,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
                             List.of(
                                     leg(fixture, null, null, "AVAILABLE", "2.0000"),
                                     new WmsInventoryPostingService.PostingLeg(
-                                            fixture.warehousePublicId(), createLocation(fixture),
+                                            fixture.warehousePublicId(), destinationLocation,
                                             fixture.itemPublicId(), null, null, null,
                                             "AVAILABLE", new BigDecimal("2.0000"))),
                             "audit rollback test")));
@@ -146,7 +147,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
         assertEquals(new BigDecimal("5.0000"),
                 bucketBalance(fixture, fixture.locationPublicId(), "AVAILABLE"));
         assertEquals(new BigDecimal("0.0000"),
-                bucketBalance(fixture, latestLocationPublicId(fixture), "AVAILABLE"));
+                bucketBalance(fixture, destinationLocation, "AVAILABLE"));
         assertEquals(beforeLedger,
                 count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
         assertEquals(beforeAudit,
