@@ -129,6 +129,44 @@ class WmsReplenishmentConcurrencyMySqlIntegrationTest {
         assertTrue(nonNegativeInventory(f));
     }
 
+    @Test
+    void duplicateReplenishmentConfirmationRequestCannotMoveStockTwice() {
+        Fixture f = fixture();
+        receive(f, f.sourcePublicId(), "10.0000");
+        String task = startManualTask(f, f.destinationPublicId(), "8.0000");
+        UUID requestId = UUID.randomUUID();
+
+        confirmWithRequestId(f, task, requestId, "3.0000");
+        BigDecimal sourceAfterFirst = onHand(f, f.sourcePublicId());
+        BigDecimal destinationAfterFirst = onHand(f, f.destinationPublicId());
+        int ledgerAfterFirst = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?", f.tenantId());
+        int confirmationsAfterFirst = count("""
+                SELECT COUNT(*) FROM replenishment_confirmations
+                WHERE tenant_id=? AND confirmation_type='MOVE'
+                """, f.tenantId());
+
+        IllegalStateException duplicate = assertThrows(IllegalStateException.class,
+                () -> confirmWithRequestId(f, task, requestId, "2.0000"));
+
+        assertEquals("The inventory request ID has already been posted", duplicate.getMessage());
+        assertEquals(sourceAfterFirst, onHand(f, f.sourcePublicId()));
+        assertEquals(destinationAfterFirst, onHand(f, f.destinationPublicId()));
+        assertEquals(ledgerAfterFirst,
+                count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?", f.tenantId()));
+        assertEquals(confirmationsAfterFirst, count("""
+                SELECT COUNT(*) FROM replenishment_confirmations
+                WHERE tenant_id=? AND confirmation_type='MOVE'
+                """, f.tenantId()));
+        assertEquals(new BigDecimal("3.0000"), confirmedQuantity(f, task));
+        assertTrue(nonNegativeInventory(f));
+    }
+
+    private void confirmWithRequestId(Fixture f, String taskPublicId, UUID requestId, String quantity) {
+        taskService.confirm(f.principal(), taskPublicId,
+                new WmsReplenishmentTaskService.ConfirmCommand(
+                        requestId, 1, new BigDecimal(quantity), List.of(), "Idempotency retry test"));
+    }
+
     private void confirm(Fixture f, String taskPublicId, String quantity) {
         taskService.confirm(f.principal(), taskPublicId,
                 new WmsReplenishmentTaskService.ConfirmCommand(
