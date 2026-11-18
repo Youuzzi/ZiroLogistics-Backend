@@ -278,23 +278,25 @@ public class WmsReplenishmentTaskService {
             throw new IllegalStateException("Non-serial confirmation unexpectedly contains serial evidence");
         }
 
-        List<WmsInventoryPostingService.PostingLeg> legs = new ArrayList<>();
         if (serialTracked) {
             for (Long serialId : serialIds) {
                 String serialPublicId = requiredLongString("""
                         SELECT public_id FROM inventory_serials WHERE tenant_id=? AND id=?
                         """, a.tenantId(), serialId);
-                legs.add(reverseDestinationLeg(original, serialPublicId));
-                legs.add(reverseSourceLeg(original, serialPublicId));
+                UUID serialRequest = UUID.nameUUIDFromBytes((command.requestId() + ":reverse:" + serialId)
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                postingService.post(a.principal(), new WmsInventoryPostingService.PostingCommand(
+                        serialRequest, "TRANSFER",
+                        List.of(reverseDestinationLeg(original, serialPublicId),
+                                reverseSourceLeg(original, serialPublicId)), optional(command.notes())));
             }
         } else {
             BigDecimal qty = decimal(original.get("confirmed_qty"));
-            legs.add(reverseDestinationLeg(original, null, qty));
-            legs.add(reverseSourceLeg(original, null, qty));
+            postingService.post(a.principal(), new WmsInventoryPostingService.PostingCommand(
+                    command.requestId(), "TRANSFER",
+                    List.of(reverseDestinationLeg(original, null, qty),
+                            reverseSourceLeg(original, null, qty)), optional(command.notes())));
         }
-        UUID postingRequestId = command.requestId();
-        postingService.post(a.principal(), new WmsInventoryPostingService.PostingCommand(
-                postingRequestId, "TRANSFER", legs, optional(command.notes())));
         String reversalPublicId = UUID.randomUUID().toString();
         try {
             jdbc.update("""
