@@ -33,7 +33,6 @@ import java.util.UUID;
 public class WmsReplenishmentPlanningService {
     private static final Set<String> RULE_TYPES = Set.of("MIN_MAX", "MANUAL");
     private static final Set<String> PRIORITIES = Set.of("LOW", "NORMAL", "HIGH", "URGENT");
-    private static final Set<String> OPEN_TASK_STATES = Set.of("DRAFT", "READY", "ASSIGNED", "IN_PROGRESS");
 
     private final WmsMembershipAccessService accessService;
     private final JdbcTemplate jdbc;
@@ -274,7 +273,8 @@ public class WmsReplenishmentPlanningService {
                    task_type, status, priority, created_by_membership_id, planned_at, notes)
                 VALUES (?, ?, ?, ?, ?, ?, 'READY', ?, ?, UTC_TIMESTAMP(6), ?)
                 """, taskPublicId, access.tenantId(), warehouseId, number(rule, "id"),
-                taskNumber, "MIN_MAX".equals(type) ? "AUTOMATIC" : "MANUAL",\n                string(scope, "priority"), access.membershipId(),
+                taskNumber, "MIN_MAX".equals(type) ? "AUTOMATIC" : "MANUAL",
+                string(scope, "priority"), access.membershipId(),
                 command == null ? null : optional(command.notes(), 1000));
         long taskId = requiredLong("SELECT id FROM replenishment_tasks WHERE tenant_id=? AND public_id=?",
                 access.tenantId(), taskPublicId);
