@@ -82,20 +82,22 @@ The current implementation acquires a tenant row lock in several WMS mutation pa
 
 If resource-level locking is introduced, it must preserve a documented common lock order and prove safety across every workflow that touches the same resources.
 
-### 4.2 Canonical lock order
+### 4.2 Lock order and shared-resource ordering
 
-The initial review baseline is:
+Do not assume one universal order across workflow aggregates and inventory resources before mapping the existing call paths. Several workflows intentionally lock their own document/header/line before invoking the inventory posting boundary. Stage 11 must inspect those call paths and identify whether any competing workflow acquires the same resources in the opposite order.
 
-1. Tenant authorization boundary.
-2. Warehouse rows in ascending internal ID.
-3. Location rows in ascending internal ID.
-4. Item rows in ascending internal ID.
-5. Lot rows in ascending internal ID.
-6. Serial rows in ascending internal ID.
-7. Inventory balance buckets in deterministic key order.
-8. Workflow headers and lines in a documented order where required by the operation.
+Within the inventory posting boundary, the current intended resource order is:
 
-This is a review baseline, not permission to reorder locks mechanically. Existing workflows may lock their aggregate before entering the posting boundary. Stage 11 must map actual call paths, identify inversions, and establish one compatible order for every shared resource. Any deviation must be documented with a concrete reason and deadlock test.
+1. Warehouse rows in ascending internal ID.
+2. Location rows in ascending internal ID.
+3. Item rows in ascending internal ID.
+4. Lot rows in ascending internal ID.
+5. Serial rows in ascending internal ID.
+6. Inventory balance buckets in deterministic key order.
+
+The tenant authorization boundary is acquired before mutation/permission resolution where the current service contract requires it. Workflow aggregate locks (task, count, adjustment, transfer, receipt and their lines) must be documented as a separate layer with the exact order in which each workflow acquires them relative to inventory resources.
+
+This is an audit baseline, not permission to reorder locks mechanically. Stage 11 must map actual call paths, identify inversions, and establish compatible ordering for every shared resource. Any deviation must be documented with a concrete reason and a deterministic concurrency/deadlock test.
 
 Never rely on unordered HashMap iteration or request-line order to determine database lock acquisition order. Sort lock keys deterministically before locking multiple rows.
 
