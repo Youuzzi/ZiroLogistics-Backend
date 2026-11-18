@@ -47,14 +47,12 @@ jobs:
 
           docs_only=true
           while IFS= read -r file; do
-            case "$file" in
-              docs/*.md|docs/*.mdx|docs/*.rst|docs/*.txt|README.md|CONTRIBUTING.md|CHANGELOG.md)
-                ;;
-              *)
-                docs_only=false
-                break
-                ;;
-            esac
+            if [[ "$file" == docs/* && "$file" =~ \\.(md|mdx|rst|txt)$ ]] || [[ "$file" =~ ^(README|CONTRIBUTING|CHANGELOG)\\.md$ ]]; then
+              continue
+            else
+              docs_only=false
+              break
+            fi
           done <<< "$changed_files"
 
           if [[ "$docs_only" == "true" ]]; then
