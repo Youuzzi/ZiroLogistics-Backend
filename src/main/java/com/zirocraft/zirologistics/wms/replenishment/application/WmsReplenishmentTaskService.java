@@ -139,7 +139,7 @@ public class WmsReplenishmentTaskService {
         if (!"IN_PROGRESS".equals(string(task, "status"))) {
             throw new IllegalStateException("Only an in-progress replenishment task can be confirmed");
         }
-        Map<String, Object> line = taskLine(a.tenantId(), number(task, "id"), command.linePublicId(), true);
+        Map<String, Object> line = taskLine(a.tenantId(), number(task, "id"), Integer.toString(command.lineNumber()), true);
         BigDecimal quantity = quantity(command.quantity());
         BigDecimal remaining = decimal(line.get("planned_qty")).subtract(decimal(line.get("confirmed_qty")));
         if (quantity.compareTo(remaining) > 0) {
@@ -465,7 +465,7 @@ public class WmsReplenishmentTaskService {
                 + (lock ? " FOR UPDATE" : ""), tenantId, required(publicId, "Task public ID"));
     }
 
-    private Map<String, Object> taskLine(long tenantId, long taskId, String linePublicId, boolean lock) {
+    private Map<String, Object> taskLine(long tenantId, long taskId, String lineNumber, boolean lock) {
         return requiredRow("""
                 SELECT l.*, i.tracking_method, i.public_id AS item_public_id,
                        w.public_id AS warehouse_public_id, sl.public_id AS source_location_public_id,
@@ -476,9 +476,9 @@ public class WmsReplenishmentTaskService {
                 JOIN warehouse_locations sl ON sl.id=l.source_location_id AND sl.warehouse_id=l.warehouse_id AND sl.tenant_id=l.tenant_id
                 JOIN warehouse_locations dl ON dl.id=l.destination_location_id AND dl.warehouse_id=l.warehouse_id AND dl.tenant_id=l.tenant_id
                 LEFT JOIN inventory_lots lot ON lot.id=l.lot_id AND lot.tenant_id=l.tenant_id AND lot.item_id=l.item_id
-                WHERE l.tenant_id=? AND l.replenishment_task_id=? AND l.public_id=?
+                WHERE l.tenant_id=? AND l.replenishment_task_id=? AND l.line_number=?
                 """ + (lock ? " FOR UPDATE" : ""), tenantId, taskId,
-                required(linePublicId, "Task line public ID"));
+                Integer.parseInt(required(lineNumber, "Task line number")));
     }
 
     private void requireHasLines(long tenantId, long taskId) {
@@ -584,7 +584,7 @@ public class WmsReplenishmentTaskService {
         return Objects.toString(row.get(key), null);
     }
 
-    public record ConfirmCommand(UUID requestId, String linePublicId, BigDecimal quantity,
+    public record ConfirmCommand(UUID requestId, Integer lineNumber, BigDecimal quantity,
                                  List<String> serialPublicIds, String notes) {}
     public record ReverseCommand(UUID requestId, String notes) {}
     private record Access(WmsAuthenticatedPrincipal principal, long tenantId, long membershipId,
