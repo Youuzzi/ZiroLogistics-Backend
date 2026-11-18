@@ -213,9 +213,9 @@ public class WmsReplenishmentTaskService {
                         number(line, "item_id"), number(line, "source_location_id"),
                         number(line, "destination_location_id"), serialId);
                 jdbc.update("""
-                        INSERT INTO replenishment_confirmation_serials(tenant_id, confirmation_id, serial_id)
-                        VALUES (?, ?, ?)
-                        """, a.tenantId(), confirmationId, serialId);
+                        INSERT INTO replenishment_confirmation_serials(tenant_id, confirmation_id, item_id, serial_id)
+                        VALUES (?, ?, ?, ?)
+                        """, a.tenantId(), confirmationId, number(line, "item_id"), serialId);
             }
         }
         BigDecimal newConfirmed = decimal(line.get("confirmed_qty")).add(quantity);
@@ -320,9 +320,9 @@ public class WmsReplenishmentTaskService {
                 """, a.tenantId(), reversalPublicId);
         for (Long serialId : serialIds) {
             jdbc.update("""
-                    INSERT INTO replenishment_confirmation_serials(tenant_id, confirmation_id, serial_id)
-                    VALUES (?, ?, ?)
-                    """, a.tenantId(), reversalId, serialId);
+                    INSERT INTO replenishment_confirmation_serials(tenant_id, confirmation_id, item_id, serial_id)
+                    VALUES (?, ?, ?, ?)
+                    """, a.tenantId(), reversalId, number(original, "item_id"), serialId);
         }
         BigDecimal adjusted = decimal(original.get("line_confirmed_qty"))
                 .subtract(decimal(original.get("confirmed_qty")));
