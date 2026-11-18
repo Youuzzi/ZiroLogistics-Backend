@@ -750,6 +750,13 @@ class WmsStockCountMySqlIntegrationTest {
                   SELECT id FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
                 )
                 """, fixture.tenantId(), fixture.tenantId(), adjustmentId));
+        assertEquals(4, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id = ? AND subject_public_id = ?
+                  AND event_type = 'WMS_INVENTORY_ADJUSTMENT_UPDATED'
+                  AND JSON_UNQUOTE(JSON_EXTRACT(change_payload, '$.action'))
+                      IN ('CREATE_MANUAL','SUBMIT','APPROVE','POST_MANUAL')
+                """, fixture.tenantId(), adjustmentId));
     }
 
     @Test
@@ -869,6 +876,75 @@ class WmsStockCountMySqlIntegrationTest {
                 SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
                 """, String.class, fixture.tenantId(), adjustmentId));
         assertEquals(new BigDecimal("6.0000"), onHand(fixture));
+    }
+
+    @Test
+    void manualAdjustmentPostingRollsBackEarlierAllocationsWhenLaterAllocationIsStale() {
+        receive(fixture, "5.0000");
+        String secondItemPublicId = createItem(fixture, "NONE");
+        postingService.post(fixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                UUID.randomUUID(), "RECEIPT",
+                List.of(new WmsInventoryPostingService.PostingLeg(
+                        fixture.warehousePublicId(), fixture.locationPublicId(), secondItemPublicId,
+                        null, null, null, "AVAILABLE", BigDecimal.ONE)),
+                "Seed second bucket for atomic rollback test"));
+
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-ATOMIC-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Atomic multi-allocation rollback test", null,
+                        List.of(
+                                new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                        fixture.warehousePublicId(), fixture.locationPublicId(),
+                                        fixture.itemPublicId(), null, "AVAILABLE", new BigDecimal("6.0000")),
+                                new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                        fixture.warehousePublicId(), fixture.locationPublicId(),
+                                        secondItemPublicId, null, "AVAILABLE", new BigDecimal("2.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, adjustmentId, "Both baselines initially verified");
+
+        // The second item has the larger generated ID, so the first allocation posts
+        // before this receipt makes the later allocation's approved baseline stale.
+        postingService.post(fixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                UUID.randomUUID(), "RECEIPT",
+                List.of(new WmsInventoryPostingService.PostingLeg(
+                        fixture.warehousePublicId(), fixture.locationPublicId(), secondItemPublicId,
+                        null, null, null, "AVAILABLE", BigDecimal.ONE)),
+                "Make the second allocation stale after approval"));
+
+        long adjustmentLedgerBefore = count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId());
+        assertThrows(IllegalStateException.class, () -> adjustmentService.post(approver, adjustmentId));
+
+        assertEquals(new BigDecimal("5.0000"), jdbc.queryForObject("""
+                SELECT on_hand_qty FROM inventory_balances
+                WHERE tenant_id = ? AND item_id = (
+                  SELECT id FROM items WHERE tenant_id = ? AND public_id = ?
+                ) AND location_id = (
+                  SELECT id FROM warehouse_locations WHERE tenant_id = ? AND public_id = ?
+                ) AND lot_id IS NULL AND stock_status = 'AVAILABLE'
+                """, BigDecimal.class, fixture.tenantId(), fixture.tenantId(), fixture.itemPublicId(),
+                fixture.tenantId(), fixture.locationPublicId()));
+        assertEquals(new BigDecimal("2.0000"), jdbc.queryForObject("""
+                SELECT on_hand_qty FROM inventory_balances
+                WHERE tenant_id = ? AND item_id = (
+                  SELECT id FROM items WHERE tenant_id = ? AND public_id = ?
+                ) AND location_id = (
+                  SELECT id FROM warehouse_locations WHERE tenant_id = ? AND public_id = ?
+                ) AND lot_id IS NULL AND stock_status = 'AVAILABLE'
+                """, BigDecimal.class, fixture.tenantId(), fixture.tenantId(), secondItemPublicId,
+                fixture.tenantId(), fixture.locationPublicId()));
+        assertEquals(adjustmentLedgerBefore, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+        assertEquals("APPROVED", jdbc.queryForObject("""
+                SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), adjustmentId));
     }
 
     @Test
