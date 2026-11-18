@@ -155,6 +155,44 @@ class WmsInventoryPostingMySqlIntegrationTest {
     }
 
     @Test
+    void oppositeDirectionTransfersCompleteWithoutDeadlockOrPartialMovement() throws Exception {
+        String secondLocation = createLocation(fixture);
+        post(fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "10.0000"));
+        WmsInventoryPostingService.PostingLeg secondReceipt =
+                new WmsInventoryPostingService.PostingLeg(fixture.warehousePublicId(), secondLocation,
+                        fixture.itemPublicId(), null, null, null, "AVAILABLE", new BigDecimal("10.0000"));
+        postingService.post(fixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                UUID.randomUUID(), "RECEIPT", List.of(secondReceipt), "seed reverse transfer"));
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        CompletableFuture<Boolean> forward = CompletableFuture.supplyAsync(() -> {
+            awaitRequestStart(ready, start);
+            return transferSucceeds(fixture, fixture.locationPublicId(), secondLocation);
+        });
+        CompletableFuture<Boolean> reverse = CompletableFuture.supplyAsync(() -> {
+            awaitRequestStart(ready, start);
+            return transferSucceeds(fixture, secondLocation, fixture.locationPublicId());
+        });
+
+        assertTrue(ready.await(10, TimeUnit.SECONDS), "Both transfer workers must reach the start barrier");
+        start.countDown();
+        assertTrue(forward.get(30, TimeUnit.SECONDS), "Forward transfer must complete");
+        assertTrue(reverse.get(30, TimeUnit.SECONDS), "Reverse transfer must complete");
+
+        assertEquals(new BigDecimal("10.0000"),
+                bucketBalance(fixture, fixture.locationPublicId(), "AVAILABLE"));
+        assertEquals(new BigDecimal("10.0000"),
+                bucketBalance(fixture, secondLocation, "AVAILABLE"));
+        assertEquals(6, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(4, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND movement_type = 'TRANSFER'
+                """, fixture.tenantId()));
+    }
+
+    @Test
     void serialReceiptIssueAndReturnKeepSerialStateAndStockAtomic() {
         Fixture serialFixture = fixture("SERIAL");
         String serialNumber = "SN-" + UUID.randomUUID();
@@ -515,6 +553,22 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 SELECT COUNT(*) FROM inventory_ledger
                 WHERE tenant_id = ? AND request_id = ?
                 """, fixture.tenantId(), requestId.toString()));
+    }
+
+    private boolean transferSucceeds(Fixture f, String sourceLocation, String destinationLocation) {
+        try {
+            WmsInventoryPostingService.PostingLeg source = new WmsInventoryPostingService.PostingLeg(
+                    f.warehousePublicId(), sourceLocation, f.itemPublicId(), null, null, null,
+                    "AVAILABLE", new BigDecimal("2.0000"));
+            WmsInventoryPostingService.PostingLeg destination = new WmsInventoryPostingService.PostingLeg(
+                    f.warehousePublicId(), destinationLocation, f.itemPublicId(), null, null, null,
+                    "AVAILABLE", new BigDecimal("2.0000"));
+            postingService.post(f.principal(), new WmsInventoryPostingService.PostingCommand(
+                    UUID.randomUUID(), "TRANSFER", List.of(source, destination), "opposite direction concurrency test"));
+            return true;
+        } catch (RuntimeException failure) {
+            throw new IllegalStateException("Opposite-direction transfer failed", failure);
+        }
     }
 
     private boolean postRequestSucceeds(Fixture f, UUID requestId,
