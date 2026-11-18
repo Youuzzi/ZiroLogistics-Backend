@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -47,6 +48,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
     }
 
     @Autowired private WmsInventoryPostingService postingService;
+    @Autowired private WmsInventoryReservationService reservationService;
     @Autowired private JdbcTemplate jdbc;
     private Fixture fixture;
 
@@ -182,6 +184,62 @@ class WmsInventoryPostingMySqlIntegrationTest {
     }
 
     @Test
+    void simultaneousReservationsCannotExceedAvailableInventory() throws Exception {
+        post(fixture, UUID.randomUUID(), "RECEIPT", leg(fixture, null, null, "AVAILABLE", "5.0000"));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        CompletableFuture<Boolean> first = CompletableFuture.supplyAsync(() -> {
+            awaitStart(ready, start);
+            return reserveSucceeds(fixture, "4.0000");
+        });
+        CompletableFuture<Boolean> second = CompletableFuture.supplyAsync(() -> {
+            awaitStart(ready, start);
+            return reserveSucceeds(fixture, "4.0000");
+        });
+
+        assertTrue(ready.await(10, TimeUnit.SECONDS), "Both reservation workers must reach the start barrier");
+        start.countDown();
+        boolean firstSucceeded = first.get(30, TimeUnit.SECONDS);
+        boolean secondSucceeded = second.get(30, TimeUnit.SECONDS);
+
+        assertNotEquals(firstSucceeded, secondSucceeded);
+        assertEquals(new BigDecimal("5.0000"), balance(fixture));
+        assertEquals(new BigDecimal("4.0000"), reservedBalance(fixture));
+        assertEquals(new BigDecimal("1.0000"), availableBalance(fixture));
+    }
+
+    @Test
+    void issueRacingReservationCannotOversellTheSameInventoryBucket() throws Exception {
+        post(fixture, UUID.randomUUID(), "RECEIPT", leg(fixture, null, null, "AVAILABLE", "5.0000"));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        CompletableFuture<Boolean> issue = CompletableFuture.supplyAsync(() -> {
+            awaitStart(ready, start);
+            return issueSucceeds(fixture, UUID.randomUUID());
+        });
+        CompletableFuture<Boolean> reservation = CompletableFuture.supplyAsync(() -> {
+            awaitStart(ready, start);
+            return reserveSucceeds(fixture, "4.0000");
+        });
+
+        assertTrue(ready.await(10, TimeUnit.SECONDS), "Both inventory workers must reach the start barrier");
+        start.countDown();
+        boolean issueSucceeded = issue.get(30, TimeUnit.SECONDS);
+        boolean reservationSucceeded = reservation.get(30, TimeUnit.SECONDS);
+
+        assertNotEquals(issueSucceeded, reservationSucceeded);
+        BigDecimal onHand = balance(fixture);
+        BigDecimal reserved = reservedBalance(fixture);
+        assertTrue(onHand.signum() >= 0, "On-hand inventory must not become negative");
+        assertTrue(reserved.signum() >= 0, "Reserved inventory must not become negative");
+        assertTrue(onHand.compareTo(reserved) >= 0, "Reserved inventory must not exceed on-hand inventory");
+        assertEquals(new BigDecimal("1.0000"), onHand.subtract(reserved));
+        int ledgerEntries = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId());
+        assertTrue(ledgerEntries == 1 || ledgerEntries == 2,
+                "Only the receipt and, at most, one issue may be posted");
+    }
+
+    @Test
     void rejectsCrossTenantWarehouseReference() {
         Fixture otherTenant = fixture("NONE");
         WmsInventoryPostingService.PostingLeg crossTenantLeg = new WmsInventoryPostingService.PostingLeg(
@@ -232,6 +290,40 @@ class WmsInventoryPostingMySqlIntegrationTest {
         assertEquals(new BigDecimal("1.0000"), bucketBalance(fixture, secondLocation, "QUARANTINED"));
         assertEquals(7, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
     }
+    private boolean reserveSucceeds(Fixture f, String quantity) {
+        try {
+            reservationService.reserve(f.principal(), new WmsInventoryReservationService.ReservationCommand(
+                    f.warehousePublicId(), f.locationPublicId(), f.itemPublicId(), null,
+                    new BigDecimal(quantity), List.of()));
+            return true;
+        } catch (RuntimeException expected) {
+            return false;
+        }
+    }
+
+    private static void awaitStart(CountDownLatch ready, CountDownLatch start) {
+        ready.countDown();
+        try {
+            if (!start.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Concurrent inventory test start barrier timed out");
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Concurrent inventory test was interrupted", interrupted);
+        }
+    }
+
+    private BigDecimal reservedBalance(Fixture f) {
+        return jdbc.queryForObject("""
+                SELECT COALESCE(SUM(reserved_qty), 0.0000) FROM inventory_balances
+                WHERE tenant_id = ? AND item_id = (SELECT id FROM items WHERE public_id = ?)
+                """, BigDecimal.class, f.tenantId(), f.itemPublicId());
+    }
+
+    private BigDecimal availableBalance(Fixture f) {
+        return balance(f).subtract(reservedBalance(f));
+    }
+
     private boolean issueSucceeds(Fixture f, UUID requestId) {
         try {
             post(f, requestId, "ISSUE", leg(f, null, null, "AVAILABLE", "4.0000"));
@@ -321,7 +413,8 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 tenantId, membershipId, roleId);
         jdbc.update("""
                 INSERT INTO role_permissions (role_id, permission_id)
-                SELECT ?, id FROM permissions WHERE permission_code = 'WMS_INVENTORY_POST'
+                SELECT ?, id FROM permissions
+                WHERE permission_code IN ('WMS_INVENTORY_POST', 'WMS_INVENTORY_RESERVE')
                 """, roleId);
 
         String warehousePublicId = UUID.randomUUID().toString();
@@ -346,7 +439,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
 
         WmsAuthenticatedPrincipal principal = new WmsAuthenticatedPrincipal(userPublicId, tenantId,
                 jdbc.queryForObject("SELECT public_id FROM tenants WHERE id = ?", String.class, tenantId),
-                membershipId, membershipPublicId, Set.of("WMS_INVENTORY_POST"));
+                membershipId, membershipPublicId, Set.of("WMS_INVENTORY_POST", "WMS_INVENTORY_RESERVE"));
         return new Fixture(tenantId, tenantPublicId, userPublicId, membershipId, membershipPublicId,
                 warehousePublicId, locationPublicId, itemPublicId, principal);
     }
