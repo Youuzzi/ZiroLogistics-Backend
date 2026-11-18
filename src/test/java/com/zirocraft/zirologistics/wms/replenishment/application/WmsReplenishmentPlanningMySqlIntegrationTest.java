@@ -47,6 +47,7 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
     }
 
     @Autowired private WmsReplenishmentPlanningService service;
+    @Autowired private WmsReplenishmentTaskService taskService;
     @Autowired private WmsInventoryPostingService postingService;
     @Autowired private JdbcTemplate jdbc;
 
@@ -178,6 +179,84 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                 lines.stream().map(line -> (String) line.get("lot_public_id")).collect(java.util.stream.Collectors.toSet()));
     }
 
+
+    @Test
+    void taskLifecycleSupportsPartialConfirmationAndOneTimeAtomicReversal() {
+        receive(fixture, fixture.sourceLocationPublicId(), "10.0000");
+        String ruleId = createRule(fixture, "MIN_MAX", "3.0000", "8.0000", null);
+        Map<String, Object> task = service.plan(fixture.principal(), ruleId, null);
+        String taskId = (String) task.get("public_id");
+
+        task = taskService.release(fixture.principal(), taskId, 0L);
+        assertEquals("READY", task.get("status"));
+        task = taskService.assign(fixture.principal(), taskId, 1L,
+                fixture.principal().membershipPublicId());
+        assertEquals("ASSIGNED", task.get("status"));
+        task = taskService.start(fixture.principal(), taskId, 2L);
+        assertEquals("IN_PROGRESS", task.get("status"));
+
+        var first = new WmsReplenishmentTaskService.ConfirmCommand(
+                UUID.randomUUID(), 1, new BigDecimal("3.0000"), List.of(), "Partial move");
+        task = taskService.confirm(fixture.principal(), taskId, first);
+        assertEquals("IN_PROGRESS", task.get("status"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> afterFirst = (List<Map<String, Object>>) task.get("lines");
+        assertEquals(new BigDecimal("3.0000"), afterFirst.getFirst().get("confirmed_qty"));
+        assertEquals("PARTIALLY_COMPLETED", afterFirst.getFirst().get("status"));
+
+        var second = new WmsReplenishmentTaskService.ConfirmCommand(
+                UUID.randomUUID(), 1, new BigDecimal("5.0000"), List.of(), "Complete move");
+        task = taskService.confirm(fixture.principal(), taskId, second);
+        assertEquals("COMPLETED", task.get("status"));
+        assertEquals(new BigDecimal("2.0000"), onHand(fixture, fixture.sourceLocationPublicId()));
+        assertEquals(new BigDecimal("8.0000"), onHand(fixture, fixture.destinationLocationPublicId()));
+        assertEquals(4, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id=? AND movement_type='TRANSFER'
+                """, fixture.tenantId()));
+
+        String firstConfirmation = jdbc.queryForObject("""
+                SELECT public_id FROM replenishment_confirmations
+                WHERE tenant_id=? AND request_id=? AND confirmation_type='MOVE'
+                """, String.class, fixture.tenantId(), first.requestId().toString());
+        task = taskService.reverse(fixture.principal(), firstConfirmation,
+                new WmsReplenishmentTaskService.ReverseCommand(UUID.randomUUID(), "Reverse first partial move"));
+        assertEquals("IN_PROGRESS", task.get("status"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> afterReverse = (List<Map<String, Object>>) task.get("lines");
+        assertEquals(new BigDecimal("5.0000"), afterReverse.getFirst().get("confirmed_qty"));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture, fixture.sourceLocationPublicId()));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture, fixture.destinationLocationPublicId()));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM replenishment_confirmations
+                WHERE tenant_id=? AND reverses_confirmation_id=(
+                    SELECT id FROM replenishment_confirmations WHERE tenant_id=? AND public_id=?
+                )
+                """, fixture.tenantId(), fixture.tenantId(), firstConfirmation));
+        assertThrows(IllegalStateException.class, () -> taskService.reverse(fixture.principal(),
+                firstConfirmation, new WmsReplenishmentTaskService.ReverseCommand(
+                        UUID.randomUUID(), "Duplicate reversal")));
+    }
+
+    @Test
+    void confirmationRejectsQuantityBeyondRemainingPlanWithoutPostingStock() {
+        receive(fixture, fixture.sourceLocationPublicId(), "10.0000");
+        String ruleId = createRule(fixture, "MIN_MAX", "3.0000", "8.0000", null);
+        Map<String, Object> task = service.plan(fixture.principal(), ruleId, null);
+        String taskId = (String) task.get("public_id");
+        taskService.release(fixture.principal(), taskId, 0L);
+        taskService.assign(fixture.principal(), taskId, 1L, fixture.principal().membershipPublicId());
+        taskService.start(fixture.principal(), taskId, 2L);
+
+        assertThrows(IllegalArgumentException.class, () -> taskService.confirm(fixture.principal(), taskId,
+                new WmsReplenishmentTaskService.ConfirmCommand(
+                        UUID.randomUUID(), 1, new BigDecimal("9.0000"), List.of(), "Too much")));
+        assertEquals(new BigDecimal("10.0000"), onHand(fixture, fixture.sourceLocationPublicId()));
+        assertEquals(new BigDecimal("0.0000"), onHand(fixture, fixture.destinationLocationPublicId()));
+        assertEquals(0, count("SELECT COUNT(*) FROM replenishment_confirmations WHERE tenant_id=?",
+                fixture.tenantId()));
+    }
+
     private String createRule(Fixture f, String type, String minimum, String target, String maximum) {
         Map<String, Object> rule = service.create(f.principal(),
                 ruleCommand(f, type, minimum, target, maximum));
@@ -284,7 +363,10 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                 SELECT ?, id FROM permissions
                 WHERE permission_code IN (
                   'WMS_INVENTORY_POST','WMS_REPLENISHMENT_READ',
-                  'WMS_REPLENISHMENT_RULE_MANAGE','WMS_REPLENISHMENT_TASK_CREATE'
+                  'WMS_REPLENISHMENT_RULE_MANAGE','WMS_REPLENISHMENT_TASK_CREATE',
+                  'WMS_REPLENISHMENT_TASK_RELEASE','WMS_REPLENISHMENT_TASK_ASSIGN',
+                  'WMS_REPLENISHMENT_TASK_START','WMS_REPLENISHMENT_TASK_CONFIRM',
+                  'WMS_REPLENISHMENT_TASK_CANCEL','WMS_REPLENISHMENT_CONFIRMATION_REVERSE'
                 )
                 """, roleId);
         jdbc.update("""
