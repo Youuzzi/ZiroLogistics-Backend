@@ -29,6 +29,14 @@ import static org.junit.jupiter.api.Assertions.*;
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @ActiveProfiles("wms")
 class WmsReplenishmentConcurrencyMySqlIntegrationTest {
+    private static final Set<String> EXPECTED_CONCURRENCY_STATE_CONFLICTS = Set.of(
+            "Replenishment task line changed; retry the confirmation",
+            "Inventory balance changed or available quantity is insufficient",
+            "Insufficient on-hand inventory",
+            "Insufficient available inventory",
+            "This replenishment confirmation has already been reversed",
+            "Confirmation reversal or request ID already exists"
+    );
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
             .withDatabaseName("zirowms_repl_conc_test")
@@ -171,7 +179,8 @@ class WmsReplenishmentConcurrencyMySqlIntegrationTest {
                 return true;
             } catch (IllegalStateException | IllegalArgumentException expectedConcurrencyConflict) {
                 String message = expectedConcurrencyConflict.getMessage();
-                boolean expectedStateConflict = expectedConcurrencyConflict instanceof IllegalStateException;
+                boolean expectedStateConflict = expectedConcurrencyConflict instanceof IllegalStateException
+                        && message != null && EXPECTED_CONCURRENCY_STATE_CONFLICTS.contains(message);
                 boolean expectedQuantityConflict = expectedConcurrencyConflict instanceof IllegalArgumentException
                         && "Confirmation quantity exceeds the remaining planned quantity".equals(message);
                 if (!expectedStateConflict && !expectedQuantityConflict) throw expectedConcurrencyConflict;
