@@ -169,7 +169,7 @@ class WmsReplenishmentConcurrencyMySqlIntegrationTest {
             try {
                 action.run();
                 return true;
-            } catch (RuntimeException expectedConflict) {
+            } catch (IllegalStateException expectedConcurrencyConflict) {
                 return false;
             }
         };
