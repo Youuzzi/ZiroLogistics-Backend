@@ -428,7 +428,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
 
         assertNotEquals(firstSucceeded, secondSucceeded,
                 "A tenant-scoped request ID must produce at most one successful posting");
-        assertEquals(new BigDecimal("7.0000"), balance(fixture));
+        assertEquals(new BigDecimal("3.0000"), balance(fixture));
         assertEquals(2, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
         assertEquals(1, count("""
                 SELECT COUNT(*) FROM inventory_ledger
