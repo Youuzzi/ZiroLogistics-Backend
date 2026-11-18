@@ -221,12 +221,13 @@ public class WmsReplenishmentTaskService {
         BigDecimal newConfirmed = decimal(line.get("confirmed_qty")).add(quantity);
         String lineStatus = newConfirmed.compareTo(decimal(line.get("planned_qty"))) == 0
                 ? "COMPLETED" : "PARTIALLY_COMPLETED";
-        jdbc.update("""
+        int lineChanged = jdbc.update("""
                 UPDATE replenishment_task_lines SET confirmed_qty=?, status=?, updated_at=UTC_TIMESTAMP(6)
                 WHERE id=? AND tenant_id=? AND confirmed_qty=? AND status IN ('PENDING','IN_PROGRESS','PARTIALLY_COMPLETED')
                 """, newConfirmed, lineStatus, number(line, "id"), a.tenantId(), decimal(line.get("confirmed_qty")));
+        if (lineChanged != 1) throw new IllegalStateException("Replenishment task line changed; retry the confirmation");
         refreshTaskStatus(a.tenantId(), number(task, "id"));
-        audit(a, taskPublicId, "CONFIRM", Map.of("linePublicId", command.linePublicId(),
+        audit(a, taskPublicId, "CONFIRM", Map.of("lineNumber", command.lineNumber(),
                         "confirmedQty", decimal(line.get("confirmed_qty")).toPlainString()),
                 Map.of("confirmationPublicId", confirmationPublicId, "confirmedQty", quantity.toPlainString(),
                         "lineStatus", lineStatus));
