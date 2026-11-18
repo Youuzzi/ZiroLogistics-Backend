@@ -601,7 +601,8 @@ class WmsInventoryPostingMySqlIntegrationTest {
         jdbc.update("""
                 INSERT INTO role_permissions (role_id, permission_id)
                 SELECT ?, id FROM permissions
-                WHERE permission_code IN ('WMS_INVENTORY_POST', 'WMS_INVENTORY_RESERVE', 'WMS_TRANSFER_READ',\n                  'WMS_TRANSFER_CREATE', 'WMS_TRANSFER_RELEASE', 'WMS_TRANSFER_DISPATCH', 'WMS_TRANSFER_RECEIVE')
+                WHERE permission_code IN ('WMS_INVENTORY_POST', 'WMS_INVENTORY_RESERVE', 'WMS_TRANSFER_READ',
+                  'WMS_TRANSFER_CREATE', 'WMS_TRANSFER_RELEASE', 'WMS_TRANSFER_DISPATCH', 'WMS_TRANSFER_RECEIVE')
                 """, roleId);
 
         String warehousePublicId = UUID.randomUUID().toString();
@@ -626,12 +627,17 @@ class WmsInventoryPostingMySqlIntegrationTest {
 
         WmsAuthenticatedPrincipal principal = new WmsAuthenticatedPrincipal(userPublicId, tenantId,
                 jdbc.queryForObject("SELECT public_id FROM tenants WHERE id = ?", String.class, tenantId),
-                membershipId, membershipPublicId, Set.of("WMS_INVENTORY_POST", "WMS_INVENTORY_RESERVE",\n                "WMS_TRANSFER_READ", "WMS_TRANSFER_CREATE", "WMS_TRANSFER_RELEASE",\n                "WMS_TRANSFER_DISPATCH", "WMS_TRANSFER_RECEIVE"));
+                membershipId, membershipPublicId, Set.of("WMS_INVENTORY_POST", "WMS_INVENTORY_RESERVE",
+                "WMS_TRANSFER_READ", "WMS_TRANSFER_CREATE", "WMS_TRANSFER_RELEASE",
+                "WMS_TRANSFER_DISPATCH", "WMS_TRANSFER_RECEIVE"));
         return new Fixture(tenantId, tenantPublicId, userPublicId, membershipId, membershipPublicId,
                 warehousePublicId, locationPublicId, itemPublicId, principal);
     }
 
-    private record TransferFixture(String transferPublicId, String allocationPublicId,\n                                   String destinationWarehousePublicId, String destinationLocationPublicId) {}\n\n    private record Fixture(long tenantId, String tenantPublicId, String userPublicId, long membershipId,
+    private record TransferFixture(String transferPublicId, String allocationPublicId,
+                                   String destinationWarehousePublicId, String destinationLocationPublicId) {}
+
+    private record Fixture(long tenantId, String tenantPublicId, String userPublicId, long membershipId,
                            String membershipPublicId, String warehousePublicId, String locationPublicId,
                            String itemPublicId, WmsAuthenticatedPrincipal principal) {}
 }
