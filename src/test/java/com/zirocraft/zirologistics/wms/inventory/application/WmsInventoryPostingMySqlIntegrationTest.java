@@ -404,6 +404,104 @@ class WmsInventoryPostingMySqlIntegrationTest {
         }
     }
 
+    @Test
+    void simultaneousDuplicateRequestIdsApplyInventoryMovementOnlyOnce() throws Exception {
+        post(fixture, UUID.randomUUID(), "RECEIPT", leg(fixture, null, null, "AVAILABLE", "5.0000"));
+        UUID requestId = UUID.randomUUID();
+        WmsInventoryPostingService.PostingLeg movement =
+                leg(fixture, null, null, "AVAILABLE", "2.0000");
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        CompletableFuture<Boolean> first = CompletableFuture.supplyAsync(() -> {
+            awaitRequestStart(ready, start);
+            return postRequestSucceeds(fixture, requestId, movement);
+        });
+        CompletableFuture<Boolean> second = CompletableFuture.supplyAsync(() -> {
+            awaitRequestStart(ready, start);
+            return postRequestSucceeds(fixture, requestId, movement);
+        });
+
+        assertTrue(ready.await(10, TimeUnit.SECONDS), "Both duplicate-request workers must reach the barrier");
+        start.countDown();
+        boolean firstSucceeded = first.get(30, TimeUnit.SECONDS);
+        boolean secondSucceeded = second.get(30, TimeUnit.SECONDS);
+
+        assertNotEquals(firstSucceeded, secondSucceeded,
+                "A tenant-scoped request ID must produce at most one successful posting");
+        assertEquals(new BigDecimal("7.0000"), balance(fixture));
+        assertEquals(2, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND request_id = ?
+                """, fixture.tenantId(), requestId.toString()));
+    }
+
+    @Test
+    void reusingInventoryRequestIdWithDifferentPayloadCannotApplySecondMovement() {
+        UUID requestId = UUID.randomUUID();
+        post(fixture, requestId, "RECEIPT", leg(fixture, null, null, "AVAILABLE", "5.0000"));
+
+        IllegalStateException conflict = assertThrows(IllegalStateException.class,
+                () -> post(fixture, requestId, "ISSUE",
+                        leg(fixture, null, null, "AVAILABLE", "2.0000")));
+
+        assertEquals("The inventory request ID has already been posted", conflict.getMessage());
+        assertEquals(new BigDecimal("5.0000"), balance(fixture));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND request_id = ?
+                """, fixture.tenantId(), requestId.toString()));
+    }
+
+    @Test
+    void failedInventoryRequestCanBeRetriedAfterItsPreconditionIsCorrected() {
+        UUID requestId = UUID.randomUUID();
+        WmsInventoryPostingService.PostingLeg issue =
+                leg(fixture, null, null, "AVAILABLE", "2.0000");
+
+        assertThrows(IllegalStateException.class, () -> post(fixture, requestId, "ISSUE", issue));
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(fixture));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND request_id = ?
+                """, fixture.tenantId(), requestId.toString()));
+
+        post(fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "3.0000"));
+        post(fixture, requestId, "ISSUE", issue);
+
+        assertEquals(new BigDecimal("1.0000"), balance(fixture));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND request_id = ?
+                """, fixture.tenantId(), requestId.toString()));
+    }
+
+    private boolean postRequestSucceeds(Fixture f, UUID requestId,
+                                        WmsInventoryPostingService.PostingLeg movement) {
+        try {
+            post(f, requestId, "ISSUE", movement);
+            return true;
+        } catch (IllegalStateException duplicate) {
+            if (!"The inventory request ID has already been posted".equals(duplicate.getMessage())) {
+                throw duplicate;
+            }
+            return false;
+        }
+    }
+
+    private void awaitRequestStart(CountDownLatch ready, CountDownLatch start) {
+        try {
+            ready.countDown();
+            if (!start.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Duplicate-request start barrier timed out");
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Duplicate-request worker was interrupted", interrupted);
+        }
+    }
+
     private void post(Fixture f, UUID requestId, String movement, WmsInventoryPostingService.PostingLeg leg) {
         postingService.post(f.principal(), new WmsInventoryPostingService.PostingCommand(
                 requestId, movement, List.of(leg), "integration test"));
