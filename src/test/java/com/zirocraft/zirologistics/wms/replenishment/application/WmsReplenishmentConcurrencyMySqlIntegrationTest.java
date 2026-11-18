@@ -31,9 +31,9 @@ import static org.junit.jupiter.api.Assertions.*;
 class WmsReplenishmentConcurrencyMySqlIntegrationTest {
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
-            .withDatabaseName("zirowms_replenishment_concurrency_test")
-            .withUsername("zirowms_replenishment_concurrency_test")
-            .withPassword("zirowms_replenishment_concurrency_test");
+            .withDatabaseName("zirowms_repl_conc_test")
+            .withUsername("zirowms_repl_conc_test")
+            .withPassword("zirowms_repl_conc_test");
 
     @DynamicPropertySource
     static void configureDatabase(DynamicPropertyRegistry registry) {
