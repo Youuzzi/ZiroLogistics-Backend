@@ -562,7 +562,7 @@ public class WmsInventoryPostingService {
                 if (source.warehouseId() != destination.warehouseId()) {
                     throw new IllegalArgumentException("Intra-warehouse TRANSFER cannot cross warehouses; use the inter-warehouse transfer workflow");
                 }
-                if (source.locationId() == destination.locationId()) {
+                if (Objects.equals(source.locationId(), destination.locationId())) {
                     throw new IllegalArgumentException("Transfer must change physical location");
                 }
                 if (!source.stockStatus().equals(destination.stockStatus())) {
