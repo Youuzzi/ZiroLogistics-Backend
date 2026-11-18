@@ -159,21 +159,26 @@ public class WmsReplenishmentTaskService {
             throw new IllegalArgumentException("Non-serial replenishment lines cannot include serial identities");
         }
 
-        List<WmsInventoryPostingService.PostingLeg> legs = new ArrayList<>();
-        for (String serialPublicId : serials) {
-            String serialId = required(serialPublicId, "Serial public ID");
-            legs.add(postingLeg(line, serialId, BigDecimal.ONE));
-            legs.add(destinationPostingLeg(line, serialId, BigDecimal.ONE));
-        }
-        if (!serialTracked) {
-            legs.add(postingLeg(line, null, quantity));
-            legs.add(destinationPostingLeg(line, null, quantity));
+        // TRANSFER accepts exactly one source/destination pair. Keep each serial
+        // movement as its own pair while the enclosing transaction remains atomic.
+        if (serialTracked) {
+            for (String serialPublicId : serials) {
+                String serialId = required(serialPublicId, "Serial public ID");
+                UUID serialRequest = UUID.nameUUIDFromBytes((command.requestId() + ":" + serialId)
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                postingService.post(a.principal(), new WmsInventoryPostingService.PostingCommand(
+                        serialRequest, "TRANSFER",
+                        List.of(postingLeg(line, serialId, BigDecimal.ONE),
+                                destinationPostingLeg(line, serialId, BigDecimal.ONE)),
+                        optional(command.notes())));
+            }
+        } else {
+            postingService.post(a.principal(), new WmsInventoryPostingService.PostingCommand(
+                    command.requestId(), "TRANSFER",
+                    List.of(postingLeg(line, null, quantity), destinationPostingLeg(line, null, quantity)),
+                    optional(command.notes())));
         }
 
-        // Posting locks and validates source/destination balances and serial state. The
-        // same transaction covers the confirmation, task counters, serial evidence and audit.
-        postingService.post(a.principal(), new WmsInventoryPostingService.PostingCommand(
-                command.requestId(), "TRANSFER", legs, optional(command.notes())));
         String confirmationPublicId = UUID.randomUUID().toString();
         try {
             jdbc.update("""
