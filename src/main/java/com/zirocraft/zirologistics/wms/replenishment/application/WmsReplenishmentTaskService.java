@@ -78,6 +78,7 @@ public class WmsReplenishmentTaskService {
             throw new IllegalArgumentException("Unsupported replenishment priority");
         List<ManualLine> validated = new ArrayList<>();
         Set<String> buckets = new HashSet<>();
+        Map<ManualSourceBucket, BigDecimal> requestedBySourceBucket = new HashMap<>();
         for (ManualTaskLine line : command.lines()) {
             if (line == null) throw new IllegalArgumentException("Task line is required");
             BigDecimal qty = quantity(line.quantity());
@@ -119,16 +120,21 @@ public class WmsReplenishmentTaskService {
                 throw new IllegalArgumentException("Serial-tracked quantities must be whole numbers");
             String key = itemId + ":" + sourceId + ":" + destinationId + ":" + Objects.toString(lotId, "0");
             if (!buckets.add(key)) throw new IllegalArgumentException("Duplicate item/location/lot bucket in manual task");
+            ManualSourceBucket sourceBucket = new ManualSourceBucket(warehouseId, sourceId, itemId, lotId);
+            requestedBySourceBucket.merge(sourceBucket, qty, BigDecimal::add);
+            validated.add(new ManualLine(itemId, sourceId, destinationId, lotId, qty, optional(line.notes())));
+        }
+        for (Map.Entry<ManualSourceBucket, BigDecimal> entry : requestedBySourceBucket.entrySet()) {
+            ManualSourceBucket bucket = entry.getKey();
             List<Map<String, Object>> stock = jdbc.queryForList("""
                     SELECT id, available_qty FROM inventory_balances
                     WHERE tenant_id=? AND warehouse_id=? AND location_id=? AND item_id=?
                       AND stock_status='AVAILABLE' AND lot_key=COALESCE(?,0) FOR UPDATE
-                    """, a.tenantId(), warehouseId, sourceId, itemId, lotId);
+                    """, a.tenantId(), bucket.warehouseId(), bucket.sourceId(), bucket.itemId(), bucket.lotId());
             BigDecimal available = stock.stream().map(row -> decimal(row.get("available_qty")))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            if (available.compareTo(qty) < 0)
-                throw new IllegalArgumentException("Requested quantity exceeds available source stock");
-            validated.add(new ManualLine(itemId, sourceId, destinationId, lotId, qty, optional(line.notes())));
+            if (available.compareTo(entry.getValue()) < 0)
+                throw new IllegalArgumentException("Combined requested quantity exceeds available source stock");
         }
         String taskPublicId = UUID.randomUUID().toString();
         String taskNumber = "RPL-" + java.time.LocalDate.now() + "-" + taskPublicId.substring(0, 8).toUpperCase(Locale.ROOT);
@@ -707,6 +713,7 @@ public class WmsReplenishmentTaskService {
     public record ManualTaskLine(String itemPublicId, String sourceLocationPublicId,
                                  String destinationLocationPublicId, String lotPublicId,
                                  BigDecimal quantity, String notes) {}
+    private record ManualSourceBucket(long warehouseId, long sourceId, long itemId, Long lotId) {}
     private record ManualLine(long itemId, long sourceId, long destinationId, Long lotId,
                               BigDecimal quantity, String notes) {}
     public record ConfirmCommand(UUID requestId, Integer lineNumber, BigDecimal quantity,
