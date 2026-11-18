@@ -1121,7 +1121,7 @@ class WmsStockCountMySqlIntegrationTest {
             assertTrue(ready.await(10, TimeUnit.SECONDS),
                     "Both independent database workers must reach the start barrier");
             start.countDown();
-            return List.of(one.get(30, TimeUnit.SECONDS), two.get(30, TimeUnit.SECONDS));
+            return java.util.Arrays.asList(one.get(30, TimeUnit.SECONDS), two.get(30, TimeUnit.SECONDS));
         } finally {
             start.countDown();
             executor.shutdownNow();
