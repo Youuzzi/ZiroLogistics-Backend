@@ -93,8 +93,9 @@ public class WmsReplenishmentTaskService {
             throw new IllegalStateException("Only a released READY task can be assigned");
         }
         Map<String, Object> member = requiredRow("""
-                SELECT id FROM tenant_memberships
-                WHERE tenant_id=? AND public_id=? AND status='ACTIVE'
+                SELECT m.id FROM tenant_memberships m
+                JOIN users u ON u.id=m.user_id AND u.status='ACTIVE'
+                WHERE m.tenant_id=? AND m.public_id=? AND m.status='ACTIVE'
                 """, a.tenantId(), required(assigneeMembershipPublicId, "Assignee membership public ID"));
         int changed = jdbc.update("""
                 UPDATE replenishment_tasks SET assigned_to_membership_id=?, status='ASSIGNED',
@@ -246,7 +247,7 @@ public class WmsReplenishmentTaskService {
         lockTenant(principal);
         Access a = access(principal, "WMS_REPLENISHMENT_CONFIRMATION_REVERSE");
         Map<String, Object> original = requiredRow("""
-                SELECT c.*, l.planned_qty, l.confirmed_qty AS line_confirmed_qty,
+                SELECT c.*, l.planned_qty, l.confirmed_qty AS line_confirmed_qty, t.status AS task_status,
                        i.tracking_method, i.public_id AS item_public_id,
                        w.public_id AS warehouse_public_id,
                        sl.public_id AS source_location_public_id,
@@ -254,6 +255,7 @@ public class WmsReplenishmentTaskService {
                        lot.public_id AS lot_public_id
                 FROM replenishment_confirmations c
                 JOIN replenishment_task_lines l ON l.id=c.replenishment_task_line_id AND l.tenant_id=c.tenant_id
+                JOIN replenishment_tasks t ON t.id=c.replenishment_task_id AND t.tenant_id=c.tenant_id
                 JOIN items i ON i.id=c.item_id AND i.tenant_id=c.tenant_id
                 JOIN warehouses w ON w.id=c.warehouse_id AND w.tenant_id=c.tenant_id
                 JOIN warehouse_locations sl ON sl.id=c.source_location_id AND sl.tenant_id=c.tenant_id
@@ -332,7 +334,8 @@ public class WmsReplenishmentTaskService {
         BigDecimal adjusted = decimal(original.get("line_confirmed_qty"))
                 .subtract(decimal(original.get("confirmed_qty")));
         if (adjusted.signum() < 0) throw new IllegalStateException("Reversal would make confirmed quantity negative");
-        String status = adjusted.signum() == 0 ? "IN_PROGRESS" :
+        String status = "CANCELLED".equals(string(original, "task_status")) ? "CANCELLED" :
+                adjusted.signum() == 0 ? "IN_PROGRESS" :
                 adjusted.compareTo(decimal(original.get("planned_qty"))) == 0 ? "COMPLETED" : "PARTIALLY_COMPLETED";
         jdbc.update("""
                 UPDATE replenishment_task_lines SET confirmed_qty=?, status=?, updated_at=UTC_TIMESTAMP(6)
