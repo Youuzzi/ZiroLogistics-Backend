@@ -84,7 +84,8 @@ public class WmsReplenishmentTaskService {
             Map<String, Object> item = requiredRow("""
                     SELECT id, tracking_method, status, is_stock_item FROM items WHERE tenant_id=? AND public_id=?
                     """, a.tenantId(), required(line.itemPublicId(), "Item public ID"));
-            if (!"ACTIVE".equals(string(item, "status")) || !Boolean.TRUE.equals(item.get("is_stock_item")))
+            if (!"ACTIVE".equals(string(item, "status")) || !(item.get("is_stock_item") instanceof Boolean b ? b
+                    : item.get("is_stock_item") instanceof Number n && n.intValue() != 0))
                 throw new IllegalArgumentException("Replenishment item must be an active stock item");
             long itemId = number(item, "id");
             Map<String, Object> source = requiredRow("""
