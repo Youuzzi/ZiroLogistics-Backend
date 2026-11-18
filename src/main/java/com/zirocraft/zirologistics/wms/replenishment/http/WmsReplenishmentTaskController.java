@@ -41,6 +41,19 @@ public class WmsReplenishmentTaskController {
         return service.get(principal(authentication), taskPublicId);
     }
 
+    @PostMapping("/api/wms/v1/tenants/current/replenishment-tasks")
+    public Map<String, Object> createManual(Authentication authentication,
+                                             @Valid @RequestBody ManualTaskRequest request) {
+        List<WmsReplenishmentTaskService.ManualTaskLine> lines = request.lines().stream()
+                .map(line -> new WmsReplenishmentTaskService.ManualTaskLine(
+                        line.itemPublicId(), line.sourceLocationPublicId(), line.destinationLocationPublicId(),
+                        line.lotPublicId(), line.quantity(), line.notes()))
+                .toList();
+        return service.createManual(principal(authentication),
+                new WmsReplenishmentTaskService.ManualTaskCommand(
+                        request.warehousePublicId(), request.priority(), request.notes(), lines));
+    }
+
     @PostMapping("/api/wms/v1/tenants/current/replenishment-tasks/{taskPublicId}/release")
     public Map<String, Object> release(Authentication authentication, @PathVariable String taskPublicId,
                                        @Valid @RequestBody VersionRequest request) {
@@ -89,6 +102,17 @@ public class WmsReplenishmentTaskController {
         return principal;
     }
 
+    public record ManualTaskRequest(@NotBlank @Size(max = 36) String warehousePublicId,
+                                    @Size(max = 20) String priority,
+                                    @Size(max = 1000) String notes,
+                                    @NotNull @Size(min = 1, max = 100) List<@Valid ManualTaskLineRequest> lines) {}
+    public record ManualTaskLineRequest(@NotBlank @Size(max = 36) String itemPublicId,
+                                        @NotBlank @Size(max = 36) String sourceLocationPublicId,
+                                        @NotBlank @Size(max = 36) String destinationLocationPublicId,
+                                        @Size(max = 36) String lotPublicId,
+                                        @NotNull @DecimalMin("0.0001") @Digits(integer = 15, fraction = 4)
+                                        BigDecimal quantity,
+                                        @Size(max = 1000) String notes) {}
     public record VersionRequest(@NotNull Long version) {}
     public record AssignRequest(@NotNull Long version,
                                 @NotBlank @Size(max = 36) String assigneeMembershipPublicId) {}
