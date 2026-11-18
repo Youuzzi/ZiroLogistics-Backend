@@ -253,7 +253,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
         TransferFixture transfer = createReleasedSerialTransfer(serialFixture, serialPublicId);
 
         boolean[] outcomes = race(
-                () -> dispatchSerialSucceeds(transfer, serialPublicId),
+                () -> dispatchSerialSucceeds(serialFixture, transfer, serialPublicId),
                 () -> issueSerialSucceeds(serialFixture, serialPublicId));
 
         assertNotEquals(outcomes[0], outcomes[1],
@@ -488,9 +488,9 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 destinationWarehousePublicId, destinationLocationPublicId);
     }
 
-    private boolean dispatchSerialSucceeds(TransferFixture transfer, String serialPublicId) {
+    private boolean dispatchSerialSucceeds(Fixture f, TransferFixture transfer, String serialPublicId) {
         try {
-            transferService.dispatch(fixture.principal(), transfer.transferPublicId(),
+            transferService.dispatch(f.principal(), transfer.transferPublicId(),
                     new WmsInterWarehouseTransferService.DispatchCommand(UUID.randomUUID(), List.of(
                             new WmsInterWarehouseTransferService.DispatchAllocation(
                                     transfer.allocationPublicId(), BigDecimal.ONE, List.of(serialPublicId))), "dispatch race"));
