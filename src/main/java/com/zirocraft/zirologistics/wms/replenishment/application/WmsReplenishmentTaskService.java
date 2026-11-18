@@ -208,6 +208,7 @@ public class WmsReplenishmentTaskService {
                           (tenant_id, replenishment_task_line_id, replenishment_task_id, warehouse_id,
                            item_id, source_location_id, destination_location_id, serial_id, status, moved_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'MOVED', UTC_TIMESTAMP(6))
+                        ON DUPLICATE KEY UPDATE status='MOVED', moved_at=UTC_TIMESTAMP(6)
                         """, a.tenantId(), number(line, "id"), number(task, "id"), number(line, "warehouse_id"),
                         number(line, "item_id"), number(line, "source_location_id"),
                         number(line, "destination_location_id"), serialId);
@@ -396,6 +397,12 @@ public class WmsReplenishmentTaskService {
                     UPDATE replenishment_tasks SET status='COMPLETED', completed_at=UTC_TIMESTAMP(6),
                         version=version+1, updated_at=UTC_TIMESTAMP(6)
                     WHERE id=? AND tenant_id=? AND status='IN_PROGRESS'
+                    """, taskId, tenantId);
+        } else {
+            jdbc.update("""
+                    UPDATE replenishment_tasks SET status='IN_PROGRESS', completed_at=NULL,
+                        version=version+1, updated_at=UTC_TIMESTAMP(6)
+                    WHERE id=? AND tenant_id=? AND status='COMPLETED'
                     """, taskId, tenantId);
         }
     }
