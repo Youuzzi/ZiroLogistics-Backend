@@ -24,6 +24,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -1027,6 +1032,114 @@ class WmsStockCountMySqlIntegrationTest {
                 """, fixture.tenantId()));
         assertEquals(0, count("SELECT COUNT(*) FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?",
                 otherTenant.tenantId(), adjustmentId));
+    }
+
+
+    @Test
+    void stockCountStartRacingWithReceiptKeepsSnapshotAndFreezeAtOneConsistentBoundary() throws Exception {
+        receive(fixture, "5.0000");
+        String countPublicId = createAndPlan(fixture);
+
+        List<RuntimeException> outcomes = race(
+                () -> stockCountService.start(fixture.principal(), countPublicId),
+                () -> receive(fixture, "1.0000"));
+
+        assertNull(outcomes.getFirst(), "Stock count start must complete successfully");
+        RuntimeException receiptFailure = outcomes.get(1);
+        if (receiptFailure != null) {
+            assertInstanceOf(IllegalStateException.class, receiptFailure);
+        }
+
+        BigDecimal snapshot = jdbc.queryForObject("""
+                SELECT l.expected_qty
+                FROM stock_count_lines l
+                JOIN stock_count_scopes s ON s.id = l.stock_count_scope_id AND s.tenant_id = l.tenant_id
+                JOIN stock_counts c ON c.id = s.stock_count_id AND c.tenant_id = s.tenant_id
+                WHERE c.tenant_id = ? AND c.public_id = ?
+                """, BigDecimal.class, fixture.tenantId(), countPublicId);
+        BigDecimal finalOnHand = onHand(fixture);
+        assertEquals(snapshot, finalOnHand,
+                "A receipt must either precede the snapshot or be rejected after the freeze");
+        assertTrue(snapshot.compareTo(new BigDecimal("5.0000")) == 0
+                        || snapshot.compareTo(new BigDecimal("6.0000")) == 0);
+        assertEquals(receiptFailure == null ? new BigDecimal("6.0000") : new BigDecimal("5.0000"), finalOnHand);
+        assertEquals(Boolean.TRUE, jdbc.queryForObject("""
+                SELECT freeze_stock FROM stock_counts WHERE tenant_id = ? AND public_id = ?
+                """, Boolean.class, fixture.tenantId(), countPublicId));
+    }
+
+    @Test
+    void adjustmentPostingRacingWithReceiptRejectsStaleBaselineWithoutPartialPosting() throws Exception {
+        receive(fixture, "5.0000");
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-RACE-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Concurrent receipt baseline validation", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("7.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, adjustmentId, "Baseline verified before concurrent receipt");
+
+        List<RuntimeException> outcomes = race(
+                () -> adjustmentService.post(approver, adjustmentId),
+                () -> receive(fixture, "1.0000"));
+
+        assertNull(outcomes.get(1), "The independent receipt must remain valid");
+        RuntimeException adjustmentFailure = outcomes.getFirst();
+        if (adjustmentFailure != null) {
+            assertInstanceOf(IllegalStateException.class, adjustmentFailure);
+            assertEquals("APPROVED", jdbc.queryForObject("""
+                    SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                    """, String.class, fixture.tenantId(), adjustmentId));
+            assertEquals(0, count("""
+                    SELECT COUNT(*) FROM inventory_ledger
+                    WHERE tenant_id = ? AND reference_type = 'INVENTORY_ADJUSTMENT'
+                    """, fixture.tenantId()));
+            assertEquals(new BigDecimal("6.0000"), onHand(fixture));
+        } else {
+            assertEquals("POSTED", jdbc.queryForObject("""
+                    SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                    """, String.class, fixture.tenantId(), adjustmentId));
+            assertEquals(1, count("""
+                    SELECT COUNT(*) FROM inventory_ledger
+                    WHERE tenant_id = ? AND reference_type = 'INVENTORY_ADJUSTMENT'
+                    """, fixture.tenantId()));
+            assertEquals(new BigDecimal("8.0000"), onHand(fixture));
+        }
+    }
+
+    private List<RuntimeException> race(Runnable first, Runnable second) throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            Future<RuntimeException> one = executor.submit(() -> runAfterBarrier(ready, start, first));
+            Future<RuntimeException> two = executor.submit(() -> runAfterBarrier(ready, start, second));
+            assertTrue(ready.await(10, TimeUnit.SECONDS),
+                    "Both independent database workers must reach the start barrier");
+            start.countDown();
+            return java.util.Arrays.asList(one.get(30, TimeUnit.SECONDS), two.get(30, TimeUnit.SECONDS));
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    private RuntimeException runAfterBarrier(
+            CountDownLatch ready, CountDownLatch start, Runnable action) throws Exception {
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Concurrency start barrier timed out");
+        }
+        try {
+            action.run();
+            return null;
+        } catch (RuntimeException failure) {
+            return failure;
+        }
     }
 
     private String createAndPlan(Fixture f) {
