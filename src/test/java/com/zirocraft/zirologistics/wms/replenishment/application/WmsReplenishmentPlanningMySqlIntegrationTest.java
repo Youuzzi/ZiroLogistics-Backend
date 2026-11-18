@@ -419,6 +419,31 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
     }
 
     @Test
+    void manualTaskAggregatesDemandAcrossDifferentDestinationsForSameSourceBucket() {
+        receive(fixture, fixture.sourceLocationPublicId(), "5.0000");
+        String secondDestinationPublicId = uuid();
+        jdbc.update("""
+                INSERT INTO warehouse_locations
+                  (public_id, tenant_id, warehouse_id, location_code, location_name, location_type, status)
+                VALUES (?, ?, ?, ?, 'Second Replenishment Destination', 'PICKING', 'ACTIVE')
+                """, secondDestinationPublicId, fixture.tenantId(), fixture.warehouseId(),
+                "DST2_" + secondDestinationPublicId.substring(0, 8));
+        int before = count("SELECT COUNT(*) FROM replenishment_tasks WHERE tenant_id=?", fixture.tenantId());
+        var command = new WmsReplenishmentTaskService.ManualTaskCommand(
+                fixture.warehousePublicId(), null, null,
+                List.of(
+                        new WmsReplenishmentTaskService.ManualTaskLine(
+                                fixture.itemPublicId(), fixture.sourceLocationPublicId(),
+                                fixture.destinationLocationPublicId(), null, new BigDecimal("3.0000"), null),
+                        new WmsReplenishmentTaskService.ManualTaskLine(
+                                fixture.itemPublicId(), fixture.sourceLocationPublicId(),
+                                secondDestinationPublicId, null, new BigDecimal("3.0000"), null)));
+        assertThrows(IllegalArgumentException.class, () -> taskService.createManual(fixture.principal(), command));
+        assertEquals(before, count("SELECT COUNT(*) FROM replenishment_tasks WHERE tenant_id=?", fixture.tenantId()));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture, fixture.sourceLocationPublicId()));
+    }
+
+    @Test
     void manualTaskCreationRequiresPersistedTaskCreatePermission() {
         Fixture restricted = fixture("NONE");
         jdbc.update("""
