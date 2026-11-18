@@ -310,6 +310,42 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                 """, serialFixture.tenantId()));
     }
 
+
+    @Test
+    void genericTransferCannotCrossWarehouseBoundary() {
+        receive(fixture, fixture.sourceLocationPublicId(), "2.0000");
+        String otherWarehousePublicId = uuid();
+        String otherLocationPublicId = uuid();
+        jdbc.update("""
+                INSERT INTO warehouses (public_id, tenant_id, warehouse_code, warehouse_name, status)
+                VALUES (?, ?, ?, 'Other Warehouse', 'ACTIVE')
+                """, otherWarehousePublicId, fixture.tenantId(),
+                "RPL_OTHER_" + otherWarehousePublicId.substring(0, 8));
+        long otherWarehouseId = jdbc.queryForObject(
+                "SELECT id FROM warehouses WHERE tenant_id=? AND public_id=?",
+                Long.class, fixture.tenantId(), otherWarehousePublicId);
+        jdbc.update("""
+                INSERT INTO warehouse_locations
+                  (public_id, tenant_id, warehouse_id, location_code, location_name, location_type, status)
+                VALUES (?, ?, ?, ?, 'Other Destination', 'STORAGE', 'ACTIVE')
+                """, otherLocationPublicId, fixture.tenantId(), otherWarehouseId,
+                "RPL_OTHER_LOC_" + otherLocationPublicId.substring(0, 8));
+
+        WmsInventoryPostingService.PostingLeg source = new WmsInventoryPostingService.PostingLeg(
+                fixture.warehousePublicId(), fixture.sourceLocationPublicId(), fixture.itemPublicId(),
+                null, null, null, "AVAILABLE", new BigDecimal("1.0000"));
+        WmsInventoryPostingService.PostingLeg destination = new WmsInventoryPostingService.PostingLeg(
+                otherWarehousePublicId, otherLocationPublicId, fixture.itemPublicId(),
+                null, null, null, "AVAILABLE", new BigDecimal("1.0000"));
+        assertThrows(IllegalArgumentException.class, () -> postingService.post(fixture.principal(),
+                new WmsInventoryPostingService.PostingCommand(
+                        UUID.randomUUID(), "TRANSFER", List.of(source, destination), "Cross-warehouse spoof")));
+
+        assertEquals(new BigDecimal("2.0000"), onHand(fixture, fixture.sourceLocationPublicId()));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER'",
+                fixture.tenantId()));
+    }
+
     private String createRule(Fixture f, String type, String minimum, String target, String maximum) {
         Map<String, Object> rule = service.create(f.principal(),
                 ruleCommand(f, type, minimum, target, maximum));
