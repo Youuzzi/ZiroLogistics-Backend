@@ -115,6 +115,45 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 fixture.tenantId()));
     }
     @Test
+    void auditFailureAfterInventoryLedgerWritesRollsBackTheEntirePosting() {
+        post(fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "5.0000"));
+
+        long beforeLedger = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId());
+        long beforeAudit = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ?",
+                fixture.tenantId());
+
+        jdbc.execute("""
+                CREATE TRIGGER wms_test_fail_inventory_audit
+                BEFORE INSERT ON tenant_audit_events
+                FOR EACH ROW
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'injected inventory audit failure'
+                """);
+        try {
+            assertThrows(RuntimeException.class, () -> postingService.post(fixture.principal(),
+                    new WmsInventoryPostingService.PostingCommand(UUID.randomUUID(), "TRANSFER",
+                            List.of(
+                                    leg(fixture, null, null, "AVAILABLE", "2.0000"),
+                                    new WmsInventoryPostingService.PostingLeg(
+                                            fixture.warehousePublicId(), createLocation(fixture),
+                                            fixture.itemPublicId(), null, null, null,
+                                            "AVAILABLE", new BigDecimal("2.0000"))),
+                            "audit rollback test")));
+        } finally {
+            jdbc.execute("DROP TRIGGER IF EXISTS wms_test_fail_inventory_audit");
+        }
+
+        assertEquals(new BigDecimal("5.0000"),
+                bucketBalance(fixture, fixture.locationPublicId(), "AVAILABLE"));
+        assertEquals(new BigDecimal("0.0000"),
+                bucketBalance(fixture, latestLocationPublicId(fixture), "AVAILABLE"));
+        assertEquals(beforeLedger,
+                count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(beforeAudit,
+                count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ?", fixture.tenantId()));
+    }
+
+    @Test
     void serialReceiptIssueAndReturnKeepSerialStateAndStockAtomic() {
         Fixture serialFixture = fixture("SERIAL");
         String serialNumber = "SN-" + UUID.randomUUID();
