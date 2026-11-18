@@ -559,8 +559,10 @@ public class WmsInventoryPostingService {
                 throw new IllegalArgumentException("Paired movement legs must match item, lot, serial and quantity");
             }
             if ("TRANSFER".equals(type)) {
-                if (source.warehouseId() == destination.warehouseId()
-                        && source.locationId() == destination.locationId()) {
+                if (source.warehouseId() != destination.warehouseId()) {
+                    throw new IllegalArgumentException("Intra-warehouse TRANSFER cannot cross warehouses; use the inter-warehouse transfer workflow");
+                }
+                if (source.locationId() == destination.locationId()) {
                     throw new IllegalArgumentException("Transfer must change physical location");
                 }
                 if (!source.stockStatus().equals(destination.stockStatus())) {
