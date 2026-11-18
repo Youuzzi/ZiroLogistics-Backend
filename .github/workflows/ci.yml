@@ -21,8 +21,59 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine validation scope
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          # Main pushes and manual runs always execute the full regression suite.
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "run_backend_tests=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          if [[ -z "$changed_files" ]]; then
+            echo "No changed files detected; defaulting to full backend validation."
+            echo "run_backend_tests=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          docs_only=true
+          while IFS= read -r file; do
+            case "$file" in
+              docs/*.md|docs/*.mdx|docs/*.rst|docs/*.txt|README.md|CONTRIBUTING.md|CHANGELOG.md)
+                ;;
+              *)
+                docs_only=false
+                break
+                ;;
+            esac
+          done <<< "$changed_files"
+
+          if [[ "$docs_only" == "true" ]]; then
+            echo "Documentation-only PR detected."
+            echo "run_backend_tests=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Backend-relevant changes detected; full regression is required."
+            echo "run_backend_tests=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate documentation diff
+        if: steps.scope.outputs.run_backend_tests == 'false'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: git diff --check "$BASE_SHA" "$HEAD_SHA"
 
       - name: Set up Java
+        if: steps.scope.outputs.run_backend_tests == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -30,7 +81,9 @@ jobs:
           cache: maven
 
       - name: Make Maven Wrapper executable
+        if: steps.scope.outputs.run_backend_tests == 'true'
         run: chmod +x mvnw
 
       - name: Run tests
+        if: steps.scope.outputs.run_backend_tests == 'true'
         run: ./mvnw --batch-mode --no-transfer-progress clean verify
