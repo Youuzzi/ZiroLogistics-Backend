@@ -158,6 +158,26 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                 ruleCommand(restricted, "MIN_MAX", "1.0000", "5.0000", null)));
     }
 
+    @Test
+    void lotTrackedPlanningCreatesOneTaskLinePerAvailableActiveLot() {
+        Fixture lotFixture = fixture("LOT");
+        String firstLot = createLot(lotFixture, "LOT-A");
+        String secondLot = createLot(lotFixture, "LOT-B");
+        receiveLot(lotFixture, lotFixture.sourceLocationPublicId(), firstLot, "2.0000");
+        receiveLot(lotFixture, lotFixture.sourceLocationPublicId(), secondLot, "3.0000");
+        String ruleId = createRule(lotFixture, "MIN_MAX", "1.0000", "5.0000", null);
+
+        Map<String, Object> task = service.plan(lotFixture.principal(), ruleId, null);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> lines = (List<Map<String, Object>>) task.get("lines");
+
+        assertEquals(2, lines.size());
+        assertEquals(List.of(new BigDecimal("2.0000"), new BigDecimal("3.0000")),
+                lines.stream().map(line -> (BigDecimal) line.get("planned_qty")).toList());
+        assertEquals(Set.of(firstLot, secondLot),
+                lines.stream().map(line -> (String) line.get("lot_public_id")).collect(java.util.stream.Collectors.toSet()));
+    }
+
     private String createRule(Fixture f, String type, String minimum, String target, String maximum) {
         Map<String, Object> rule = service.create(f.principal(),
                 ruleCommand(f, type, minimum, target, maximum));
@@ -171,6 +191,24 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                 f.destinationLocationPublicId(), "Primary replenishment", type,
                 new BigDecimal(minimum), new BigDecimal(target),
                 maximum == null ? null : new BigDecimal(maximum), "NORMAL", "integration test");
+    }
+
+    private String createLot(Fixture f, String lotNumber) {
+        String publicId = uuid();
+        jdbc.update("""
+                INSERT INTO inventory_lots (public_id, tenant_id, item_id, lot_number, status)
+                VALUES (?, ?, ?, ?, 'ACTIVE')
+                """, publicId, f.tenantId(), f.itemId(), lotNumber + "_" + publicId.substring(0, 8));
+        return publicId;
+    }
+
+    private void receiveLot(Fixture f, String locationPublicId, String lotPublicId, String quantity) {
+        postingService.post(f.principal(), new WmsInventoryPostingService.PostingCommand(
+                UUID.randomUUID(), "RECEIPT",
+                List.of(new WmsInventoryPostingService.PostingLeg(
+                        f.warehousePublicId(), locationPublicId, f.itemPublicId(),
+                        lotPublicId, null, null, "AVAILABLE", new BigDecimal(quantity))),
+                "Lot replenishment planning test receipt"));
     }
 
     private void receive(Fixture f, String locationPublicId, String quantity) {
