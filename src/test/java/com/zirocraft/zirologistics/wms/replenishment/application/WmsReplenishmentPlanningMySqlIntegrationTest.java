@@ -257,6 +257,59 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                 fixture.tenantId()));
     }
 
+
+    @Test
+    void serialConfirmationAndReversalMoveTheExactIdentityBetweenLocations() {
+        Fixture serialFixture = fixture("SERIAL");
+        String serialNumber = "RPL-SN-" + UUID.randomUUID();
+        postingService.post(serialFixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                UUID.randomUUID(), "RECEIPT",
+                List.of(new WmsInventoryPostingService.PostingLeg(
+                        serialFixture.warehousePublicId(), serialFixture.sourceLocationPublicId(),
+                        serialFixture.itemPublicId(), null, null, serialNumber,
+                        "AVAILABLE", BigDecimal.ONE)),
+                "Serial replenishment test receipt"));
+        String serialPublicId = jdbc.queryForObject("""
+                SELECT public_id FROM inventory_serials WHERE tenant_id=? AND serial_number=?
+                """, String.class, serialFixture.tenantId(), serialNumber);
+
+        String ruleId = createRule(serialFixture, "MIN_MAX", "0.0000", "1.0000", null);
+        Map<String, Object> task = service.plan(serialFixture.principal(), ruleId, null);
+        String taskId = (String) task.get("public_id");
+        taskService.release(serialFixture.principal(), taskId, 0L);
+        taskService.assign(serialFixture.principal(), taskId, 1L,
+                serialFixture.principal().membershipPublicId());
+        taskService.start(serialFixture.principal(), taskId, 2L);
+        task = taskService.confirm(serialFixture.principal(), taskId,
+                new WmsReplenishmentTaskService.ConfirmCommand(
+                        UUID.randomUUID(), 1, BigDecimal.ONE, List.of(serialPublicId), "Move exact serial"));
+        assertEquals("COMPLETED", task.get("status"));
+        assertEquals(serialFixture.destinationLocationId(), jdbc.queryForObject("""
+                SELECT current_location_id FROM inventory_serials WHERE tenant_id=? AND public_id=?
+                """, Long.class, serialFixture.tenantId(), serialPublicId));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM replenishment_confirmation_serials cs
+                JOIN replenishment_confirmations c ON c.id=cs.confirmation_id AND c.tenant_id=cs.tenant_id
+                WHERE c.tenant_id=? AND c.confirmation_type='MOVE'
+                """, serialFixture.tenantId()));
+
+        String confirmationPublicId = jdbc.queryForObject("""
+                SELECT public_id FROM replenishment_confirmations
+                WHERE tenant_id=? AND confirmation_type='MOVE'
+                """, String.class, serialFixture.tenantId());
+        task = taskService.reverse(serialFixture.principal(), confirmationPublicId,
+                new WmsReplenishmentTaskService.ReverseCommand(UUID.randomUUID(), "Return serial to source"));
+        assertEquals("IN_PROGRESS", task.get("status"));
+        assertEquals(serialFixture.sourceLocationId(), jdbc.queryForObject("""
+                SELECT current_location_id FROM inventory_serials WHERE tenant_id=? AND public_id=?
+                """, Long.class, serialFixture.tenantId(), serialPublicId));
+        assertEquals(2, count("""
+                SELECT COUNT(*) FROM replenishment_confirmation_serials cs
+                JOIN replenishment_confirmations c ON c.id=cs.confirmation_id AND c.tenant_id=cs.tenant_id
+                WHERE c.tenant_id=?
+                """, serialFixture.tenantId()));
+    }
+
     private String createRule(Fixture f, String type, String minimum, String target, String maximum) {
         Map<String, Object> rule = service.create(f.principal(),
                 ruleCommand(f, type, minimum, target, maximum));
