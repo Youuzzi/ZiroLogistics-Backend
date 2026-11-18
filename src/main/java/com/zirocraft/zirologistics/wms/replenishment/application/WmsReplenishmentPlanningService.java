@@ -216,7 +216,7 @@ public class WmsReplenishmentPlanningService {
         BigDecimal destinationOnHand = scalar("""
                 SELECT COALESCE(SUM(on_hand_qty),0)
                 FROM inventory_balances
-                WHERE tenant_id=? AND warehouse_id=? AND location_id=? AND item_id=? AND stock_status='AVAILABLE'
+                WHERE tenant_id=? AND warehouse_id=? AND location_id=? AND item_id=?
                 """, access.tenantId(), warehouseId, destinationId, itemId);
         BigDecimal desired;
         if ("MIN_MAX".equals(type)) {
