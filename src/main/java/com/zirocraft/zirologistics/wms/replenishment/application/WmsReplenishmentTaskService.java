@@ -60,6 +60,109 @@ public class WmsReplenishmentTaskService {
     }
 
     @Transactional
+    public Map<String, Object> createManual(WmsAuthenticatedPrincipal principal, ManualTaskCommand command) {
+        if (command == null || command.lines() == null || command.lines().isEmpty())
+            throw new IllegalArgumentException("At least one replenishment task line is required");
+        if (command.lines().size() > 100) throw new IllegalArgumentException("A manual task supports at most 100 lines");
+        lockTenant(principal);
+        Access a = access(principal, "WMS_REPLENISHMENT_TASK_CREATE");
+        String warehousePublicId = required(command.warehousePublicId(), "Warehouse public ID");
+        Map<String, Object> warehouse = requiredRow(
+                "SELECT id, status FROM warehouses WHERE tenant_id=? AND public_id=? FOR UPDATE",
+                a.tenantId(), warehousePublicId);
+        if (!"ACTIVE".equals(string(warehouse, "status"))) throw new IllegalArgumentException("Warehouse must be active");
+        long warehouseId = number(warehouse, "id");
+        String priority = command.priority() == null || command.priority().isBlank()
+                ? "NORMAL" : command.priority().trim().toUpperCase(Locale.ROOT);
+        if (!Set.of("LOW", "NORMAL", "HIGH", "URGENT").contains(priority))
+            throw new IllegalArgumentException("Unsupported replenishment priority");
+        List<ManualLine> validated = new ArrayList<>();
+        Set<String> buckets = new HashSet<>();
+        Map<ManualSourceBucket, BigDecimal> requestedBySourceBucket = new HashMap<>();
+        for (ManualTaskLine line : command.lines()) {
+            if (line == null) throw new IllegalArgumentException("Task line is required");
+            BigDecimal qty = quantity(line.quantity());
+            Map<String, Object> item = requiredRow("""
+                    SELECT id, tracking_method, status, is_stock_item FROM items WHERE tenant_id=? AND public_id=?
+                    """, a.tenantId(), required(line.itemPublicId(), "Item public ID"));
+            if (!"ACTIVE".equals(string(item, "status")) || !(item.get("is_stock_item") instanceof Boolean b ? b
+                    : item.get("is_stock_item") instanceof Number n && n.intValue() != 0))
+                throw new IllegalArgumentException("Replenishment item must be an active stock item");
+            long itemId = number(item, "id");
+            Map<String, Object> source = requiredRow("""
+                    SELECT id, status FROM warehouse_locations
+                    WHERE tenant_id=? AND warehouse_id=? AND public_id=?
+                    """, a.tenantId(), warehouseId, required(line.sourceLocationPublicId(), "Source location public ID"));
+            Map<String, Object> destination = requiredRow("""
+                    SELECT id, status FROM warehouse_locations
+                    WHERE tenant_id=? AND warehouse_id=? AND public_id=?
+                    """, a.tenantId(), warehouseId, required(line.destinationLocationPublicId(), "Destination location public ID"));
+            if (!"ACTIVE".equals(string(source, "status")) || !"ACTIVE".equals(string(destination, "status")))
+                throw new IllegalArgumentException("Source and destination locations must be active");
+            long sourceId = number(source, "id"), destinationId = number(destination, "id");
+            if (sourceId == destinationId) throw new IllegalArgumentException("Source and destination locations must differ");
+            String tracking = string(item, "tracking_method");
+            boolean lotTracked = Set.of("LOT", "LOT_AND_SERIAL").contains(tracking);
+            String lotPublicId = line.lotPublicId() == null || line.lotPublicId().isBlank()
+                    ? null : line.lotPublicId().trim();
+            Long lotId = null;
+            if (lotTracked && lotPublicId == null) throw new IllegalArgumentException("Lot-tracked items require an explicit lot");
+            if (!lotTracked && lotPublicId != null) throw new IllegalArgumentException("Non-lot-tracked items cannot specify a lot");
+            if (lotPublicId != null) {
+                Map<String, Object> lot = requiredRow("""
+                        SELECT id, status FROM inventory_lots WHERE tenant_id=? AND item_id=? AND public_id=?
+                        """, a.tenantId(), itemId, lotPublicId);
+                if (!"ACTIVE".equals(string(lot, "status"))) throw new IllegalArgumentException("Lot must be active");
+                lotId = number(lot, "id");
+            }
+            if (Set.of("SERIAL", "LOT_AND_SERIAL").contains(tracking)
+                    && qty.stripTrailingZeros().scale() > 0)
+                throw new IllegalArgumentException("Serial-tracked quantities must be whole numbers");
+            String key = itemId + ":" + sourceId + ":" + destinationId + ":" + Objects.toString(lotId, "0");
+            if (!buckets.add(key)) throw new IllegalArgumentException("Duplicate item/location/lot bucket in manual task");
+            ManualSourceBucket sourceBucket = new ManualSourceBucket(warehouseId, sourceId, itemId, lotId);
+            requestedBySourceBucket.merge(sourceBucket, qty, BigDecimal::add);
+            validated.add(new ManualLine(itemId, sourceId, destinationId, lotId, qty, optional(line.notes())));
+        }
+        for (Map.Entry<ManualSourceBucket, BigDecimal> entry : requestedBySourceBucket.entrySet()) {
+            ManualSourceBucket bucket = entry.getKey();
+            List<Map<String, Object>> stock = jdbc.queryForList("""
+                    SELECT id, available_qty FROM inventory_balances
+                    WHERE tenant_id=? AND warehouse_id=? AND location_id=? AND item_id=?
+                      AND stock_status='AVAILABLE' AND lot_key=COALESCE(?,0) FOR UPDATE
+                    """, a.tenantId(), bucket.warehouseId(), bucket.sourceId(), bucket.itemId(), bucket.lotId());
+            BigDecimal available = stock.stream().map(row -> decimal(row.get("available_qty")))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (available.compareTo(entry.getValue()) < 0)
+                throw new IllegalArgumentException("Combined requested quantity exceeds available source stock");
+        }
+        String taskPublicId = UUID.randomUUID().toString();
+        String taskNumber = "RPL-" + java.time.LocalDate.now() + "-" + taskPublicId.substring(0, 8).toUpperCase(Locale.ROOT);
+        jdbc.update("""
+                INSERT INTO replenishment_tasks
+                  (public_id, tenant_id, warehouse_id, replenishment_rule_id, task_number,
+                   task_type, status, priority, created_by_membership_id, planned_at, notes)
+                VALUES (?, ?, ?, NULL, ?, 'MANUAL', 'READY', ?, ?, UTC_TIMESTAMP(6), ?)
+                """, taskPublicId, a.tenantId(), warehouseId, taskNumber, priority,
+                a.membershipId(), optional(command.notes()));
+        long taskId = requiredLong("SELECT id FROM replenishment_tasks WHERE tenant_id=? AND public_id=?",
+                a.tenantId(), taskPublicId);
+        int lineNumber = 0;
+        for (ManualLine line : validated) {
+            jdbc.update("""
+                    INSERT INTO replenishment_task_lines
+                      (tenant_id, replenishment_task_id, warehouse_id, item_id, source_location_id,
+                       destination_location_id, lot_id, line_number, planned_qty, status, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
+                    """, a.tenantId(), taskId, warehouseId, line.itemId(), line.sourceId(),
+                    line.destinationId(), line.lotId(), ++lineNumber, line.quantity(), line.notes());
+        }
+        audit(a, taskPublicId, "CREATE_MANUAL", null,
+                Map.of("taskType", "MANUAL", "lineCount", validated.size(), "priority", priority));
+        return taskView(a.tenantId(), taskPublicId);
+    }
+
+    @Transactional
     public Map<String, Object> release(WmsAuthenticatedPrincipal principal, String taskPublicId,
                                        long expectedVersion) {
         lockTenant(principal);
@@ -606,6 +709,13 @@ public class WmsReplenishmentTaskService {
         return Objects.toString(row.get(key), null);
     }
 
+    public record ManualTaskCommand(String warehousePublicId, String priority, String notes, List<ManualTaskLine> lines) {}
+    public record ManualTaskLine(String itemPublicId, String sourceLocationPublicId,
+                                 String destinationLocationPublicId, String lotPublicId,
+                                 BigDecimal quantity, String notes) {}
+    private record ManualSourceBucket(long warehouseId, long sourceId, long itemId, Long lotId) {}
+    private record ManualLine(long itemId, long sourceId, long destinationId, Long lotId,
+                              BigDecimal quantity, String notes) {}
     public record ConfirmCommand(UUID requestId, Integer lineNumber, BigDecimal quantity,
                                  List<String> serialPublicIds, String notes) {}
     public record ReverseCommand(UUID requestId, String notes) {}
