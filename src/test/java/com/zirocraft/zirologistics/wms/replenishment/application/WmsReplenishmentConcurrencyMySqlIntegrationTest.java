@@ -169,7 +169,12 @@ class WmsReplenishmentConcurrencyMySqlIntegrationTest {
             try {
                 action.run();
                 return true;
-            } catch (IllegalStateException expectedConcurrencyConflict) {
+            } catch (IllegalStateException | IllegalArgumentException expectedConcurrencyConflict) {
+                String message = expectedConcurrencyConflict.getMessage();
+                boolean expectedStateConflict = expectedConcurrencyConflict instanceof IllegalStateException;
+                boolean expectedQuantityConflict = expectedConcurrencyConflict instanceof IllegalArgumentException
+                        && "Confirmation quantity exceeds the remaining planned quantity".equals(message);
+                if (!expectedStateConflict && !expectedQuantityConflict) throw expectedConcurrencyConflict;
                 return false;
             }
         };
