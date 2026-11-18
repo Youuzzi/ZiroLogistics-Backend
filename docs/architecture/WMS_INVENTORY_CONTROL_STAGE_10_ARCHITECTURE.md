@@ -36,7 +36,7 @@ The frozen V1 schema already contains the principal tables for this stage:
 
 V1 defines count types FULL_COUNT, CYCLE_COUNT, SPOT_COUNT; count modes BLIND, OPEN; the count, line and scope lifecycle states; the adjustment document lifecycle and reason types; and MIN_MAX / MANUAL replenishment rules. Stage 10 must use those allowlists and columns as written.
 
-**V1–V22 are immutable.** Do not edit an existing migration, regenerate the baseline, or create duplicate count/adjustment/replenishment tables. Any required schema extension must be an additive V23+ migration and must identify the exact V1 gap it closes.
+**V1–V25 are immutable.** Do not edit an existing migration, regenerate the baseline, or create duplicate count/adjustment/replenishment tables. Any future schema extension must be an additive V26+ migration and must identify the exact V1 gap it closes.
 
 ### 2.1 Proven schema gap: serialized count observations
 
@@ -198,7 +198,7 @@ List endpoints are tenant-scoped, bounded and stably ordered. Blind-count actor 
 
 ## 9. Required disposable MySQL 8.4 integration tests
 
-1. Fresh V1→V21 migration and migration upgrade path; V1–V20 checksums unchanged.
+1. Fresh V1→V25 migration and migration upgrade path; V1–V24 checksums unchanged.
 2. Tenant A cannot list, read, mutate, count or post adjustments for Tenant B documents or references.
 3. Blind count API never exposes expected quantity to the counter; open count exposes it only with permission.
 4. Scope duplication, line-bucket duplication, invalid item/lot/status and non-active location are rejected.
