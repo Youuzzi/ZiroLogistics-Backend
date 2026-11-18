@@ -690,6 +690,345 @@ class WmsStockCountMySqlIntegrationTest {
         assertEquals(new BigDecimal("4.0000"), onHand(fixture));
     }
 
+    @Test
+    void manualAdjustmentRejectsUnsupportedTypesAndSerialTrackedItems() {
+        assertThrows(IllegalArgumentException.class, () -> adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-DAMAGE-" + UUID.randomUUID().toString().substring(0, 8), "DAMAGE",
+                        "DAMAGE", "Status reclassification is not enabled yet", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", BigDecimal.ONE)))));
+
+        Fixture serialFixture = fixture("SERIAL");
+        assertThrows(IllegalArgumentException.class, () -> adjustmentService.createManual(serialFixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-SERIAL-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Serial evidence workflow not yet enabled", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                serialFixture.warehousePublicId(), serialFixture.locationPublicId(),
+                                serialFixture.itemPublicId(), null, "AVAILABLE", BigDecimal.ONE)))));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_adjustments WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_adjustments WHERE tenant_id = ?", serialFixture.tenantId()));
+    }
+
+    @Test
+    void manualCorrectionPostsOnlyAfterIndependentApprovalThroughTypedBoundary() {
+        receive(fixture, "5.0000");
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-COR-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "CYCLE_FIX", "Reconcile verified shelf discrepancy", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("7.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        assertEquals("DRAFT", created.get("status"));
+        assertEquals("CORRECTION", created.get("adjustment_type"));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        assertThrows(AccessDeniedException.class,
+                () -> adjustmentService.approve(fixture.principal(), adjustmentId, "Creator cannot self-approve"));
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, adjustmentId, "Evidence reviewed independently");
+        Map<String, Object> posted = adjustmentService.post(approver, adjustmentId);
+
+        assertEquals("POSTED", posted.get("status"));
+        assertEquals(new BigDecimal("7.0000"), onHand(fixture));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND movement_type = 'ADJUSTMENT_IN'
+                  AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM stock_count_adjustment_links
+                WHERE tenant_id = ? AND inventory_adjustment_id = (
+                  SELECT id FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                )
+                """, fixture.tenantId(), fixture.tenantId(), adjustmentId));
+        assertEquals(4, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id = ? AND subject_public_id = ?
+                  AND event_type = 'WMS_INVENTORY_ADJUSTMENT_UPDATED'
+                  AND JSON_UNQUOTE(JSON_EXTRACT(change_payload, '$.action'))
+                      IN ('CREATE_MANUAL','SUBMIT','APPROVE','POST_MANUAL')
+                """, fixture.tenantId(), adjustmentId));
+    }
+
+    @Test
+    void manualLossAndFoundRequireCorrectVarianceDirection() {
+        receive(fixture, "5.0000");
+        assertThrows(IllegalArgumentException.class, () -> adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-LOSS-INVALID-" + UUID.randomUUID().toString().substring(0, 6), "LOSS",
+                        "LOSS", "Loss reason", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("6.0000"))))));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+
+        Map<String, Object> validLoss = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-LOSS-" + UUID.randomUUID().toString().substring(0, 8), "LOSS",
+                        "LOSS", "Verified missing stock", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("3.0000")))));
+        String lossId = (String) validLoss.get("publicId");
+        adjustmentService.submit(fixture.principal(), lossId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, lossId, "Loss independently verified");
+        assertEquals("POSTED", adjustmentService.post(approver, lossId).get("status"));
+        assertEquals(new BigDecimal("3.0000"), onHand(fixture));
+    }
+
+    @Test
+    void manualFoundAdjustmentCanAddVerifiedQuantityFromZeroBaseline() {
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-FOUND-" + UUID.randomUUID().toString().substring(0, 8), "FOUND",
+                        "FOUND", "Verified unrecorded stock", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("2.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, adjustmentId, "Found quantity independently verified");
+        Map<String, Object> posted = adjustmentService.post(approver, adjustmentId);
+        assertEquals("POSTED", posted.get("status"));
+        assertEquals(new BigDecimal("2.0000"), onHand(fixture));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND movement_type = 'ADJUSTMENT_IN'
+                  AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+    }
+
+    @Test
+    void manualAdjustmentRejectsStaleBaselineAtApproval() {
+        receive(fixture, "5.0000");
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-STALE-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Baseline stale test", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("7.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        receive(fixture, "1.0000");
+        assertThrows(IllegalStateException.class,
+                () -> adjustmentService.approve(secondCounter(fixture), adjustmentId, "Stale baseline"));
+        assertEquals("SUBMITTED", jdbc.queryForObject("""
+                SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), adjustmentId));
+        assertEquals(new BigDecimal("6.0000"), onHand(fixture));
+    }
+
+    @Test
+    void manualNegativeAdjustmentCannotConsumeReservedQuantity() {
+        receive(fixture, "5.0000");
+        reservationService.reserve(fixture.principal(),
+                new WmsInventoryReservationService.ReservationCommand(
+                        fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                        null, new BigDecimal("4.0000"), List.of()));
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-RESERVED-" + UUID.randomUUID().toString().substring(0, 8), "LOSS",
+                        "LOSS", "Reserved stock must remain allocated", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", BigDecimal.ZERO.setScale(4)))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        assertThrows(IllegalStateException.class,
+                () -> adjustmentService.approve(secondCounter(fixture), adjustmentId, "Insufficient available quantity"));
+        assertEquals("SUBMITTED", jdbc.queryForObject("""
+                SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), adjustmentId));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+    }
+
+    @Test
+    void manualAdjustmentRevalidatesBaselineAgainAtPosting() {
+        receive(fixture, "5.0000");
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-POST-STALE-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Posting-time baseline test", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("7.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, adjustmentId, "Baseline valid at approval");
+        receive(fixture, "1.0000");
+        long ledgerBefore = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId());
+        assertThrows(IllegalStateException.class, () -> adjustmentService.post(approver, adjustmentId));
+        assertEquals(ledgerBefore, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals("APPROVED", jdbc.queryForObject("""
+                SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), adjustmentId));
+        assertEquals(new BigDecimal("6.0000"), onHand(fixture));
+    }
+
+    @Test
+    void manualAdjustmentPostingRollsBackEarlierAllocationsWhenLaterAllocationIsStale() {
+        receive(fixture, "5.0000");
+        String secondItemPublicId = createItem(fixture, "NONE");
+        postingService.post(fixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                UUID.randomUUID(), "RECEIPT",
+                List.of(new WmsInventoryPostingService.PostingLeg(
+                        fixture.warehousePublicId(), fixture.locationPublicId(), secondItemPublicId,
+                        null, null, null, "AVAILABLE", BigDecimal.ONE)),
+                "Seed second bucket for atomic rollback test"));
+
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-ATOMIC-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Atomic multi-allocation rollback test", null,
+                        List.of(
+                                new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                        fixture.warehousePublicId(), fixture.locationPublicId(),
+                                        fixture.itemPublicId(), null, "AVAILABLE", new BigDecimal("6.0000")),
+                                new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                        fixture.warehousePublicId(), fixture.locationPublicId(),
+                                        secondItemPublicId, null, "AVAILABLE", new BigDecimal("2.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, adjustmentId, "Both baselines initially verified");
+
+        // The second item has the larger generated ID, so the first allocation posts
+        // before this receipt makes the later allocation's approved baseline stale.
+        postingService.post(fixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                UUID.randomUUID(), "RECEIPT",
+                List.of(new WmsInventoryPostingService.PostingLeg(
+                        fixture.warehousePublicId(), fixture.locationPublicId(), secondItemPublicId,
+                        null, null, null, "AVAILABLE", BigDecimal.ONE)),
+                "Make the second allocation stale after approval"));
+
+        long adjustmentLedgerBefore = count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId());
+        assertThrows(IllegalStateException.class, () -> adjustmentService.post(approver, adjustmentId));
+
+        assertEquals(new BigDecimal("5.0000"), jdbc.queryForObject("""
+                SELECT on_hand_qty FROM inventory_balances
+                WHERE tenant_id = ? AND item_id = (
+                  SELECT id FROM items WHERE tenant_id = ? AND public_id = ?
+                ) AND location_id = (
+                  SELECT id FROM warehouse_locations WHERE tenant_id = ? AND public_id = ?
+                ) AND lot_id IS NULL AND stock_status = 'AVAILABLE'
+                """, BigDecimal.class, fixture.tenantId(), fixture.tenantId(), fixture.itemPublicId(),
+                fixture.tenantId(), fixture.locationPublicId()));
+        assertEquals(new BigDecimal("2.0000"), jdbc.queryForObject("""
+                SELECT on_hand_qty FROM inventory_balances
+                WHERE tenant_id = ? AND item_id = (
+                  SELECT id FROM items WHERE tenant_id = ? AND public_id = ?
+                ) AND location_id = (
+                  SELECT id FROM warehouse_locations WHERE tenant_id = ? AND public_id = ?
+                ) AND lot_id IS NULL AND stock_status = 'AVAILABLE'
+                """, BigDecimal.class, fixture.tenantId(), fixture.tenantId(), secondItemPublicId,
+                fixture.tenantId(), fixture.locationPublicId()));
+        assertEquals(adjustmentLedgerBefore, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+        assertEquals("APPROVED", jdbc.queryForObject("""
+                SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), adjustmentId));
+    }
+
+    @Test
+    void manualAdjustmentPostingIsBlockedByActiveFrozenStockCount() {
+        receive(fixture, "5.0000");
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-FROZEN-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Frozen location test", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("7.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        WmsAuthenticatedPrincipal approver = secondCounter(fixture);
+        adjustmentService.approve(approver, adjustmentId, "Approved before count freeze");
+        String countId = createAndPlan(fixture);
+        stockCountService.start(fixture.principal(), countId);
+        assertThrows(IllegalStateException.class, () -> adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-CREATE-FROZEN-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Cannot create against frozen location", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("7.0000"))))));
+        long ledgerBefore = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId());
+        assertThrows(IllegalStateException.class, () -> adjustmentService.post(approver, adjustmentId));
+        assertEquals(ledgerBefore, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals("APPROVED", jdbc.queryForObject("""
+                SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), adjustmentId));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+    }
+
+    @Test
+    void manualAdjustmentCreationRequiresDedicatedCreatePermission() {
+        jdbc.update("""
+                DELETE rp FROM role_permissions rp
+                JOIN membership_roles mr ON mr.role_id = rp.role_id AND mr.tenant_id = ?
+                JOIN tenant_memberships tm ON tm.id = mr.membership_id AND tm.tenant_id = mr.tenant_id
+                WHERE tm.public_id = ?
+                  AND rp.permission_id = (SELECT id FROM permissions
+                                          WHERE permission_code = 'WMS_INVENTORY_ADJUSTMENT_CREATE')
+                """, fixture.tenantId(), fixture.principal().membershipPublicId());
+
+        assertThrows(AccessDeniedException.class, () -> adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-NO-CREATE-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Permission denial test", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", BigDecimal.ONE)))));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_adjustments WHERE tenant_id = ?", fixture.tenantId()));
+    }
+
+    @Test
+    void manualAdjustmentPublicIdCannotBePostedAcrossTenants() {
+        receive(fixture, "5.0000");
+        Map<String, Object> created = adjustmentService.createManual(fixture.principal(),
+                new WmsInventoryAdjustmentService.CreateManualCommand(
+                        "MAN-TENANT-" + UUID.randomUUID().toString().substring(0, 8), "CORRECTION",
+                        "RECONCILE", "Tenant boundary test", null,
+                        List.of(new WmsInventoryAdjustmentService.ManualAllocationCommand(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, "AVAILABLE", new BigDecimal("7.0000")))));
+        String adjustmentId = (String) created.get("publicId");
+        adjustmentService.submit(fixture.principal(), adjustmentId);
+        adjustmentService.approve(secondCounter(fixture), adjustmentId, "Independent approval");
+
+        Fixture otherTenant = fixture();
+        assertThrows(IllegalArgumentException.class,
+                () -> adjustmentService.post(otherTenant.principal(), adjustmentId));
+        assertEquals("APPROVED", jdbc.queryForObject("""
+                SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), adjustmentId));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?",
+                otherTenant.tenantId(), adjustmentId));
+    }
+
     private String createAndPlan(Fixture f) {
         return createAndPlan(f, f.locationPublicId());
     }

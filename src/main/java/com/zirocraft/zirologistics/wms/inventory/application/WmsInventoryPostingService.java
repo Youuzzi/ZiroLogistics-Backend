@@ -59,6 +59,67 @@ public class WmsInventoryPostingService {
     }
 
     /**
+     * Narrow posting entry for an approved manual adjustment with no stock-count link.
+     * Manual postings never bypass active stock-count freezes.
+     */
+    @Transactional
+    public Map<String, Object> postManualAdjustment(
+            WmsAuthenticatedPrincipal principal, String adjustmentPublicId,
+            long adjustmentLineId, BigDecimal expectedSystemQty, BigDecimal expectedOnHandQty,
+            PostingCommand command) {
+        if (command == null || !Set.of("ADJUSTMENT_IN", "ADJUSTMENT_OUT")
+                .contains(command.movementType() == null ? "" : command.movementType().toUpperCase(Locale.ROOT))) {
+            throw new IllegalArgumentException("Manual adjustment posting type is required");
+        }
+        if (principal == null) throw new AccessDeniedException("Tenant context is required");
+        lockTenant(principal.tenantId());
+        Access access = access(principal);
+        Map<String, Object> adjustment = requiredRowForUpdate("""
+                SELECT a.id AS adjustment_id, a.adjustment_type
+                FROM inventory_adjustments a
+                WHERE a.tenant_id = ? AND a.public_id = ? AND a.status = 'APPROVED'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM stock_count_adjustment_links link
+                    WHERE link.tenant_id = a.tenant_id AND link.inventory_adjustment_id = a.id
+                  )
+                """, access.tenantId(), required(adjustmentPublicId, "adjustment public ID"));
+        if (!accessService.resolve(principal.userPublicId(), principal.membershipPublicId())
+                .hasPermission("WMS_INVENTORY_ADJUSTMENT_POST")) {
+            throw new AccessDeniedException("Manual adjustment posting permission is required");
+        }
+        String adjustmentType = string(adjustment, "adjustment_type");
+        if (!Set.of("CORRECTION", "OTHER", "LOSS", "FOUND").contains(adjustmentType)) {
+            throw new AccessDeniedException("Adjustment type is not eligible for manual quantity posting");
+        }
+        if ("LOSS".equals(adjustmentType) && !"ADJUSTMENT_OUT".equalsIgnoreCase(command.movementType())) {
+            throw new AccessDeniedException("LOSS adjustments can only post negative inventory movements");
+        }
+        if ("FOUND".equals(adjustmentType) && !"ADJUSTMENT_IN".equalsIgnoreCase(command.movementType())) {
+            throw new AccessDeniedException("FOUND adjustments can only post positive inventory movements");
+        }
+        List<Long> lines = jdbc.queryForList("""
+                SELECT id FROM inventory_adjustment_lines
+                WHERE id = ? AND tenant_id = ? AND inventory_adjustment_id = ?
+                FOR UPDATE
+                """, Long.class, adjustmentLineId, access.tenantId(), number(adjustment, "adjustment_id"));
+        if (lines.isEmpty()) throw new AccessDeniedException("Manual adjustment line does not belong to the approved adjustment");
+        if (expectedSystemQty == null || expectedOnHandQty == null) {
+            throw new IllegalArgumentException("Manual adjustment baseline quantities are required");
+        }
+        BigDecimal systemBaseline;
+        BigDecimal currentBaseline;
+        try {
+            systemBaseline = expectedSystemQty.setScale(4, RoundingMode.UNNECESSARY);
+            currentBaseline = expectedOnHandQty.setScale(4, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException invalidScale) {
+            throw new IllegalArgumentException("Manual adjustment baseline must fit DECIMAL(19,4)", invalidScale);
+        }
+        AdjustmentPostingContext context = new AdjustmentPostingContext(
+                number(adjustment, "adjustment_id"), null, adjustmentLineId, systemBaseline, currentBaseline);
+        return postInternal(principal, command, false, context);
+    }
+
+    /**
      * Narrow posting entry for an already-approved adjustment linked to its exact
      * approved, still-frozen stock count. Generic callers cannot request a freeze bypass.
      */
@@ -444,6 +505,12 @@ public class WmsInventoryPostingService {
             if (adjustmentContext == null) {
                 if (!counts.isEmpty()) {
                     throw new IllegalStateException("Inventory posting is blocked by an active frozen stock count");
+                }
+                continue;
+            }
+            if (adjustmentContext.stockCountId() == null) {
+                if (!counts.isEmpty()) {
+                    throw new IllegalStateException("Manual inventory adjustment is blocked by an active frozen stock count");
                 }
                 continue;
             }
@@ -941,7 +1008,7 @@ public class WmsInventoryPostingService {
             return new NormalizedCommand(requestId, movementType, legs, notes, type, id, lineId);
         }
     }
-    private record AdjustmentPostingContext(long adjustmentId, long stockCountId, long adjustmentLineId,
+    private record AdjustmentPostingContext(long adjustmentId, Long stockCountId, long adjustmentLineId,
                                             BigDecimal expectedSystemQty, BigDecimal expectedOnHandQty) {}
     private record Access(long tenantId, long membershipId, String userPublicId) {}
     private record Balance(long id, BigDecimal onHand, BigDecimal reserved) {}
