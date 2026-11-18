@@ -47,7 +47,7 @@ jobs:
 
           docs_only=true
           while IFS= read -r file; do
-            if [[ "$file" == docs/* && "$file" =~ \\.(md|mdx|rst|txt)$ ]] || [[ "$file" =~ ^(README|CONTRIBUTING|CHANGELOG)\\.md$ ]]; then
+            if [[ "$file" == docs/* && "$file" =~ \.(md|mdx|rst|txt)$ ]] || [[ "$file" =~ ^(README|CONTRIBUTING|CHANGELOG)\.md$ ]]; then
               continue
             else
               docs_only=false
