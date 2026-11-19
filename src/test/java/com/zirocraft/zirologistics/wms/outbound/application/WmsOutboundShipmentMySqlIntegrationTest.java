@@ -432,6 +432,16 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 destination.locationPublicId(), "AVAILABLE"));
         assertEquals(1, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_RECEIPT'",
                 fixture.tenantId()));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id=? AND subject_public_id=? AND event_type='WMS_STOCK_TRANSFER_UPDATED'
+                  AND operation_ref=? AND actor_type='TENANT_MEMBER'
+                """, fixture.tenantId(), transferId, dispatchRequestId.toString()));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id=? AND subject_public_id=? AND event_type='WMS_STOCK_TRANSFER_UPDATED'
+                  AND operation_ref=? AND actor_type='TENANT_MEMBER'
+                """, fixture.tenantId(), transferId, receiveRequestId.toString()));
         assertEquals("IN_TRANSIT", transferStatus(fixture, transferId));
     }
 
