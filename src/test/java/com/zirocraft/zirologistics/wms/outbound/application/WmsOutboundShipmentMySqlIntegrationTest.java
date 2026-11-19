@@ -247,8 +247,9 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         assertEquals(new BigDecimal("5.0000"),onHand(fixture));
 
         int ledgerBeforeShipping=count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?",fixture.tenantId());
+        UUID shippingRequestId = UUID.randomUUID();
         Map<String,Object> shipped=shippingService.ship(fixture.principal(),shipmentId,
-                new WmsShippingManagementService.ShipCommand(UUID.randomUUID(),null,"TRACK-"+UUID.randomUUID(),null));
+                new WmsShippingManagementService.ShipCommand(shippingRequestId,null,"TRACK-"+UUID.randomUUID(),null));
         assertEquals("SHIPPED",shipped.get("status"));
         assertEquals("SHIPPED",shipmentStatus(fixture,shipmentId));
         assertEquals(BigDecimal.ZERO.setScale(4),onHand(fixture));
