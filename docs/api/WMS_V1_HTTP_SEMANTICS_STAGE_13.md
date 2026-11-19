@@ -25,7 +25,7 @@ This WP introduces `WmsResourceNotFoundException` and maps it to a stable, non-d
 - code `RESOURCE_NOT_FOUND`
 - message `The requested resource was not found`
 
-The service changes cover empty resource lookups across inbound receiving, outbound shipment, inter-warehouse transfer, replenishment planning/tasks, stock counts, inventory adjustments, inventory master data, inventory posting/reservation, warehouse-adjacent putaway, picking, packing, shipping and role/membership management. Resource IDs selected by the caller now map to the typed 404 category. Internal post-insert identifier lookups retain state-conflict semantics (409) rather than being misreported as client-facing 404s. Validation failures, workflow-state conflicts and authorization failures retain their existing categories.
+The service changes cover empty resource lookups across inbound receiving, outbound shipment, inter-warehouse transfer, replenishment planning/tasks, stock counts, inventory adjustments, inventory master data, inventory posting/reservation, warehouse-adjacent putaway, picking, packing, shipping and role/membership management. Caller-selected resource IDs now map to the typed 404 category. Dedicated generated-ID lookups retain internal state-failure semantics where the service explicitly distinguishes them. Validation failures, workflow-state conflicts and authorization failures retain their existing categories.
 
 The MockMvc contract test verifies the status and stable error code and ensures the internal exception message is not exposed. Service tests verify role and membership lookup behavior.
 
