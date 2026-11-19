@@ -216,7 +216,7 @@ Required integrity:
 
 ## 5. Engineering and schema rules
 
-1. V1–V25 migrations are immutable. Any justified schema extension must be additive V26+.
+1. V1–V25 migrations are immutable. WP7 adds V26 for the WMS operational reporting permission; future schema extensions must be additive V27+.
 2. Never run migrations or schema-changing commands against the user's local databases. Use disposable MySQL 8.4 Testcontainers in CI.
 3. Never write inventory balances, ledger, serial state or reservations from controllers or workflow modules; use the existing application boundary.
 4. Preserve tenant scope and persisted permission resolution in every query and command.
