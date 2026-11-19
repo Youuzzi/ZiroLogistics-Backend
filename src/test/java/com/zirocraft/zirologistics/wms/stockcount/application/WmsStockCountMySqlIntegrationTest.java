@@ -247,23 +247,27 @@ class WmsStockCountMySqlIntegrationTest {
         stockCountService.plan(fixture.principal(), countPublicId);
         Map<String, Object> started = stockCountService.start(fixture.principal(), countPublicId);
 
-        Map<String, BigDecimal> expectedByLocation = new java.util.HashMap<>();
-        jdbc.query("""
-                SELECT l.public_id, scl.expected_qty
-                FROM stock_count_lines scl
-                JOIN stock_count_scopes scs
-                  ON scs.id = scl.stock_count_scope_id AND scs.tenant_id = scl.tenant_id
-                JOIN stock_counts sc
-                  ON sc.id = scs.stock_count_id AND sc.tenant_id = scs.tenant_id
-                JOIN warehouse_locations l
-                  ON l.id = scl.location_id AND l.tenant_id = scl.tenant_id
-                WHERE sc.tenant_id = ? AND sc.public_id = ?
-                """, rs -> {
-            while (rs.next()) expectedByLocation.put(rs.getString("public_id"), rs.getBigDecimal("expected_qty"));
-        }, fixture.tenantId(), countPublicId);
+        BigDecimal sourceSnapshot = jdbc.queryForObject("""
+                SELECT l.expected_qty
+                FROM stock_count_lines l
+                JOIN stock_count_scopes s ON s.id = l.stock_count_scope_id AND s.tenant_id = l.tenant_id
+                JOIN stock_counts c ON c.id = s.stock_count_id AND c.tenant_id = s.tenant_id
+                WHERE c.tenant_id = ? AND c.public_id = ?
+                  AND l.location_id = (SELECT id FROM warehouse_locations WHERE tenant_id = ? AND public_id = ?)
+                """, BigDecimal.class, fixture.tenantId(), countPublicId,
+                fixture.tenantId(), fixture.locationPublicId());
+        BigDecimal destinationSnapshot = jdbc.queryForObject("""
+                SELECT l.expected_qty
+                FROM stock_count_lines l
+                JOIN stock_count_scopes s ON s.id = l.stock_count_scope_id AND s.tenant_id = l.tenant_id
+                JOIN stock_counts c ON c.id = s.stock_count_id AND c.tenant_id = s.tenant_id
+                WHERE c.tenant_id = ? AND c.public_id = ?
+                  AND l.location_id = (SELECT id FROM warehouse_locations WHERE tenant_id = ? AND public_id = ?)
+                """, BigDecimal.class, fixture.tenantId(), countPublicId,
+                fixture.tenantId(), destinationLocation);
 
-        assertEquals(new BigDecimal("7.0000"), expectedByLocation.get(fixture.locationPublicId()));
-        assertEquals(new BigDecimal("3.0000"), expectedByLocation.get(destinationLocation));
+        assertEquals(new BigDecimal("7.0000"), sourceSnapshot);
+        assertEquals(new BigDecimal("3.0000"), destinationSnapshot);
         assertEquals(Boolean.TRUE, started.get("freezeStock"));
         assertEquals(3, count("""
                 SELECT COUNT(*) FROM inventory_ledger
