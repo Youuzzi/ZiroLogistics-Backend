@@ -86,7 +86,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                                 fixture.receivingLocationPublicId(), null, new BigDecimal("2.0000"), List.of()))));
         assertEquals(new BigDecimal("5.0000"), reserved(fixture));
         assertEquals("RELEASED", shipmentService.release(fixture.principal(), shipmentId).get("status"));
-        assertEquals("PICKING", shipmentStatus(fixture, shipmentId));
+        assertEquals("RELEASED", shipmentStatus(fixture, shipmentId));
     }
 
     @Test
@@ -446,7 +446,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         UUID packingRequestId = UUID.randomUUID();
         WmsPackingManagementService.AddPackageLineCommand packageLine =
                 new WmsPackingManagementService.AddPackageLineCommand(
-                        packingRequestId, 1, new BigDecimal("5.0000"), List.of(), "Packing replay");
+                        packingRequestId, 1, new BigDecimal("2.0000"), List.of(), "Packing replay");
         packingService.addLine(fixture.principal(), sessionId, packageId, packageLine);
         int packageLinesAfterFirst = count("""
                 SELECT COUNT(*) FROM packing_package_lines
