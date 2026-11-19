@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.security.authentication.http;
 
+import com.zirocraft.zirologistics.exception.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -24,7 +25,7 @@ class WmsApiErrorContractTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(new WorkflowProbeController())
-                .setControllerAdvice(new WmsAuthenticationExceptionHandler())
+                .setControllerAdvice(new GlobalExceptionHandler(), new WmsAuthenticationExceptionHandler())
                 .build();
     }
 
