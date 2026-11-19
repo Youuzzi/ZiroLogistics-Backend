@@ -1126,7 +1126,7 @@ public class WmsStockCountManagementService {
 
     private Map<String, Object> requiredRow(String sql, Object... args) {
         List<Map<String, Object>> rows = jdbc.queryForList(sql, args);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Stock count or referenced record not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Stock count or referenced record not found");
         return rows.getFirst();
     }
 
