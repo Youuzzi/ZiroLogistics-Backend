@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.wms.security.authentication.http;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessDeniedException;
 import com.zirocraft.zirologistics.wms.identity.application.WmsIdentityActionTokenRejectedException;
 import com.zirocraft.zirologistics.wms.tenancy.application.WmsTenantProfileConflictException;
@@ -43,7 +44,7 @@ public class WmsAuthenticationExceptionHandler {
                 .body(new ApiError("ACCESS_DENIED", "Access denied"));
     }
 
-    @ExceptionHandler(WmsWarehouseNotFoundException.class)
+    @ExceptionHandler({WmsWarehouseNotFoundException.class, WmsResourceNotFoundException.class})
     public ResponseEntity<ApiError> notFound() {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ApiError("RESOURCE_NOT_FOUND", "The requested resource was not found"));
