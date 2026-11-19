@@ -41,6 +41,11 @@ public class WmsInterWarehouseTransferService {
 
     @Transactional(readOnly = true)
     public List<Map<String,Object>>     @Transactional(readOnly = true)
+    public List<Map<String,Object>> list(WmsAuthenticatedPrincipal principal) {
+        return list(principal, 0, 200);
+    }
+
+    @Transactional(readOnly = true)
     public List<Map<String,Object>> list(WmsAuthenticatedPrincipal principal, int page, int size) {
         Access a = access(principal, "WMS_TRANSFER_READ");
         long offset = boundedOffset(page, size);
