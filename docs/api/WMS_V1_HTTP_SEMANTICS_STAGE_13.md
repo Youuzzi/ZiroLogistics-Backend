@@ -25,7 +25,7 @@ This WP introduces `WmsResourceNotFoundException` and maps it to a stable, non-d
 - code `RESOURCE_NOT_FOUND`
 - message `The requested resource was not found`
 
-The service changes are restricted to empty tenant-scoped lookup results in inbound receiving, outbound shipment, inter-warehouse transfer, replenishment task, stock count and role/membership management. Validation failures, workflow-state conflicts and authorization failures retain their existing exception categories.
+The service changes cover empty resource lookups across inbound receiving, outbound shipment, inter-warehouse transfer, replenishment planning/tasks, stock counts, inventory adjustments, inventory master data, inventory posting/reservation, warehouse-adjacent putaway, picking, packing, shipping and role/membership management. Resource IDs selected by the caller now map to the typed 404 category. Internal post-insert identifier lookups retain state-conflict semantics (409) rather than being misreported as client-facing 404s. Validation failures, workflow-state conflicts and authorization failures retain their existing categories.
 
 The MockMvc contract test verifies the status and stable error code and ensures the internal exception message is not exposed. Service tests verify role and membership lookup behavior.
 
@@ -53,7 +53,7 @@ Idempotency is not inferred merely from HTTP POST. Existing command-specific req
 | Item | Status | Follow-up |
 |---|---|---|
 | Existing success status defaults | **VERIFIED — source inspection** | WP9 confirms representative controller responses. |
-| Missing-resource response contract | **PARTIALLY VERIFIED** | CI must run MockMvc and service tests; WP9 extends route-family coverage. |
+| Missing-resource response contract | **PARTIALLY VERIFIED** | MockMvc verifies the generic WMS 404 contract; role/membership service tests verify selected lookups. Full Java 21/Testcontainers CI and WP9/WP10 route-family coverage remain required. |
 | Multipart route inventory | **VERIFIED — source inspection** | Recheck when upload functionality is introduced. |
 | Global request-size budget | **UNVERIFIED / not configured in WMS profile** | Decide with deployment limits and realistic payload sizes. |
 | Every workflow's missing-resource path | **PARTIALLY VERIFIED** | Expand only where source audit identifies an empty lookup incorrectly mapped to 400. |
