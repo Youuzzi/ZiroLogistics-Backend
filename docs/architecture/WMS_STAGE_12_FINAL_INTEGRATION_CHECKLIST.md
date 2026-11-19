@@ -25,7 +25,7 @@ Before each merge:
 - review the final diff and all unresolved review threads;
 - update/rebase against the latest main when required;
 - rerun full PR CI after any code, SQL, configuration, dependency, test or workflow change;
-- merge only after the preceding WP's post-merge Main CI is green.
+- complete all per-WP PR CI and compatibility checks first; then merge PRs in WP order without waiting between automatic Main CI runs. The final full Main CI after the last merge is the Stage 12 completion gate.
 
 ## 2. Canonical workflow acceptance matrix
 
@@ -43,11 +43,11 @@ Before each merge:
 
 - [ ] All WP PR CI runs pass on exact final PR head SHAs.
 - [ ] Every PR has been reviewed; no unresolved review threads remain.
-- [ ] PRs merge in WP order, with post-merge Main CI green after each merge.
+- [ ] All PRs merge in WP order after their exact-head PR CI runs pass and compatibility is confirmed.
 - [ ] V1–V25 checksums remain unchanged; V26 is additive and Flyway validates from a fresh database.
 - [ ] Full Maven regression runs on the final Stage 12 main commit using Java 21 and MySQL 8.4 Testcontainers.
 - [ ] Final CI logs show zero failures and zero errors; any skipped tests are understood and unchanged from the established suite.
-- [ ] Final Main CI is green on the exact final merge SHA.
+- [ ] A final full Main CI is green on the exact final Stage 12 merge SHA. Main push CI runs triggered by earlier merges may run concurrently; they do not replace this final gate.
 - [ ] Documentation and migration registry reflect the final delivered Stage 12 state.
 
 ## 4. Evidence discipline
