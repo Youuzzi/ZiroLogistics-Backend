@@ -45,7 +45,8 @@ public class WmsOperationalReportingService {
         long tenantId = access.tenantId();
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("generatedAt", jdbc.queryForObject("SELECT UTC_TIMESTAMP(6)", java.sql.Timestamp.class));
+        result.put("generatedAtUtc", jdbc.queryForObject("SELECT UTC_TIMESTAMP(6)", java.sql.Timestamp.class));
+        result.put("statusScope", "ALL_TENANT_DOCUMENTS_CURRENT_STATUS");
         result.put("inventoryPosition", jdbc.queryForMap("""
                 SELECT COALESCE(SUM(on_hand_qty), 0.0000) AS onHandQty,
                        COALESCE(SUM(reserved_qty), 0.0000) AS reservedQty,
