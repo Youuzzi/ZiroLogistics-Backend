@@ -83,7 +83,7 @@ Use separate token profiles for tenant selection and tenant-bound access. The ex
 | `mid` | Must be absent | Selected membership public ID |
 | Roles / permissions | Must be absent | Must be absent |
 
-Proposed initial lifetimes for evaluation, not standards requirements:
+Implemented initial lifetimes (configurable deployment policy, not standards requirements):
 - tenant-selection token: 5 minutes;
 - tenant-bound access token: 10 minutes.
 

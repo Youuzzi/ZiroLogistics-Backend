@@ -58,7 +58,7 @@ The additive V2 migration creates `wms_login_throttle_buckets` to store one row 
 | `blocked_until` | Optional bounded cooldown end |
 | `created_at`, `updated_at` | UTC audit timestamps |
 
-Required uniqueness is the complete logical bucket identity, for example bucket type + key version + digest + window start. Indexes must support lookup by that identity and cleanup by time. Exact column types, collation, FK policy, naming, and constraints must be reconciled with the frozen schema conventions before writing V2.
+Required uniqueness is the complete logical bucket identity, for example bucket type + key version + digest + window start. Indexes must support lookup by that identity and cleanup by time. The V2 migration has been written and is frozen with the current implementation. Any future additive changes must follow the same schema conventions and must not rewrite V2 after deployment.
 
 A fixed-window design is the simplest initial candidate. A sliding-window or token-bucket design may reduce boundary bursts but adds state/complexity. Select one deliberately and test its edge semantics. Do not combine multiple algorithms accidentally.
 
@@ -147,14 +147,14 @@ Concurrency semantics are defined by database commit order:
 - A request that passed its pre-verification cooldown check before another request crossed the threshold may still finish password verification. If it proves the correct password, its successful reset may clear that concurrent account cooldown. This is intentional: valid credentials win over account-lockout state, while the source bucket continues to constrain request volume.
 - Do not claim that in-flight requests are cancelled when a cooldown is created.
 
-This reset operation is not implemented by the current storage port yet. Add an application-owned semantic port method and Testcontainers coverage before login integration. During key rotation, the reset must cover every active/overlap key version used by account cooldown checks; until multi-version rotation is implemented, the current single-active-key configuration is the only supported case.
+This reset operation is implemented by `WmsThrottleStoragePort.resetAccountFailures` and `MySqlWmsThrottleStorageAdapter`, with credential-orchestration and MySQL integration coverage. During key rotation, the reset must cover every active/overlap key version used by account cooldown checks; until multi-version rotation is implemented, the current single-active-key configuration is the only supported case.
 
 
 ## 8. Outage behavior
 
 The throttle is part of the credential-authentication security boundary.
 
-**Proposed behavior:** if the throttle store cannot be read or updated, do not proceed with password authentication. Fail closed with a generic temporary service-unavailable response (503), without revealing account existence or store internals. This avoids silently disabling abuse controls during a database outage.
+**Implemented fail-closed behavior:** if the throttle store cannot be read or updated, password authentication does not proceed. The application surfaces a generic throttle-unavailable failure for safe HTTP mapping; it does not reveal account existence or store internals. The security boundary must remain fail-closed during a database outage.
 
 The service must:
 - set strict database timeouts;
