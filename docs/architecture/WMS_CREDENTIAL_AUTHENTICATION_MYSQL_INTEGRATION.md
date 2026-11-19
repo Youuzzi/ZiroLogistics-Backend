@@ -1,6 +1,6 @@
 # WMS Credential Authentication MySQL Integration Evidence
 
-**Status:** Integration test added; CI result pending.  
+**Status:** Integration test merged; the complete test suite passed in Main CI run #645 (352 tests, 0 failures, 0 errors, 2 skipped).  
 **Scope:** Internal credential-authentication use case against disposable MySQL 8.4.  
 **Database safety:** Testcontainers creates an isolated database and applies the repository's WMS Flyway migrations. No developer, staging, or production database is configured or accessed.
 
@@ -34,7 +34,7 @@ The tenant-selection token service is mocked at the boundary. Token signing and 
 
 ## Deliberate boundaries
 
-- No public login endpoint or Spring bean wiring is added.
+- This test deliberately composes the internal authentication use case manually and does not test HTTP adapter wiring. The credential and tenant-selection HTTP adapters were implemented later; their route/security behavior is covered by the Stage 13 controller and security contract tests.
 - No deployment throttle thresholds are approved by this test; its values are test-only.
 - No password hash from a real user is inspected or migrated.
 - No V1 or V2 migration is modified.

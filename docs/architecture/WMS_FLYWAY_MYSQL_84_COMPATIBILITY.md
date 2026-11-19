@@ -1,5 +1,7 @@
 # WMS Flyway and MySQL 8.4 Compatibility
 
+> **Current warning distinction:** The earlier Flyway/MySQL compatibility warning was addressed by aligning Flyway core and MySQL module to 11.20.3. A separate MySQL 8.4 integer display-width DDL deprecation warning remains (513 instances were counted in the Stage 13 audit); it originates from frozen migration statements, not from Flyway version compatibility. See [MySQL Integer Display Width Deprecation Audit](MYSQL_INTEGER_DISPLAY_WIDTH_DEPRECATION_AUDIT.md) and the [Stage 13 WP11 repository audit](../audits/WMS_STAGE_13_FINAL_API_AND_REPOSITORY_AUDIT.md).
+
 **Status:** implemented; PR CI #187 passed  
 **Baseline:** Spring Boot 3.5.13, Java 21, MySQL 8.4 Testcontainers  
 **Scope:** Flyway dependency alignment only

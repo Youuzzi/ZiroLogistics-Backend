@@ -1,5 +1,7 @@
 # WMS v1 Compatibility & API Integration Audit — Stage 13 WP10
 
+> **Historical WP10 snapshot:** The deployment mismatch recorded below was the WP10 baseline finding. WP11 PR #157 replaces the root Dockerfile/Compose runtime with the dedicated WMS Maven artifact and isolated WMS MySQL database. Treat the WP11 final repository audit as the current remediation record; this WP10 file preserves the original finding and evidence.
+
 **Baseline:** `564a5e25b131101a2948b45784fd1efa7883176d` (WP8 API reference merged; WP7 runtime behavior included)
 **Evidence:** source/configuration inspection. Runtime compatibility is subject to WP9 controller tests and final Stage 13 CI.
 
@@ -48,7 +50,7 @@ The inspected Maven dependency list contains no springdoc/OpenAPI dependency and
 
 If a generated OpenAPI document is required for external consumers, add it as a separately reviewed compatibility/security change and verify that protected schemas/routes are not unintentionally exposed.
 
-## 7. Deployment configuration mismatch — deferred to WP11 / Stage 17
+## 7. Deployment configuration mismatch — identified at WP10 baseline; remediation owned by WP11
 
 The existing `compose.yml` and default `application.properties` describe the legacy application configuration:
 
@@ -58,9 +60,9 @@ The existing `compose.yml` and default `application.properties` describe the leg
 - WMS JWT key material is required only when `WMS_JWT_ENABLED=true`. The anonymous authentication endpoints additionally require the explicit endpoint switch and the configured MySQL-backed throttle storage/policy; SMTP and email-outbox encryption secrets are required only when their respective opt-in features are enabled.
 - Compose's default MySQL database name is `zirologistics`, not the planned isolated `zirologistics_wms` runtime database.
 
-This means the current Compose configuration must not be described as a verified WMS deployment path. The existing default development credentials also must not be treated as production secrets.
+The mismatch above describes the WP10 baseline only. WP11 PR #157 now updates the root Dockerfile to package `WmsRuntimeApplication` with the `wms-runtime` Maven profile, changes root Compose to use `WMS_DB_URL`/`WMS_DB_USERNAME`/`WMS_DB_PASSWORD`, creates an isolated `zirologistics_wms` MySQL 8.4 database/volume, and adds `.env.example` with secure JWT defaults. The WMS Flyway setting is explicit in Compose and remains disabled by default in application properties. These changes are subject to WP11 full regression and post-merge Main CI; they are not yet production deployment evidence.
 
-**Ownership split:** WP11 owns the repository-wide documentation and configuration audit, including README, Dockerfile, Compose, deployment YAML, application properties, Maven/CI configuration and `.env.example`. WP11 will correct stale or misleading developer setup instructions and align the files with the dedicated WMS runtime without claiming production deployment readiness. Stage 17 remains responsible for final environment-specific deployment architecture, production secrets, hosting/network policy, rollout and operational validation. Never point WMS Flyway at the legacy database or the frozen reference database.
+**Ownership split:** WP11 owns repository-level developer documentation and local container configuration. Stage 17 remains responsible for environment-specific production deployment architecture, production secrets, hosting/network policy, rollout, monitoring, backup/restore, and operational validation. Never point WMS Flyway at the legacy database or frozen reference database.
 
 ## 8. Final compatibility conclusions
 
@@ -72,7 +74,7 @@ This means the current Compose configuration must not be described as a verified
 | Exact public route allowlist | **VERIFIED — security tests** | Only exact anonymous POST routes are permitted when enabled. |
 | Full client compatibility for every response | **PARTIALLY VERIFIED** | WP9/WP11 integration matrix remains required. |
 | Generated OpenAPI schema | **UNAVAILABLE at baseline** | Curated API reference documented; generated schema is a separate decision. |
-| Current Docker Compose as WMS deployment | **UNVERIFIED / NOT SUPPORTED** | Configuration targets the legacy runtime and database variables. WP11 / Stage 17 own remediation. |
+| WP10 Docker Compose baseline | **VERIFIED — historical source inspection** | The old Compose configuration targeted the legacy runtime. WP11 PR #157 provides a dedicated WMS local Compose path; final status depends on its CI and merge evidence. |
 
 ## 9. Exit criteria
 

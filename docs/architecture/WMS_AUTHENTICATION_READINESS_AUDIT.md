@@ -1,19 +1,19 @@
 # WMS Authentication Readiness Audit
 
-**Status:** Repository evidence review; production data provenance remains unverified.  
+**Status:** Updated Stage 13 readiness review; production data provenance and deployment load evidence remain unverified.  
 **Runtime:** WMS-only runtime (`wms` profile)  
 **Schema:** Frozen V1; this audit makes no schema or runtime changes.  
 **Decision:** Do not expose credential login until the blockers below are resolved.
 
 ## 1. Executive result
 
-The repository contains a working WMS Argon2id encoder foundation and an isolated WMS HTTP security boundary. It does **not** establish that existing WMS account rows contain Argon2id hashes, and it does not contain a shared/durable login-throttling implementation.
+The repository now contains WMS credential-authentication and tenant-selection HTTP adapters, a WMS JWT security boundary, and MySQL-backed login-throttle storage. It still does **not** establish that existing WMS account rows contain Argon2id hashes, nor does it contain target-production Argon2id benchmark evidence.
 
 Therefore:
-- WMS login and tenant-selection endpoints remain blocked.
+- WMS credential and tenant-selection endpoints are implemented, but production enablement remains gated by hash provenance, benchmark, and operational security evidence.
 - Do not reuse the legacy authentication service or its encoder against WMS identity records.
 - Do not inspect or modify a production database as part of this repository audit.
-- No database migration, endpoint, or password rewrite is included in this change.
+- WMS V2 login-throttle persistence and subsequent identity-token/outbox migrations are additive; frozen V1 remains unchanged.
 
 ## 2. Evidence classification
 
@@ -24,10 +24,10 @@ Therefore:
 | Existing WMS hash format | No repository evidence establishes the format/provenance of values already stored in the WMS database. | UNVERIFIED |
 | WMS password encoder | WMS-only `Argon2PasswordEncoder` configured with 16-byte salt, 32-byte output, parallelism 1, 19 MiB memory, and 2 iterations; tests check the PHC prefix and matching behavior. | VERIFIED — unit tests |
 | Production cost benchmark | No target-deployment benchmark or expected concurrent-login capacity evidence found. | NOT VERIFIED |
-| Shared login throttling | No Redis client, shared limiter, login-attempt persistence, or WMS throttling service found in the repository. | VERIFIED — repository search |
-| WMS auth endpoints | No WMS credential login or tenant-selection endpoint exists. | VERIFIED — repository state |
-| HTTP security | WMS filter chain requires authentication when JWT is enabled and denies all requests when disabled/missing. PR #25 is merged. | VERIFIED — CI |
-| WMS V1 throttle/session schema | Frozen V1 contains no dedicated login-attempt, refresh-token, or session-revocation persistence. | VERIFIED — schema audit |
+| Shared login throttling | MySQL-backed WMS throttle storage and application service are implemented with Testcontainers integration coverage; no Redis dependency is introduced. | VERIFIED — source and integration tests |
+| WMS auth endpoints | Credential authentication and tenant-selection routes exist under `/api/wms/v1/auth/credentials` and `/api/wms/v1/auth/tenant-selection`; protected registration is gated by WMS JWT and anonymous access by the exact public-route switch. | VERIFIED — source and HTTP contract tests |
+| HTTP security | JWT-disabled mode denies all requests; JWT-enabled mode registers protected WMS routes, while the separate switch permits only the exact anonymous POST allowlist. | VERIFIED — security tests and Stage 13 CI |
+| WMS schema for throttling/sessions | V1 is immutable and has no throttle/session tables; additive V2 provides login-throttle persistence. Durable refresh-token/session revocation is still not implemented. | VERIFIED — migration and repository audit |
 
 ## 3. Password hash compatibility
 
@@ -97,24 +97,23 @@ Credential login must remain disabled until all of the following are true:
 
 - [ ] Existing WMS password-hash formats and provenance are established through an approved controlled process, or affected users are assigned a reset path.
 - [ ] Argon2id parameters are benchmarked against deployment hardware and expected concurrency.
-- [ ] Shared/durable throttling implementation and outage policy are approved and tested under concurrent requests.
+- [x] MySQL-backed shared/durable throttle storage and service have integration coverage; production thresholds, load evidence, monitoring, and outage runbook still require deployment sign-off.
 - [ ] Generic authentication errors and timing behavior are tested for unknown, inactive, malformed-hash, and wrong-password cases.
 - [ ] Login success updates last-login metadata safely without leaking account existence.
 - [ ] Login returns only a tenant-neutral selection token and safe membership display data.
 - [ ] Tenant selection verifies the selection-token profile and re-resolves the chosen membership against the authenticated global user.
-- [ ] HTTP security explicitly allows only the two intended auth routes; all business routes remain protected by access tokens.
+- [x] HTTP security enforces the exact anonymous POST allowlist; all other business/protected routes require WMS access tokens.
 - [ ] Permission and tenant ownership enforcement is tested at service boundaries.
 - [ ] No refresh token is issued until durable session persistence, rotation, replay detection, and revocation are implemented.
 - [ ] Integration tests use disposable MySQL 8.4 Testcontainers only.
 
 ## 6. Scope of this audit
 
-This change adds documentation only. It does not:
+This readiness document does not itself change runtime behavior. The current repository already includes the credential/tenant-selection HTTP adapters and MySQL-backed throttle implementation. This audit does not:
 - inspect or connect to `zirowms_v1` or `zirologistics_db`;
-- change schema or migration files;
-- add a login, registration, tenant-selection, refresh, or logout endpoint;
+- change frozen V1 or any migration;
+- add public self-registration, refresh-token issuance, or durable logout/session revocation;
 - change legacy BCrypt authentication;
-- add Redis, a local cache limiter, or database throttle tables;
 - claim production password-hash compatibility.
 
 ## 7. References
