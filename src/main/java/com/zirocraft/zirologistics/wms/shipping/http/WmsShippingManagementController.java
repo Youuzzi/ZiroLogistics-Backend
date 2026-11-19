@@ -1,7 +1,7 @@
 package com.zirocraft.zirologistics.wms.shipping.http;
 
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
-import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityHttpEnabledCondition;
+import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
 import com.zirocraft.zirologistics.wms.shipping.application.WmsShippingManagementService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -19,7 +19,7 @@ import java.util.UUID;
 @RestController
 @Profile("wms")
 @RequestMapping("/api/wms/v1/tenants/current/shipping")
-@Conditional(WmsIdentityHttpEnabledCondition.class)
+@Conditional(WmsHttpApiEnabledCondition.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class WmsShippingManagementController {
     private final WmsShippingManagementService service;

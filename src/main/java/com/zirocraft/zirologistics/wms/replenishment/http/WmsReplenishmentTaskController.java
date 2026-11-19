@@ -2,7 +2,7 @@ package com.zirocraft.zirologistics.wms.replenishment.http;
 
 import com.zirocraft.zirologistics.wms.replenishment.application.WmsReplenishmentTaskService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
-import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityHttpEnabledCondition;
+import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -22,7 +22,7 @@ import java.util.UUID;
 
 @RestController
 @Profile("wms")
-@Conditional(WmsIdentityHttpEnabledCondition.class)
+@Conditional(WmsHttpApiEnabledCondition.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class WmsReplenishmentTaskController {
     private final WmsReplenishmentTaskService service;

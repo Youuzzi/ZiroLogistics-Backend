@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
         "com.zirocraft.zirologistics.wms.inventory.http"
 })
 @Profile("wms")
-@Conditional(WmsIdentityHttpEnabledCondition.class)
+@Conditional(WmsHttpApiEnabledCondition.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class WmsAuthenticationExceptionHandler {
 

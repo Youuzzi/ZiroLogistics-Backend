@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @Profile("wms")
 @RequestMapping("/api/wms/v1/auth")
-@Conditional(WmsIdentityHttpEnabledCondition.class)
+@Conditional(WmsPublicAuthEndpointsEnabledCondition.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class WmsAuthenticationController {
 

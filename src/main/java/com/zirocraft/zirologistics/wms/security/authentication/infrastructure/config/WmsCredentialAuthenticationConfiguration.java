@@ -5,7 +5,7 @@ import com.zirocraft.zirologistics.wms.identity.application.WmsUserLookupService
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.WmsLoginMembershipRepository;
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtTokenService;
 import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationService;
-import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityHttpEnabledCondition;
+import com.zirocraft.zirologistics.wms.security.authentication.http.WmsPublicAuthEndpointsEnabledCondition;
 import com.zirocraft.zirologistics.wms.security.authentication.application.WmsUnknownUserPasswordVerifier;
 import com.zirocraft.zirologistics.wms.security.throttling.application.WmsClientAddressResolver;
 import com.zirocraft.zirologistics.wms.security.throttling.application.WmsLoginThrottlePolicy;
@@ -32,7 +32,7 @@ import java.util.Base64;
  */
 @Configuration(proxyBeanMethods = false)
 @Profile("wms")
-@Conditional(WmsIdentityHttpEnabledCondition.class)
+@Conditional(WmsPublicAuthEndpointsEnabledCondition.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @EnableConfigurationProperties(WmsLoginThrottleProperties.class)
 public class WmsCredentialAuthenticationConfiguration {

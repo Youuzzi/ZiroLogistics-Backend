@@ -1,7 +1,7 @@
 package com.zirocraft.zirologistics.wms.transfer.http;
 
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
-import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityHttpEnabledCondition;
+import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
 import com.zirocraft.zirologistics.wms.transfer.application.WmsInterWarehouseTransferService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
@@ -24,7 +24,7 @@ import java.util.UUID;
 @RestController
 @Profile("wms")
 @RequestMapping("/api/wms/v1/tenants/current/stock-transfers")
-@Conditional(WmsIdentityHttpEnabledCondition.class)
+@Conditional(WmsHttpApiEnabledCondition.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class WmsInterWarehouseTransferController {
     private final WmsInterWarehouseTransferService service;
