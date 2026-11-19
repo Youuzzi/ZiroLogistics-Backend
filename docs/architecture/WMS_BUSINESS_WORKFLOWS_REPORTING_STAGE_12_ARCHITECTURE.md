@@ -2,7 +2,7 @@
 
 **Status:** Proposed implementation contract for roadmap Stage 12.
 **Runtime:** WMS-only modular monolith (`wms` profile).
-**Schema authority:** Frozen WMS V1 plus additive migrations V2–V25; future schema changes are additive V26+ only.
+**Schema authority:** Frozen WMS V1 plus additive migrations V2–V26; future schema changes are additive V27+ only.
 **Verification:** Disposable MySQL 8.4 Testcontainers only.
 **Baseline commit:** `8cf37a7558a07481d284d91b2b137f28ed61d8cd`.
 **Scope:** End-to-end integrity across inbound, outbound, inventory lifecycle, inter-warehouse transfer, replenishment/stock control, operational reporting and audit traceability.
@@ -48,7 +48,7 @@ The existing source tree also contains inventory query, reservation, posting and
 
 The repository contains a legacy `/api/v1.0/dashboard/summary` endpoint backed by the legacy `DashboardServiceImpl`, which counts legacy warehouses, bins and items.
 
-The WMS runtime entry point `WmsRuntimeApplication` scans only `com.zirocraft.zirologistics.wms`. At this baseline there is no WMS reporting package/controller/service in that runtime package. Therefore the legacy dashboard is **not** an acceptable substitute for tenant-scoped WMS operational reporting.
+The WMS runtime entry point `WmsRuntimeApplication` scans only `com.zirocraft.zirologistics.wms`. At this baseline there is no WMS reporting package/controller/service in that runtime package. WP7 adds `WmsOperationalReportingService` and `/api/wms/v1/tenants/current/reports/operational-summary`, protected by persisted `WMS_OPERATIONAL_REPORT_READ`. Therefore the legacy dashboard is **not** an acceptable substitute for tenant-scoped WMS operational reporting.
 
 Stage 12 WP7 must design and implement reporting within the WMS runtime, using tenant-scoped WMS sources and persisted permissions. Do not expose legacy aggregate counts as WMS reports, and do not introduce cross-tenant or unscoped aggregation.
 
@@ -189,7 +189,7 @@ Required integrity:
 
 ### WP7 — Operational Reporting
 
-- Add a dedicated WMS reporting boundary inside the WMS runtime.
+- Add a dedicated WMS reporting boundary inside the WMS runtime. WP7 delivers a read-only operational summary across inventory position, inbound receipts and putaway tasks, outbound shipments, inter-warehouse transfers, replenishment tasks, stock counts and adjustments. The summary reports current document-status totals across the tenant (not a date-window count) and returns an explicit UTC generation timestamp. Inventory `onHandQty` includes all stock statuses, while `availableQty` includes only `AVAILABLE` stock; reserved quantity remains separately reported.
 - Define tenant-scoped, permission-protected operational summaries based on authoritative WMS documents and inventory sources.
 - Start with actionable operational views: inventory position/availability, inbound receiving and putaway progress, outbound picking/packing/shipping progress, transfer status, replenishment workload, stock-count/adjustment status.
 - Define time basis, status semantics, filters, pagination/limits and aggregation behavior explicitly.
@@ -216,7 +216,7 @@ Required integrity:
 
 ## 5. Engineering and schema rules
 
-1. V1–V25 migrations are immutable. Any justified schema extension must be additive V26+.
+1. V1–V25 migrations are immutable. WP7 adds V26 for the WMS operational reporting permission; future schema extensions must be additive V27+.
 2. Never run migrations or schema-changing commands against the user's local databases. Use disposable MySQL 8.4 Testcontainers in CI.
 3. Never write inventory balances, ledger, serial state or reservations from controllers or workflow modules; use the existing application boundary.
 4. Preserve tenant scope and persisted permission resolution in every query and command.

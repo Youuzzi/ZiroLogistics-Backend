@@ -2,6 +2,7 @@ package com.zirocraft.zirologistics.wms.inventory.application;
 
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
+import com.zirocraft.zirologistics.wms.reporting.application.WmsOperationalReportingService;
 import com.zirocraft.zirologistics.wms.transfer.application.WmsInterWarehouseTransferService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +53,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
     }
 
     @Autowired private WmsInventoryPostingService postingService;
+    @Autowired private WmsOperationalReportingService reportingService;
     @Autowired private WmsInventoryReservationService reservationService;
     @Autowired private WmsInterWarehouseTransferService transferService;
     @Autowired private JdbcTemplate jdbc;
@@ -61,6 +63,53 @@ class WmsInventoryPostingMySqlIntegrationTest {
     @BeforeEach
     void setUp() {
         fixture = fixture("NONE");
+    }
+
+    @Test
+    void operationalSummaryIsReadOnlyAndStrictlyScopedToAuthenticatedTenant() {
+        post(fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "5.0000"));
+        Fixture otherTenant = fixture("NONE");
+        post(otherTenant, UUID.randomUUID(), "RECEIPT",
+                leg(otherTenant, null, null, "AVAILABLE", "9.0000"));
+
+        long ledgerBefore = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id IN (?, ?)",
+                fixture.tenantId(), otherTenant.tenantId());
+
+        Map<String, Object> summary = reportingService.operationalSummary(fixture.principal());
+        assertNotNull(summary.get("generatedAtUtc"));
+        assertEquals("ALL_TENANT_DOCUMENTS_CURRENT_STATUS", summary.get("statusScope"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> inventory = (Map<String, Object>) summary.get("inventoryPosition");
+        assertEquals(new BigDecimal("5.0000"), inventory.get("onHandQty"));
+        assertEquals(new BigDecimal("0.0000"), inventory.get("reservedQty"));
+        assertEquals(new BigDecimal("5.0000"), inventory.get("availableQty"));
+        assertEquals(1L, ((Number) inventory.get("distinctItemCount")).longValue());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflows = (Map<String, Object>) summary.get("workflowDocumentsByStatus");
+        assertTrue(workflows.containsKey("inboundReceipts"));
+        assertTrue(workflows.containsKey("putawayTasks"));
+        assertTrue(workflows.containsKey("outboundShipments"));
+        assertTrue(workflows.containsKey("interWarehouseTransfers"));
+        assertTrue(workflows.containsKey("replenishmentTasks"));
+        assertTrue(workflows.containsKey("stockCounts"));
+        assertTrue(workflows.containsKey("inventoryAdjustments"));
+
+        Map<String, Object> otherSummary = reportingService.operationalSummary(otherTenant.principal());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> otherInventory = (Map<String, Object>) otherSummary.get("inventoryPosition");
+        assertEquals(new BigDecimal("9.0000"), otherInventory.get("onHandQty"));
+        assertEquals(ledgerBefore, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id IN (?, ?)",
+                fixture.tenantId(), otherTenant.tenantId()));
+
+        jdbc.update("""
+                DELETE rp FROM role_permissions rp
+                JOIN membership_roles mr ON mr.role_id = rp.role_id AND mr.tenant_id = ?
+                JOIN permissions p ON p.id = rp.permission_id
+                WHERE mr.membership_id = ? AND p.permission_code = 'WMS_OPERATIONAL_REPORT_READ'
+                """, fixture.tenantId(), fixture.membershipId());
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> reportingService.operationalSummary(fixture.principal()));
     }
 
     @Test
@@ -992,7 +1041,8 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 INSERT INTO role_permissions (role_id, permission_id)
                 SELECT ?, id FROM permissions
                 WHERE permission_code IN ('WMS_INVENTORY_POST', 'WMS_INVENTORY_RESERVE', 'WMS_TRANSFER_READ',
-                  'WMS_TRANSFER_CREATE', 'WMS_TRANSFER_RELEASE', 'WMS_TRANSFER_DISPATCH', 'WMS_TRANSFER_RECEIVE')
+                  'WMS_TRANSFER_CREATE', 'WMS_TRANSFER_RELEASE', 'WMS_TRANSFER_DISPATCH', 'WMS_TRANSFER_RECEIVE',
+                  'WMS_OPERATIONAL_REPORT_READ')
                 """, roleId);
 
         String warehousePublicId = UUID.randomUUID().toString();
@@ -1019,7 +1069,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 jdbc.queryForObject("SELECT public_id FROM tenants WHERE id = ?", String.class, tenantId),
                 membershipId, membershipPublicId, Set.of("WMS_INVENTORY_POST", "WMS_INVENTORY_RESERVE",
                 "WMS_TRANSFER_READ", "WMS_TRANSFER_CREATE", "WMS_TRANSFER_RELEASE",
-                "WMS_TRANSFER_DISPATCH", "WMS_TRANSFER_RECEIVE"));
+                "WMS_TRANSFER_DISPATCH", "WMS_TRANSFER_RECEIVE", "WMS_OPERATIONAL_REPORT_READ"));
         return new Fixture(tenantId, tenantPublicId, userPublicId, membershipId, membershipPublicId,
                 warehousePublicId, locationPublicId, itemPublicId, principal);
     }
