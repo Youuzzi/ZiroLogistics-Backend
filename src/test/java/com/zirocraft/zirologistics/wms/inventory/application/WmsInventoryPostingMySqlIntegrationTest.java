@@ -77,6 +77,8 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 fixture.tenantId(), otherTenant.tenantId());
 
         Map<String, Object> summary = reportingService.operationalSummary(fixture.principal());
+        assertNotNull(summary.get("generatedAtUtc"));
+        assertEquals("ALL_TENANT_DOCUMENTS_CURRENT_STATUS", summary.get("statusScope"));
         @SuppressWarnings("unchecked")
         Map<String, Object> inventory = (Map<String, Object>) summary.get("inventoryPosition");
         assertEquals(new BigDecimal("5.0000"), inventory.get("onHandQty"));
