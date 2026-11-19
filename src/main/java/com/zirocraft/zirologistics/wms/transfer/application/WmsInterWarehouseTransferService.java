@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.transfer.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
@@ -574,7 +575,7 @@ public class WmsInterWarehouseTransferService {
     }
 
     private Map<String,Object> requiredRow(String sql,Object a,Object b,String message){
-        List<Map<String,Object>> rows=jdbc.queryForList(sql,a,b);if(rows.isEmpty())throw new IllegalArgumentException(message);return rows.getFirst();
+        List<Map<String,Object>> rows=jdbc.queryForList(sql,a,b);if(rows.isEmpty())throw new WmsResourceNotFoundException(message);return rows.getFirst();
     }
     private Map<String,Object> requiredRow(String sql,Object a,Object b,Object c,String message){
         List<Map<String,Object>> rows=jdbc.queryForList(sql,a,b,c);if(rows.isEmpty())throw new IllegalArgumentException(message);return rows.getFirst();
