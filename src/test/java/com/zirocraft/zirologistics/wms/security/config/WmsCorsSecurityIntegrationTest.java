@@ -2,14 +2,17 @@ package com.zirocraft.zirologistics.wms.security.config;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -17,9 +20,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(classes = WmsHttpSecurityTestApplication.class)
-@AutoConfigureMockMvc
-@Import({WmsSecurityConfiguration.class, WmsCorsConfiguration.class})
+@WebMvcTest(controllers = WmsCorsSecurityIntegrationTest.ProbeController.class)
+@ContextConfiguration(classes = WmsHttpSecurityTestApplication.class)
+@Import({WmsSecurityConfiguration.class, WmsCorsConfiguration.class, WmsCorsSecurityIntegrationTest.ProbeController.class})
 @ActiveProfiles("wms")
 @TestPropertySource(properties = {
         "wms.security.jwt.enabled=false",
@@ -60,10 +63,18 @@ class WmsCorsSecurityIntegrationTest {
     @Test
     void actualRequestFromConfiguredFrontendOriginReceivesCorsHeadersWithoutBypassingAuthentication()
             throws Exception {
-        mockMvc.perform(get("/api/wms/v1/warehouses")
+        mockMvc.perform(get("/wms/cors-probe")
                         .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN))
                 .andExpect(status().isForbidden())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN))
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+    }
+
+    @RestController
+    static class ProbeController {
+        @GetMapping(value = "/wms/cors-probe", produces = MediaType.TEXT_PLAIN_VALUE)
+        String probe() {
+            return "must-remain-authenticated";
+        }
     }
 }
