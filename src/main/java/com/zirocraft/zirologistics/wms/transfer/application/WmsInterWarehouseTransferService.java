@@ -587,22 +587,22 @@ public class WmsInterWarehouseTransferService {
     }
 
     private Map<String,Object> requiredRow(String sql,Object a,Object b,String message){
-        List<Map<String,Object>> rows=jdbc.queryForList(sql,a,b);if(rows.isEmpty())throw new IllegalArgumentException(message);return rows.getFirst();
+        List<Map<String,Object>> rows=jdbc.queryForList(sql,a,b);if(rows.isEmpty())throw new WmsResourceNotFoundException(message);return rows.getFirst();
     }
     private Map<String,Object> requiredRow(String sql,Object a,Object b,Object c,String message){
-        List<Map<String,Object>> rows=jdbc.queryForList(sql,a,b,c);if(rows.isEmpty())throw new IllegalArgumentException(message);return rows.getFirst();
+        List<Map<String,Object>> rows=jdbc.queryForList(sql,a,b,c);if(rows.isEmpty())throw new WmsResourceNotFoundException(message);return rows.getFirst();
     }
     private Map<String,Object> requiredRow(String sql,Object a,Object b,Object c,Object d,Object e,Object f,String message){
-        List<Map<String,Object>> rows=jdbc.queryForList(sql,a,b,c,d,e,f);if(rows.isEmpty())throw new IllegalArgumentException(message);return rows.getFirst();
+        List<Map<String,Object>> rows=jdbc.queryForList(sql,a,b,c,d,e,f);if(rows.isEmpty())throw new WmsResourceNotFoundException(message);return rows.getFirst();
     }
     private long requiredLong(String sql,Object a,Object b,String message){
-        List<Long> rows=jdbc.queryForList(sql,Long.class,a,b);if(rows.isEmpty())throw new IllegalArgumentException(message);return rows.getFirst();
+        List<Long> rows=jdbc.queryForList(sql,Long.class,a,b);if(rows.isEmpty())throw new WmsResourceNotFoundException(message);return rows.getFirst();
     }
     private long requiredLong(String sql,Object a,Object b,Object c,String message){
-        List<Long> rows=jdbc.queryForList(sql,Long.class,a,b,c);if(rows.isEmpty())throw new IllegalArgumentException(message);return rows.getFirst();
+        List<Long> rows=jdbc.queryForList(sql,Long.class,a,b,c);if(rows.isEmpty())throw new WmsResourceNotFoundException(message);return rows.getFirst();
     }
     private long requiredLong(String sql,Object a,Object b,Object c,Object d,Object e,Object f,String message){
-        List<Long> rows=jdbc.queryForList(sql,Long.class,a,b,c,d,e,f);if(rows.isEmpty())throw new IllegalArgumentException(message);return rows.getFirst();
+        List<Long> rows=jdbc.queryForList(sql,Long.class,a,b,c,d,e,f);if(rows.isEmpty())throw new WmsResourceNotFoundException(message);return rows.getFirst();
     }
     private static long number(Map<String,Object> row,String key){return ((Number)row.get(key)).longValue();}
     private static boolean bool(Object v){return v instanceof Boolean b?b: v instanceof Number n&&n.intValue()!=0;}
