@@ -125,10 +125,9 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 fixture.tenantId());
 
         jdbc.execute("""
-                CREATE TRIGGER wms_test_fail_inventory_audit
-                BEFORE INSERT ON tenant_audit_events
-                FOR EACH ROW
-                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'injected inventory audit failure'
+                ALTER TABLE tenant_audit_events
+                ADD CONSTRAINT chk_test_reject_inventory_audit
+                CHECK (event_type <> 'INVENTORY_MOVEMENT_POSTED')
                 """);
         try {
             assertThrows(RuntimeException.class, () -> postingService.post(fixture.principal(),
@@ -141,7 +140,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
                                             "AVAILABLE", new BigDecimal("2.0000"))),
                             "audit rollback test")));
         } finally {
-            jdbc.execute("DROP TRIGGER IF EXISTS wms_test_fail_inventory_audit");
+            jdbc.execute("ALTER TABLE tenant_audit_events DROP CHECK chk_test_reject_inventory_audit");
         }
 
         assertEquals(new BigDecimal("5.0000"),
