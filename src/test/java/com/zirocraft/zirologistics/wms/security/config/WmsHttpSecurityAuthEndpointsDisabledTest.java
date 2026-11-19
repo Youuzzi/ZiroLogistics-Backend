@@ -20,6 +20,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
@@ -27,7 +28,6 @@ import java.util.Set;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -84,7 +84,7 @@ class WmsHttpSecurityAuthEndpointsDisabledTest {
     }
 
     @Test
-    void keepsPublicAuthenticationRouteProtectedWhenPublicAuthEndpointsAreDisabled() throws Exception {
+    void doesNotRegisterPublicAuthenticationRouteWhenPublicAuthEndpointsAreDisabled() throws Exception {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .post("/api/wms/v1/auth/credentials")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -105,7 +105,7 @@ class WmsHttpSecurityAuthEndpointsDisabledTest {
     @RestController
     @Conditional(WmsPublicAuthEndpointsEnabledCondition.class)
     static class PublicAuthenticationProbeController {
-        @org.springframework.web.bind.annotation.PostMapping(
+        @PostMapping(
                 value = "/api/wms/v1/auth/credentials", produces = MediaType.TEXT_PLAIN_VALUE)
         String publicAuthenticationRoute() {
             return "public-auth-route";
