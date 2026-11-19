@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.wms.security.authentication.http;
 
-import com.zirocraft.zirologistics.exception.GlobalExceptionHandler;
 import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,7 +25,7 @@ class WmsApiErrorContractTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(new WorkflowProbeController())
-                .setControllerAdvice(new GlobalExceptionHandler(), new WmsAuthenticationExceptionHandler())
+                .setControllerAdvice(new WmsAuthenticationExceptionHandler())
                 .build();
     }
 

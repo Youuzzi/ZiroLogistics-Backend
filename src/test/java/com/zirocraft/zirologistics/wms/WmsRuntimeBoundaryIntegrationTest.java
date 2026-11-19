@@ -1,10 +1,5 @@
 package com.zirocraft.zirologistics.wms;
 
-import com.zirocraft.zirologistics.controller.AuthController;
-import com.zirocraft.zirologistics.controller.WarehouseController;
-import com.zirocraft.zirologistics.repository.UserRepository;
-import com.zirocraft.zirologistics.service.impl.AuthServiceImpl;
-import com.zirocraft.zirologistics.filter.JwtRequestFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
                 "spring.jpa.hibernate.ddl-auto=none",
                 "spring.flyway.enabled=false"
         })
-@ActiveProfiles({"wms", "test"})
+@ActiveProfiles("wms")
 class WmsRuntimeBoundaryIntegrationTest {
 
     @Autowired
@@ -31,15 +26,15 @@ class WmsRuntimeBoundaryIntegrationTest {
 
     @Test
     void wmsRuntimeDoesNotLoadLegacyApplicationComponents() {
-        assertFalse(applicationContext.getBeansOfType(AuthController.class).size() > 0,
+        assertFalse(applicationContext.containsBean("authController"),
                 "Legacy authentication controller must not be loaded by WMS runtime");
-        assertFalse(applicationContext.getBeansOfType(WarehouseController.class).size() > 0,
+        assertFalse(applicationContext.containsBean("warehouseController"),
                 "Legacy warehouse controller must not be loaded by WMS runtime");
-        assertFalse(applicationContext.getBeansOfType(UserRepository.class).size() > 0,
+        assertFalse(applicationContext.containsBean("userRepository"),
                 "Legacy user repository must not be loaded by WMS runtime");
-        assertFalse(applicationContext.getBeansOfType(AuthServiceImpl.class).size() > 0,
+        assertFalse(applicationContext.containsBean("authServiceImpl"),
                 "Legacy authentication service must not be loaded by WMS runtime");
-        assertFalse(applicationContext.getBeansOfType(JwtRequestFilter.class).size() > 0,
+        assertFalse(applicationContext.containsBean("jwtRequestFilter"),
                 "Legacy JWT filter must not be loaded by WMS runtime");
         assertFalse(applicationContext.containsBean("auditorProvider"),
                 "Legacy JPA auditing configuration must not be loaded by WMS runtime");
