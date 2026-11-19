@@ -85,6 +85,60 @@ class WmsPutawayManagementMySqlIntegrationTest {
     }
 
     @Test
+    void retryingTheSamePutawayRequestReturnsOriginalConfirmationWithoutMovingStockAgain() {
+        Receipt receipt = receive(fixture, "NONE", "2.0000", List.of());
+        String taskId = createTask(fixture, receipt, "2.0000", List.of());
+        String lineId = taskLineId(fixture, taskId);
+        startTask(fixture, taskId);
+        UUID requestId = UUID.randomUUID();
+        WmsPutawayManagementService.ConfirmPutawayCommand command =
+                new WmsPutawayManagementService.ConfirmPutawayCommand(
+                        requestId, new BigDecimal("2.0000"), List.of(), "Retry-safe confirmation");
+
+        var first = putawayService.confirm(fixture.principal(), taskId, lineId, command);
+        var retry = putawayService.confirm(fixture.principal(), taskId, lineId, command);
+
+        assertEquals(first.get("confirmationPublicId"), retry.get("confirmationPublicId"));
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(fixture, fixture.receivingLocationPublicId()));
+        assertEquals(new BigDecimal("2.0000"), balance(fixture, fixture.storageLocationPublicId()));
+        assertEquals(new BigDecimal("2.0000"), jdbc.queryForObject("""
+                SELECT confirmed_qty FROM putaway_task_lines WHERE tenant_id = ? AND public_id = ?
+                """, BigDecimal.class, fixture.tenantId(), lineId));
+        assertEquals("COMPLETED", taskStatus(fixture, taskId));
+        assertEquals("COMPLETED", lineStatus(fixture, lineId));
+        assertEquals(3, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(1, count("SELECT COUNT(*) FROM putaway_confirmations WHERE tenant_id = ? AND request_id = ?",
+                fixture.tenantId(), requestId.toString()));
+    }
+
+    @Test
+    void reusingPutawayRequestIdWithDifferentQuantityIsRejectedWithoutAdditionalMovement() {
+        Receipt receipt = receive(fixture, "NONE", "5.0000", List.of());
+        String taskId = createTask(fixture, receipt, "5.0000", List.of());
+        String lineId = taskLineId(fixture, taskId);
+        startTask(fixture, taskId);
+        UUID requestId = UUID.randomUUID();
+
+        putawayService.confirm(fixture.principal(), taskId, lineId,
+                new WmsPutawayManagementService.ConfirmPutawayCommand(
+                        requestId, new BigDecimal("2.0000"), List.of(), null));
+
+        assertThrows(IllegalArgumentException.class, () -> putawayService.confirm(
+                fixture.principal(), taskId, lineId,
+                new WmsPutawayManagementService.ConfirmPutawayCommand(
+                        requestId, new BigDecimal("3.0000"), List.of(), null)));
+
+        assertEquals(new BigDecimal("3.0000"), balance(fixture, fixture.receivingLocationPublicId()));
+        assertEquals(new BigDecimal("2.0000"), balance(fixture, fixture.storageLocationPublicId()));
+        assertEquals(new BigDecimal("2.0000"), jdbc.queryForObject("""
+                SELECT confirmed_qty FROM putaway_task_lines WHERE tenant_id = ? AND public_id = ?
+                """, BigDecimal.class, fixture.tenantId(), lineId));
+        assertEquals(3, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(1, count("SELECT COUNT(*) FROM putaway_confirmations WHERE tenant_id = ? AND request_id = ?",
+                fixture.tenantId(), requestId.toString()));
+    }
+
+    @Test
     void overConfirmationIsRejectedWithoutPostingAnyInventoryMovement() {
         Receipt receipt = receive(fixture, "NONE", "5.0000", List.of());
         String taskId = createTask(fixture, receipt, "5.0000", List.of());

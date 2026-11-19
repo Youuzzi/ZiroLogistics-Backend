@@ -206,9 +206,6 @@ public class WmsPutawayManagementService {
         Access access = access(principal, "WMS_PUTAWAY_CONFIRM");
         if (command.requestId() == null) throw new IllegalArgumentException("Request ID is required");
         Map<String, Object> task = task(access.tenantId(), taskPublicId);
-        if (!"IN_PROGRESS".equals(task.get("status"))) {
-            throw new IllegalStateException("Putaway task is not in progress");
-        }
         if (number(task, "assigned_to_membership_id") != access.membershipId()) {
             throw new AccessDeniedException("Only the assigned member can confirm putaway");
         }
@@ -229,10 +226,55 @@ public class WmsPutawayManagementService {
                 LEFT JOIN inventory_lots lot ON lot.id = l.lot_id AND lot.tenant_id = l.tenant_id
                 WHERE l.tenant_id = ? AND l.putaway_task_id = ? AND l.public_id = ?
                 """, "Putaway task line not found", access.tenantId(), number(task, "id"), linePublicId);
+        BigDecimal qty = quantity(command.confirmedQty());
+        Map<String, Object> priorConfirmation = jdbc.query("""
+                SELECT c.public_id, c.putaway_task_id, c.putaway_task_line_id,
+                       c.confirmed_qty, c.confirmed_by_membership_id, c.notes,
+                       l.public_id AS line_public_id
+                FROM putaway_confirmations c
+                JOIN putaway_task_lines l
+                  ON l.id = c.putaway_task_line_id AND l.tenant_id = c.tenant_id
+                WHERE c.tenant_id = ? AND c.request_id = ?
+                """, rs -> rs.next() ? Map.of(
+                        "public_id", rs.getString("public_id"),
+                        "putaway_task_id", rs.getLong("putaway_task_id"),
+                        "putaway_task_line_id", rs.getLong("putaway_task_line_id"),
+                        "confirmed_qty", rs.getBigDecimal("confirmed_qty"),
+                        "confirmed_by_membership_id", rs.getLong("confirmed_by_membership_id"),
+                        "notes", rs.getString("notes") == null ? "" : rs.getString("notes"),
+                        "line_public_id", rs.getString("line_public_id")) : null,
+                access.tenantId(), command.requestId().toString());
+        if (priorConfirmation != null) {
+            List<String> priorSerialIds = jdbc.queryForList("""
+                    SELECT DISTINCT s.public_id
+                    FROM inventory_ledger ledger
+                    JOIN inventory_serials s
+                      ON s.id = ledger.serial_id AND s.tenant_id = ledger.tenant_id
+                    WHERE ledger.tenant_id = ? AND ledger.request_id = ? AND ledger.serial_id IS NOT NULL
+                    """, String.class, access.tenantId(), command.requestId().toString());
+            Set<String> requestedSerialIds = new HashSet<>(
+                    command.serialPublicIds() == null ? List.of() : command.serialPublicIds());
+            if (number(priorConfirmation, "putaway_task_id") != number(task, "id")
+                    || number(priorConfirmation, "putaway_task_line_id") != number(line, "id")
+                    || !string(priorConfirmation, "line_public_id").equals(linePublicId)
+                    || number(priorConfirmation, "confirmed_by_membership_id") != access.membershipId()
+                    || decimal(priorConfirmation, "confirmed_qty").compareTo(qty) != 0
+                    || !string(priorConfirmation, "notes").equals(optional(command.notes(), 1000))
+                    || !new HashSet<>(priorSerialIds).equals(requestedSerialIds)) {
+                throw new IllegalArgumentException("Request ID was already used for a different putaway confirmation");
+            }
+            return Map.of("confirmationPublicId", string(priorConfirmation, "public_id"),
+                    "confirmedQty", decimal(priorConfirmation, "confirmed_qty"),
+                    "lineStatus", string(line, "status"),
+                    "taskStatus", string(task, "status"),
+                    "inventoryMovement", postingServiceResultSummary(command.requestId()));
+        }
+        if (!"IN_PROGRESS".equals(task.get("status"))) {
+            throw new IllegalStateException("Putaway task is not in progress");
+        }
         if ("COMPLETED".equals(line.get("status")) || "CANCELLED".equals(line.get("status"))) {
             throw new IllegalStateException("Putaway task line is not eligible for confirmation");
         }
-        BigDecimal qty = quantity(command.confirmedQty());
         BigDecimal planned = decimal(line, "planned_qty");
         BigDecimal already = decimal(line, "confirmed_qty");
         if (already.add(qty).compareTo(planned) > 0) {
