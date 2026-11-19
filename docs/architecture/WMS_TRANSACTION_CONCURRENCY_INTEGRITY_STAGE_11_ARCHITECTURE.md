@@ -1,9 +1,9 @@
 # WMS Transaction & Concurrency Integrity — Stage 11 Architecture Contract
 
-**Status:** Completed — WP1–WP8 merged; final Main CI #503 succeeded on `8cf37a7558a07481d284d91b2b137f28ed61d8cd`.  
-**Runtime:** WMS-only modular monolith.  
-**Schema authority:** Frozen WMS V1 plus immutable additive migrations V2–V25; future schema changes are additive V26+.  
-**Verification:** Disposable MySQL 8.4 Testcontainers only.  
+**Status:** Completed — WP1–WP8 merged; final Main CI #503 succeeded on `8cf37a7558a07481d284d91b2b137f28ed61d8cd`.
+**Runtime:** WMS-only modular monolith.
+**Schema authority:** Frozen WMS V1 plus immutable additive migrations V2–V25; future schema changes are additive V26+.
+**Verification:** Disposable MySQL 8.4 Testcontainers only.
 **Scope:** Transaction boundaries, concurrent inventory operations, lock ordering, idempotency and safe retry behavior across implemented WMS workflows.
 
 ## 1. Objective and boundaries
