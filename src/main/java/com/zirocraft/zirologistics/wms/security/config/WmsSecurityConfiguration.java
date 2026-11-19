@@ -12,10 +12,10 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
  * Isolated HTTP security boundary for the WMS servlet runtime.
@@ -36,11 +36,12 @@ public class WmsSecurityConfiguration {
             HttpSecurity http,
             @Qualifier("wmsAccessJwtDecoder") JwtDecoder accessJwtDecoder,
             WmsJwtAuthenticationConverter authenticationConverter,
+            CorsConfigurationSource wmsCorsConfigurationSource,
             @Value("${wms.security.http.auth-endpoints-enabled:false}") boolean authEndpointsEnabled) throws Exception {
 
         http
                 .securityMatcher("/**")
-                .cors(Customizer.withDefaults())
+                .cors(cors -> cors.configurationSource(wmsCorsConfigurationSource))
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -76,10 +77,11 @@ public class WmsSecurityConfiguration {
             name = "enabled",
             havingValue = "false",
             matchIfMissing = true)
-    SecurityFilterChain wmsJwtDisabledSecurityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain wmsJwtDisabledSecurityFilterChain(
+            HttpSecurity http, CorsConfigurationSource wmsCorsConfigurationSource) throws Exception {
         http
                 .securityMatcher("/**")
-                .cors(Customizer.withDefaults())
+                .cors(cors -> cors.configurationSource(wmsCorsConfigurationSource))
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
