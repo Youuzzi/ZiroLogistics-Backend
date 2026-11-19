@@ -124,14 +124,19 @@ class WmsInventoryPostingMySqlIntegrationTest {
         long beforeAudit = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ?",
                 fixture.tenantId());
 
+        UUID rejectedRequestId = UUID.fromString("00000000-0000-4000-8000-000000000117");
         jdbc.execute("""
                 ALTER TABLE tenant_audit_events
                 ADD CONSTRAINT chk_test_reject_inventory_audit
-                CHECK (event_type <> 'INVENTORY_MOVEMENT_POSTED')
+                CHECK (
+                    event_type <> 'INVENTORY_MOVEMENT_POSTED'
+                    OR JSON_UNQUOTE(JSON_EXTRACT(change_payload, '$.requestId'))
+                       <> '00000000-0000-4000-8000-000000000117'
+                )
                 """);
         try {
             assertThrows(RuntimeException.class, () -> postingService.post(fixture.principal(),
-                    new WmsInventoryPostingService.PostingCommand(UUID.randomUUID(), "TRANSFER",
+                    new WmsInventoryPostingService.PostingCommand(rejectedRequestId, "TRANSFER",
                             List.of(
                                     leg(fixture, null, null, "AVAILABLE", "2.0000"),
                                     new WmsInventoryPostingService.PostingLeg(
