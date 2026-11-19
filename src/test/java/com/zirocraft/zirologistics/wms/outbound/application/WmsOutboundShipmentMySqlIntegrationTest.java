@@ -520,7 +520,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 CHECK (event_type <> 'OUTBOUND_SHIPMENT_SHIPPED')
                 """);
         try {
-            assertThrows(RuntimeException.class, () -> shippingService.ship(fixture.principal(), shipmentId,
+            assertThrows(org.springframework.dao.DataIntegrityViolationException.class, () -> shippingService.ship(fixture.principal(), shipmentId,
                     new WmsShippingManagementService.ShipCommand(UUID.randomUUID(), null, "ROLLBACK-TRACK", null)));
         } finally {
             jdbc.execute("ALTER TABLE tenant_audit_events DROP CHECK chk_test_block_outbound_ship_audit");
