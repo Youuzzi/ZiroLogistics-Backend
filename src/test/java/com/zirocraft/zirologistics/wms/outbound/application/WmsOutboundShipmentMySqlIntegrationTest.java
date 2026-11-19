@@ -86,7 +86,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                                 fixture.receivingLocationPublicId(), null, new BigDecimal("2.0000"), List.of()))));
         assertEquals(new BigDecimal("5.0000"), reserved(fixture));
         assertEquals("RELEASED", shipmentService.release(fixture.principal(), shipmentId).get("status"));
-        assertEquals("RELEASED", shipmentStatus(fixture, shipmentId));
+        assertEquals("PICKING", shipmentStatus(fixture, shipmentId));
     }
 
     @Test
