@@ -582,7 +582,7 @@ public class WmsPutawayManagementService {
 
     private long requiredLong(String sql, String message, Object... args) {
         List<Long> rows = jdbc.queryForList(sql, Long.class, args);
-        if (rows.isEmpty()) throw new IllegalArgumentException(message);
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException(message);
         return rows.getFirst();
     }
 
