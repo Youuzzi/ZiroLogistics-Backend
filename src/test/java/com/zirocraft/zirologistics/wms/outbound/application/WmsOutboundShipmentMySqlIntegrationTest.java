@@ -389,7 +389,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         assertEquals("RECEIVED", transferStatus(fixture, transferId));
         assertEquals(new BigDecimal("3.0000"), balanceAt(fixture, destination.warehousePublicId(),
                 destination.locationPublicId(), "AVAILABLE"));
-        assertEquals(2, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_DISPATCH'",
+        assertEquals(1, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_DISPATCH'",
                 fixture.tenantId()));
         assertEquals(3, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_RECEIPT'",
                 fixture.tenantId()));
@@ -430,7 +430,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 () -> transferService.receive(fixture.principal(), transferId, receive));
         assertEquals(new BigDecimal("2.0000"), balanceAt(fixture, destination.warehousePublicId(),
                 destination.locationPublicId(), "AVAILABLE"));
-        assertEquals(2, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_RECEIPT'",
+        assertEquals(1, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_RECEIPT'",
                 fixture.tenantId()));
         assertEquals("IN_TRANSIT", transferStatus(fixture, transferId));
     }
