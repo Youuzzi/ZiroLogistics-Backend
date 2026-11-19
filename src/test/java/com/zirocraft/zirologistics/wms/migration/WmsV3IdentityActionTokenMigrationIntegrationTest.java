@@ -1,4 +1,4 @@
-package com.zirocraft.zirologistics.integration;
+package com.zirocraft.zirologistics.wms.migration;
 
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
