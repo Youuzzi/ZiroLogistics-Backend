@@ -51,6 +51,28 @@ class WmsRoleManagementServiceTest {
         verifyNoInteractions(jdbc);
     }
 
+    @Test
+    void rejectsNegativePageBeforeExecutingCollectionQuery() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_READ")));
+
+        assertThrows(IllegalArgumentException.class, () -> service.listRoles(principal, -1, 50));
+
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void rejectsPageSizeAboveHardMaximumBeforeExecutingCollectionQuery() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_READ")));
+
+        assertThrows(IllegalArgumentException.class, () -> service.listRoles(principal, 0, 201));
+
+        verifyNoInteractions(jdbc);
+    }
+
     private static WmsAuthenticatedPrincipal principal() {
         return new WmsAuthenticatedPrincipal(
                 "user-public", 10L, "tenant-public", 30L, "membership-public",
