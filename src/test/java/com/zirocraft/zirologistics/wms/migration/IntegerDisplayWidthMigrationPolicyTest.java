@@ -1,4 +1,4 @@
-package com.zirocraft.zirologistics.integration;
+package com.zirocraft.zirologistics.wms.migration;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -18,7 +18,6 @@ import org.springframework.core.io.support.ResourcePatternResolver;
 class IntegerDisplayWidthMigrationPolicyTest {
 
     private static final List<String> MIGRATION_LOCATIONS = List.of(
-            "db/migration",
             "db/wms-migration");
 
     private static final Pattern VERSIONED_MIGRATION =
