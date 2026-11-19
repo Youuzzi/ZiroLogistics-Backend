@@ -1,12 +1,14 @@
 package com.zirocraft.zirologistics.wms.identity.http;
 
+import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import com.zirocraft.zirologistics.wms.identity.application.WmsEmailOutboxEncryptionService;
 import com.zirocraft.zirologistics.wms.identity.application.WmsInvitationAcceptanceService;
 import com.zirocraft.zirologistics.wms.identity.application.WmsInvitationIssueResult;
 import com.zirocraft.zirologistics.wms.identity.application.WmsTenantInvitationService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
-import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityHttpEnabledCondition;
+import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -22,7 +24,7 @@ import java.time.Instant;
 @RestController
 @Profile("wms")
 @RequestMapping("/api/wms/v1/invitations")
-@Conditional(WmsIdentityHttpEnabledCondition.class)
+@Conditional(WmsHttpApiEnabledCondition.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class WmsInvitationController {
 
