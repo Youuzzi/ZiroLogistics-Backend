@@ -4,7 +4,7 @@ import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEn
 
 import com.zirocraft.zirologistics.wms.inventory.application.WmsInventoryMasterDataService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
-import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
