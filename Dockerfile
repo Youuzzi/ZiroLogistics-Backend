@@ -6,8 +6,8 @@ COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
 RUN chmod +x mvnw
 
-COPY src/ src/
-RUN ./mvnw --batch-mode --no-transfer-progress -Pwms-runtime -DskipTests package
+COPY src/main/ src/main/
+RUN ./mvnw --batch-mode --no-transfer-progress -Pwms-runtime -Dmaven.test.skip=true package
 
 # Minimal non-root Java 21 runtime.
 FROM eclipse-temurin:21-jre

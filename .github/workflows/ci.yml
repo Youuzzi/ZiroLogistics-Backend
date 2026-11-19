@@ -96,3 +96,7 @@ jobs:
         run: |
           start_class="$(unzip -p target/zirologistics-0.0.1-SNAPSHOT.jar META-INF/MANIFEST.MF | sed -n 's/^Start-Class: //p' | tr -d '\r')"
           test "$start_class" = "com.zirocraft.zirologistics.wms.WmsRuntimeApplication"
+
+      - name: Build WMS Docker image
+        if: steps.scope.outputs.run_backend_tests == 'true'
+        run: docker build --pull --tag zirologistics-wms:ci --file Dockerfile .
