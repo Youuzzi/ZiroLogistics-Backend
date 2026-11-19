@@ -32,6 +32,20 @@ build/
 ### VS Code ###
 .vscode/
 
-# Zirocraft Studio Security Secrets
+# Local environment files (keep the committed template only)
 .env
+.env.*
+!.env.example
 *.env
+
+# Private key stores and local certificates
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Local logs and crash dumps
+*.log
+hs_err_pid*

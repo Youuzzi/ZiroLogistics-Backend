@@ -16,7 +16,7 @@ jobs:
   test:
     name: Build and test (Java 21)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Check out source
@@ -82,6 +82,17 @@ jobs:
         if: steps.scope.outputs.run_backend_tests == 'true'
         run: chmod +x mvnw
 
-      - name: Run tests
+      - name: Validate WMS Compose configuration
         if: steps.scope.outputs.run_backend_tests == 'true'
-        run: ./mvnw --batch-mode --no-transfer-progress clean verify
+        run: docker compose --env-file .env.example -f compose.yml config --quiet
+
+      - name: Run full regression and package WMS runtime
+        if: steps.scope.outputs.run_backend_tests == 'true'
+        run: ./mvnw --batch-mode --no-transfer-progress -Pwms-runtime clean verify
+
+      - name: Verify packaged WMS entry point
+        if: steps.scope.outputs.run_backend_tests == 'true'
+        shell: bash
+        run: |
+          start_class="$(unzip -p target/zirologistics-0.0.1-SNAPSHOT.jar META-INF/MANIFEST.MF | sed -n 's/^Start-Class: //p' | tr -d '\r')"
+          test "$start_class" = "com.zirocraft.zirologistics.wms.WmsRuntimeApplication"

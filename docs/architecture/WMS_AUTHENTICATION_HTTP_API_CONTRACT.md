@@ -1,6 +1,15 @@
 # WMS Authentication and Account Lifecycle HTTP API Contract
 
-Status: Implemented as opt-in WMS HTTP adapters. The endpoints remain disabled unless both `wms.security.jwt.enabled=true` and `wms.security.http.auth-endpoints-enabled=true` are explicitly configured; see the deployment gates below.
+Status: Implemented as opt-in WMS HTTP adapters. Runtime registration and anonymous-route access are controlled by separate security gates.
+
+## Runtime and security gates
+
+- `wms.security.jwt.enabled=false` or missing: WMS HTTP controllers are not registered and the WMS HTTP security chain denies all requests.
+- `wms.security.jwt.enabled=true`: WMS operational and protected identity controllers are registered. Every route requires an authenticated WMS access token by default.
+- JWT enabled plus `wms.security.http.auth-endpoints-enabled=false`: operational APIs remain registered and protected; the anonymous authentication POST allowlist is not permitted.
+- Both settings true: only the exact anonymous POST allowlist below is permitted. All other routes remain authenticated.
+
+The public authentication endpoint switch does not disable operational controllers and does not make invitation issuance public. Invitation issuance, existing-account invitation acceptance, and password changes remain authenticated.
 
 ## Principles
 
@@ -61,7 +70,7 @@ Success: short-lived access token containing only subject, membership reference,
 ## Security filter-chain requirements
 
 1. Keep JWT-disabled mode deny-all.
-2. In JWT-enabled mode, permit only the exact public POST routes above.
+2. In JWT-enabled mode, permit only the exact public POST routes above when the public auth endpoint switch is enabled.
 3. Require authentication for invitation issuance, existing-account invitation acceptance, password changes, and all future protected routes.
 4. Use a separate tenant-selection token decoder for tenant selection. Do not accept an access token as a selection token or vice versa.
 5. Do not globally permit `/api/**`, `/auth/**`, actuator endpoints, or arbitrary OPTIONS/GET paths.
@@ -72,7 +81,7 @@ Success: short-lived access token containing only subject, membership reference,
 
 ## Deployment gates
 
-HTTP identity endpoints remain disabled unless both `wms.security.jwt.enabled=true` and `wms.security.http.auth-endpoints-enabled=true` are explicitly set. Credential login additionally requires all of the following configuration:
+Operational WMS APIs require `wms.security.jwt.enabled=true` and correctly provisioned WMS JWT signing/verification material. Anonymous identity routes additionally require `wms.security.http.auth-endpoints-enabled=true`. Credential login also requires:
 - WMS profile and WMS-only datasource;
 - WMS JWT signing/verification key material and issuer/audiences;
 - reviewed login throttle policy, dedicated Base64 HMAC key of at least 256 bits, and explicit key version;
@@ -87,7 +96,8 @@ No default thresholds, proxy CIDRs, JWT secrets, email keys, or CORS origins are
 
 Use MockMvc/Spring Security tests for exact route authorization and DTO validation, plus disposable MySQL 8.4 Testcontainers for application flows. Cover:
 - JWT disabled denies every WMS route;
-- JWT enabled permits only the listed public POST routes anonymously;
+- JWT enabled permits only the listed public POST routes anonymously when the public endpoint switch is enabled;
+- JWT enabled with public endpoint switch disabled keeps operational routes registered and protected;
 - protected routes reject missing/invalid tokens;
 - selection decoder rejects access tokens and vice versa;
 - cross-user membership selection is rejected;
@@ -106,7 +116,6 @@ Use MockMvc/Spring Security tests for exact route authorization and DTO validati
 - No reliance on frontend route guards for authorization.
 - No direct access to user-owned database instances during tests.
 
-
 ## Encrypted identity-email delivery worker
 
 The SMTP delivery worker is opt-in and remains inactive unless
@@ -120,6 +129,7 @@ MySQL `FOR UPDATE SKIP LOCKED` adapter, decrypts only in memory, validates the
 payload purpose and recipient against the outbox envelope, and sends one of the
 three purpose-specific messages (invitation, email verification, password reset).
 Raw action tokens are placed only in the action link fragment (for example, `#token=...`), never in a request path or query string. The frontend must extract the fragment and submit the token in the POST body; fragments are not transmitted in HTTP requests.
+
 After successful SMTP submission the row is marked `SENT`. Failures receive an
 opaque `DELIVERY_FAILED` code and bounded exponential retry; exhausted or
 expired messages move to `DEAD_LETTER`. Expired processing leases are recovered

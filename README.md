@@ -1,216 +1,174 @@
-# ZiroLogistics Backend
+# ZiroLogistics WMS Backend
 
-A warehouse management system (WMS) backend built with Java 21 and Spring Boot 3.5.13. It provides REST APIs for warehouse, storage-bin, item, and inventory workflows, with authentication and transactional stock movement handling.
+Tenant-aware Warehouse Management System backend built with Java 21, Spring Boot 3.5.13, MySQL 8.4, and Flyway.
 
-> **Status:** Active development. This repository is a portfolio and development project; it is not presented as a production-ready or fully audited WMS.
+> **Status:** Active development. This repository is not yet declared production-ready. Structural refactoring, QA/security, deployment hardening, and production-readiness gates follow Stage 13.
 
 ## Repositories
 
 | Component | Repository |
 |---|---|
-| Backend API | [ZiroLogistics-Backend](https://github.com/Youuzzi/ZiroLogistics-Backend) |
+| Backend | [ZiroLogistics-Backend](https://github.com/Youuzzi/ZiroLogistics-Backend) |
 | Frontend | [ZiroLogistics-Frontend](https://github.com/Youuzzi/ZiroLogistics-Frontend) |
 
-## Scope and capabilities
+## WMS capabilities
 
-- Warehouse and storage-bin management.
-- Item and SKU management.
-- Inbound stock receiving and outbound stock issuing.
-- Bin-to-bin stock transfers.
-- Inventory balances, movement ledger, and low-stock query support.
-- Bin capacity and occupancy tracking.
-- JWT authentication and role-based authorization.
-- Request-id idempotency checks and pessimistic locking in selected inventory workflows.
-- Centralized API exception handling and JPA audit metadata.
+- Global identity, tenant membership, tenant-scoped roles, and persisted permissions.
+- Warehouse and hierarchical location master data.
+- Item catalogue, UOM, and inventory balances.
+- Inbound receiving, putaway, replenishment, picking, packing, and shipping.
+- Inventory adjustments, physical stock counts, and inter-warehouse transfers.
+- Immutable inventory posting, request idempotency, concurrency controls, and operational reporting.
+- Versioned HTTP API under `/api/wms/v1`.
 
-The feature list describes implemented areas; individual endpoints and edge cases may have different levels of test coverage.
+See [WMS v1 API Reference](docs/api/WMS_V1_API_REFERENCE_STAGE_13.md). Route existence alone does not establish production readiness.
 
-## Technology stack
+## Technology
 
 | Area | Technology |
 |---|---|
-| Language | Java 21 |
+| Language/runtime | Java 21 |
 | Framework | Spring Boot 3.5.13 |
-| Security | Spring Security, JJWT 0.11.5 |
-| Persistence | Spring Data JPA, Hibernate |
-| Database | MySQL 8.x |
-| Schema migrations | Flyway |
-| Build | Maven Wrapper |
+| Security | Spring Security, OAuth2 Resource Server, RSA JWT |
+| Persistence | Spring Data JPA / Hibernate |
+| Database | MySQL 8.4 |
+| Schema management | Flyway |
+| Build | Maven Wrapper 3.9.14 |
 | Tests | JUnit 5, Spring Boot Test, Testcontainers |
+| CI | GitHub Actions |
 
-## Architecture
+## Runtime boundary
 
-The backend follows a layered Spring application structure:
+The supported WMS entry point is `com.zirocraft.zirologistics.wms.WmsRuntimeApplication`. It scans only `com.zirocraft.zirologistics.wms` for WMS components, entities, and repositories.
 
-```text
-src/main/java/com/zirocraft/zirologistics/
-├── config/        # Application, security, web, and auditing configuration
-├── controller/    # REST API controllers
-├── entity/        # JPA entities
-├── exception/     # API exceptions and global exception handling
-├── filter/        # JWT request filter
-├── repository/    # Spring Data repositories
-├── io/
-│   ├── request/   # API request models
-│   └── response/  # API response models
-├── service/       # Service interfaces
-│   └── impl/      # Business logic
-└── util/          # Shared utilities
-```
+The legacy entry point and technical-layer packages remain isolated transitional source/test material. They are not the WMS domain model and must not be wired to the WMS database. Their final disposition belongs to the dedicated Backend Structural Audit & Refactoring after Stage 13.
 
-Controllers expose HTTP endpoints, services coordinate business workflows, and repositories handle persistence. Security and other cross-cutting concerns are configured separately.
+WMS migrations are under `classpath:db/wms-migration`. Frozen migrations V1–V26 remain immutable; future schema evolution is additive (V27+). Read [WMS Runtime Boundary](docs/runtime/WMS_RUNTIME_BOUNDARY.md) before configuring a database.
 
 ## Requirements
 
 - Java 21
-- MySQL 8.x for running the application locally
-- Docker Desktop / Docker Engine for Testcontainers tests and Docker Compose
+- Docker Desktop / Docker Engine with Docker Compose v2 (recommended local runtime)
 - PowerShell on Windows for the commands below
+- Maven is provided by the Maven Wrapper
 
-Maven is provided by the repository's Maven Wrapper.
+## Run WMS with Docker Compose
 
-## Run locally with Maven
+The Compose stack creates a dedicated local MySQL 8.4 database named `zirologistics_wms` and a named volume. It does not use the legacy `zirologistics_db` database or frozen source/reference database `zirowms_v1`.
 
-### 1. Create an empty database
-
-Create a new, empty database in MySQL:
-
-```sql
-CREATE DATABASE zirologistics;
-```
-
-### 2. Configure environment variables
-
-PowerShell:
+### 1. Prepare environment
 
 ```powershell
-$env:DB_URL="jdbc:mysql://localhost:3306/zirologistics"
-$env:DB_USERNAME="your_username"
-$env:DB_PASSWORD="your_password"
-$env:JWT_SECRET_KEY="replace-with-a-secure-secret-at-least-32-characters"
+Copy-Item .env.example .env
+notepad .env
 ```
 
-Do not commit real credentials, production secrets, or local environment files.
+Replace the example database and root passwords with unique local values. Never commit `.env`.
 
-### 3. Apply the initial schema and start the app
-
-Flyway is disabled by default to prevent accidental migration of an existing database. For a **new, empty database only**, explicitly enable the initial migration:
+### 2. Build and start
 
 ```powershell
-$env:FLYWAY_ENABLED="true"
-$env:JPA_DDL_AUTO="validate"
-.\mvnw.cmd spring-boot:run
-```
-
-Flyway scripts are stored in `src/main/resources/db/migration`. The initial `V1__initial_schema.sql` migration creates the six application tables.
-
-**Existing databases must not be pointed at this initial migration as-is.** An existing installation needs a separately reviewed baseline/adoption plan and schema/data compatibility checks. Back up existing data before any future migration-adoption work.
-
-Hibernate uses `validate` by default. It checks the mapped schema at startup; it is not a schema migration mechanism. Do not use Hibernate `update` as a production migration strategy.
-
-For a disposable local development database only, schema auto-update can be enabled explicitly:
-
-```powershell
-$env:JPA_DDL_AUTO="update"
-```
-
-## Run with Docker Compose
-
-The Compose configuration starts an isolated MySQL instance and builds/runs the backend. It uses a dedicated named volume and enables Flyway for that new Compose database.
-
-Set a local JWT secret before starting:
-
-```powershell
-$env:JWT_SECRET_KEY="replace-with-a-secure-local-secret-at-least-32-characters"
+docker compose config
 docker compose up --build -d
 ```
 
-The API is exposed at `http://localhost:8081`; MySQL is exposed on host port `3308` to avoid common local MySQL port `3306` and backend port `8080` conflicts. The Compose database is separate from any existing local database. The fallback database passwords in the Compose file are for local development only; set your own `DB_PASSWORD` and `MYSQL_ROOT_PASSWORD` values for local use, and use managed secrets in hosted environments.
+The API is exposed at `http://localhost:8081`. MySQL is available only on the Compose network and is not published to the host.
 
-To inspect service status and logs:
+### 3. Inspect services
 
 ```powershell
 docker compose ps
-docker compose logs --tail 100 backend
+docker compose logs --tail 150 mysql
+docker compose logs --tail 150 backend
 ```
 
-To stop the services without deleting database data:
+### 4. Stop
 
 ```powershell
 docker compose down
 ```
 
-To remove the disposable Compose database volume as well (this permanently deletes its data):
+To permanently delete the disposable local Compose database volume and its data:
 
 ```powershell
 docker compose down -v
 ```
 
-Do not run the volume-removal command if you need to keep the Compose database contents.
+### Authentication default
 
-### Local Docker verification
+The Compose example keeps `WMS_JWT_ENABLED=false` and the public authentication endpoint switch disabled. This is deliberate fail-closed behavior: the WMS HTTP security chain denies requests. Operational APIs require JWT. Anonymous identity routes additionally require `WMS_SECURITY_HTTP_AUTH_ENDPOINTS_ENABLED=true`; this switch does not make operational routes public. Do not enable these settings with placeholder values.
 
-The Compose stack was started locally with MySQL 8.4 and the backend container. The observed startup logs confirmed that Flyway validated and applied migration V1, Hibernate initialized successfully with schema validation enabled, and the Spring Boot application started. A host request to `http://localhost:8081/` returned HTTP 403, confirming HTTP connectivity while the root path remained protected by Spring Security; this is not an authenticated API workflow test.
+See [Authentication HTTP Contract](docs/architecture/WMS_AUTHENTICATION_HTTP_API_CONTRACT.md), [Controlled Platform Bootstrap](docs/architecture/WMS_CONTROLLED_PLATFORM_BOOTSTRAP.md), and [Local Docker Deployment](docs/deployment/WMS_LOCAL_DOCKER_DEPLOYMENT.md).
 
-## Demo profile
+## Run WMS directly with Maven
 
-A local demo account initializer is available only when the `demo` Spring profile is active and `demo.account.enabled=true`. It provisions a least-privilege `ROLE_STAFF` account, hashes the password using the configured BCrypt encoder, and leaves an existing account unchanged.
-
-Configure your own local values; never publish demo credentials:
+Use a dedicated, empty WMS development database. Do not use a legacy database or the frozen source/reference database.
 
 ```powershell
-$env:DEMO_ACCOUNT_EMAIL="demo@zirologistics.test"
-$env:DEMO_ACCOUNT_PASSWORD="ChooseYourOwnDemoPass123"
-$env:SPRING_PROFILES_ACTIVE="demo"
-.\mvnw.cmd spring-boot:run
+$env:WMS_DB_URL = "jdbc:mysql://localhost:3306/zirologistics_wms"
+$env:WMS_DB_USERNAME = "your_wms_database_user"
+$env:WMS_DB_PASSWORD = "your_wms_database_password"
+$env:WMS_FLYWAY_ENABLED = "false"
+$env:WMS_JWT_ENABLED = "false"
+
+.\mvnw.cmd -Pwms-runtime spring-boot:run
 ```
 
-Use a password meeting the application's validation rules. Do not activate the demo profile against a production database. The initializer does not create warehouses, bins, items, or stock records.
-
-## Tests
-
-Run the complete test suite:
+For a newly provisioned empty WMS database only, verify the connection target and explicitly enable Flyway:
 
 ```powershell
-.\mvnw.cmd clean test
+$env:WMS_FLYWAY_ENABLED = "true"
+.\mvnw.cmd -Pwms-runtime spring-boot:run
 ```
 
-Run the MySQL inventory locking integration test only:
+Hibernate uses schema validation. Do not enable Hibernate schema auto-update. Flyway defaults to false outside the dedicated Compose example.
+
+## Database and migration safety
+
+- WMS connection variables: `WMS_DB_URL`, `WMS_DB_USERNAME`, `WMS_DB_PASSWORD`.
+- Flyway is controlled independently by `WMS_FLYWAY_ENABLED` and defaults to false.
+- WMS migration location: `src/main/resources/db/wms-migration`.
+- The legacy migration path `classpath:db/migration` is not the WMS migration path.
+- Never point the legacy runtime at the WMS schema.
+- Never run WMS migrations against `zirologistics_db` or `zirowms_v1`.
+- Migration/runtime integration tests use disposable MySQL 8.4 Testcontainers databases, not developer-owned databases.
+
+## Tests and CI
+
+Run the complete regression suite and package the WMS runtime entry point:
 
 ```powershell
-.\mvnw.cmd "-Dtest=MySqlInventoryLockingIntegrationTest" test
+.\mvnw.cmd -Pwms-runtime clean verify
 ```
 
-MySQL integration tests use disposable Testcontainers databases and require Docker to be running. Some tests are configured to disable themselves when Docker is unavailable, so inspect the Surefire reports and confirm that the integration tests actually ran rather than being skipped.
+MySQL integration tests use disposable Testcontainers databases and require Docker. Inspect the Surefire summary and confirm Docker-dependent tests ran rather than being skipped.
 
-### Recorded verification evidence
+### Latest verified CI evidence
 
-- Local Surefire reports: **29 tests across 15 suites; 0 failures, 0 errors, 0 skipped**.
-- GitHub Actions Backend CI: **successful** for commit `690584a54732a25ffd0125533139d8df0c06ded0` (before the later Compose host-port/documentation-only commits).
-- Local Docker Compose smoke test: MySQL container healthy; Flyway V1 applied; Hibernate schema validation and application startup succeeded; host HTTP request received a Spring Security 403 response.
+- Backend CI run [#645](https://github.com/Youuzzi/ZiroLogistics-Backend/actions/runs/44615501968)
+- Main commit: `a160b3ed0a52a9b9d98a8ac49b5e452af9e980ce`
+- **352 tests, 0 failures, 0 errors, 2 skipped; BUILD SUCCESS**
+- MySQL integration target: MySQL 8.4.13 Testcontainers
 
-Test results demonstrate only the scenarios covered by the tests; they do not establish that every workflow or production environment has been verified. CI has not yet been rerun for the latest documentation and Compose adjustments.
+This evidence applies to the recorded commit and does not establish production readiness.
 
-## CI
+## Engineering roadmap
 
-GitHub Actions runs the Maven test suite for pushes and pull requests targeting the repository's main development branches. The workflow uses Java 21 and caches Maven dependencies. MySQL Testcontainers tests run using the Docker service available on the GitHub-hosted Linux runner.
+After backend/API Stages 1–13:
+1. Backend Structural Audit & Refactoring.
+2. Quality Assurance & Security Audit.
+3. Deployment & Infrastructure.
+4. Production Readiness.
 
-## Current engineering focus
+Frontend WMS and frontend-backend integration remain gated until backend structural, QA/security, deployment, and production-readiness work is complete.
 
-- Backend security and authorization hardening.
-- Inventory transaction integrity, idempotency, and concurrency.
-- Repeatable database setup and schema migration safety.
-- API documentation and frontend integration.
-- Additional integration coverage for warehouse and inventory edge cases.
+## Security
 
-## Security and portfolio notes
-
-This is a development project, not a hosted public demo unless a deployment is explicitly provided.
-
-- Use synthetic or anonymized data in screenshots, database exports, and demonstrations.
-- Never commit production credentials, JWT secrets, API keys, or real user passwords.
-- Keep demo accounts isolated and grant only the minimum required access.
-- Review database migrations carefully before applying them to any database containing valuable data.
+- Never commit `.env`, database credentials, JWT private keys, SMTP credentials, encryption keys, or real user data.
+- Use synthetic/anonymized data in test evidence.
+- Keep WMS JWT disabled until deployment secrets and security policy are configured.
+- Review database targets before enabling Flyway.
+- Do not expose MySQL publicly for local development.
 
 ## Maintainer
 
