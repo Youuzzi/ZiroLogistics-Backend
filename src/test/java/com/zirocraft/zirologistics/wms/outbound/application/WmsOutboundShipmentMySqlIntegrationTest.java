@@ -387,6 +387,87 @@ class WmsOutboundShipmentMySqlIntegrationTest {
 
 
     @Test
+    void duplicatePickingAndPackingRequestIdsCannotRepeatWorkflowEffects() {
+        String shipmentId = createShipment(fixture);
+        String lineId = addLine(fixture, shipmentId, "5.0000");
+        shipmentService.allocate(fixture.principal(), shipmentId, lineId,
+                new WmsOutboundShipmentService.AllocationCommand(List.of(
+                        new WmsOutboundShipmentService.AllocationLine(
+                                fixture.receivingLocationPublicId(), null, new BigDecimal("5.0000"), List.of()))));
+        shipmentService.release(fixture.principal(), shipmentId);
+        String taskId = (String) pickingService.create(fixture.principal(),
+                new WmsPickingManagementService.CreatePickingCommand(shipmentId,
+                        "PICK-REPLAY-" + UUID.randomUUID().toString().substring(0, 8), "NORMAL", null))
+                .get("public_id");
+        pickingService.assign(fixture.principal(), taskId,
+                new WmsPickingManagementService.AssignPickingCommand(fixture.membershipPublicId()));
+        pickingService.start(fixture.principal(), taskId);
+
+        String staging = UUID.randomUUID().toString();
+        long warehouseId = jdbc.queryForObject(
+                "SELECT id FROM warehouses WHERE tenant_id=? AND public_id=?", Long.class,
+                fixture.tenantId(), fixture.warehousePublicId());
+        jdbc.update("""
+                INSERT INTO warehouse_locations(public_id,tenant_id,warehouse_id,location_code,
+                  location_name,location_type,status)
+                VALUES(?,?,?,?,'Replay Staging','STAGING','ACTIVE')
+                """, staging, fixture.tenantId(), warehouseId, "STG_REPLAY_" + UUID.randomUUID().toString().substring(0, 6));
+
+        UUID pickingRequestId = UUID.randomUUID();
+        WmsPickingManagementService.ConfirmPickingCommand partialPick =
+                new WmsPickingManagementService.ConfirmPickingCommand(
+                        pickingRequestId, new BigDecimal("2.0000"), staging, List.of(), "Partial pick replay");
+        pickingService.confirm(fixture.principal(), taskId, 1, partialPick);
+        int ledgerAfterFirstPick = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?", fixture.tenantId());
+        assertThrows(IllegalStateException.class, () -> pickingService.confirm(fixture.principal(), taskId, 1, partialPick));
+        assertEquals(ledgerAfterFirstPick, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?", fixture.tenantId()));
+        assertEquals(new BigDecimal("2.0000"), jdbc.queryForObject("""
+                SELECT picked_qty FROM picking_task_lines
+                WHERE tenant_id=? AND picking_task_id=(SELECT id FROM picking_tasks WHERE tenant_id=? AND public_id=?)
+                """, BigDecimal.class, fixture.tenantId(), fixture.tenantId(), taskId));
+
+        pickingService.confirm(fixture.principal(), taskId, 1,
+                new WmsPickingManagementService.ConfirmPickingCommand(
+                        UUID.randomUUID(), new BigDecimal("3.0000"), staging, List.of(), "Finish pick"));
+
+        String sessionId = (String) packingService.create(fixture.principal(),
+                new WmsPackingManagementService.CreateSessionCommand(shipmentId,
+                        "PACK-REPLAY-" + UUID.randomUUID().toString().substring(0, 8), null)).get("public_id");
+        packingService.ready(fixture.principal(), sessionId);
+        packingService.assign(fixture.principal(), sessionId,
+                new WmsPackingManagementService.AssignSessionCommand(fixture.membershipPublicId()));
+        packingService.start(fixture.principal(), sessionId);
+        String packageId = (String) packingService.createPackage(fixture.principal(), sessionId,
+                new WmsPackingManagementService.CreatePackageCommand(
+                        "BOX-REPLAY-" + UUID.randomUUID().toString().substring(0, 8), "CARTON",
+                        null, null, null, null, null)).get("public_id");
+
+        UUID packingRequestId = UUID.randomUUID();
+        WmsPackingManagementService.AddPackageLineCommand packageLine =
+                new WmsPackingManagementService.AddPackageLineCommand(
+                        packingRequestId, 1, new BigDecimal("5.0000"), List.of(), "Packing replay");
+        packingService.addLine(fixture.principal(), sessionId, packageId, packageLine);
+        int packageLinesAfterFirst = count("""
+                SELECT COUNT(*) FROM packing_package_lines
+                WHERE tenant_id=? AND packing_session_id=(
+                  SELECT id FROM packing_sessions WHERE tenant_id=? AND public_id=?
+                )
+                """, fixture.tenantId(), fixture.tenantId(), sessionId);
+        assertThrows(IllegalStateException.class,
+                () -> packingService.addLine(fixture.principal(), sessionId, packageId, packageLine));
+        assertEquals(packageLinesAfterFirst, count("""
+                SELECT COUNT(*) FROM packing_package_lines
+                WHERE tenant_id=? AND packing_session_id=(
+                  SELECT id FROM packing_sessions WHERE tenant_id=? AND public_id=?
+                )
+                """, fixture.tenantId(), fixture.tenantId(), sessionId));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM packing_confirmations
+                WHERE tenant_id=? AND request_id=?
+                """, fixture.tenantId(), packingRequestId.toString()));
+    }
+
+    @Test
     void interWarehouseTransferDispatchesAndReceivesPartialGoodDamagedAndShortQuantities() {
         Destination destination = destination(fixture);
         String transferId = createTransfer(fixture, destination, "5.0000", List.of());
