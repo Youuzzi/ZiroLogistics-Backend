@@ -256,7 +256,7 @@ class WmsStockCountMySqlIntegrationTest {
                 JOIN stock_counts sc
                   ON sc.id = scs.stock_count_id AND sc.tenant_id = scs.tenant_id
                 JOIN warehouse_locations l
-                  ON l.id = scs.location_id AND l.tenant_id = scs.tenant_id
+                  ON l.id = scl.location_id AND l.tenant_id = scl.tenant_id
                 WHERE sc.tenant_id = ? AND sc.public_id = ?
                 """, rs -> {
             while (rs.next()) expectedByLocation.put(rs.getString("public_id"), rs.getBigDecimal("expected_qty"));
