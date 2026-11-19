@@ -29,6 +29,9 @@ public class WmsCorsConfiguration {
                 .filter(origin -> !origin.isEmpty())
                 .distinct()
                 .toList();
+        if (allowedOrigins.contains("*")) {
+            throw new IllegalArgumentException("Wildcard CORS origins are not permitted");
+        }
 
         CorsConfiguration cors = new CorsConfiguration();
         cors.setAllowedOrigins(allowedOrigins);
