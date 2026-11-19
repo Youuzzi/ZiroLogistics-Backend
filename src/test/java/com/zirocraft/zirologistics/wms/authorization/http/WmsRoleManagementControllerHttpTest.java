@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -83,6 +82,17 @@ class WmsRoleManagementControllerHttpTest {
                 .andExpect(content().json("[]"));
 
         verify(service).listRoles(principal, 2, 50);
+    }
+
+    @Test
+    void mapsServicePageBoundRejectionToStableBadRequestContract() throws Exception {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(service.listRoles(principal, -1, 200)).thenThrow(new IllegalArgumentException("page must be non-negative"));
+
+        mockMvc.perform(get(ROUTE + "?page=-1")
+                        .with(authentication(authenticated(principal))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
     @Test
