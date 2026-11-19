@@ -445,7 +445,7 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                 List.of(new WmsReplenishmentTaskService.ManualTaskLine(
                         lotFixture.itemPublicId(), lotFixture.sourceLocationPublicId(),
                         lotFixture.destinationLocationPublicId(), null, BigDecimal.ONE, null)));
-        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class, () -> taskService.createManual(lotFixture.principal(), missingLot));
+        assertThrows(IllegalArgumentException.class, () -> taskService.createManual(lotFixture.principal(), missingLot));
 
         Fixture foreign = fixture("LOT");
         String foreignLot = createLot(foreign, "FOREIGN-LOT");
