@@ -23,6 +23,7 @@ import java.util.Objects;
 public class WmsOperationalReportingService {
     private static final List<WorkflowSource> WORKFLOWS = List.of(
             new WorkflowSource("inbound_receipts", "inboundReceipts"),
+            new WorkflowSource("putaway_tasks", "putawayTasks"),
             new WorkflowSource("outbound_shipments", "outboundShipments"),
             new WorkflowSource("stock_transfers", "interWarehouseTransfers"),
             new WorkflowSource("replenishment_tasks", "replenishmentTasks"),
