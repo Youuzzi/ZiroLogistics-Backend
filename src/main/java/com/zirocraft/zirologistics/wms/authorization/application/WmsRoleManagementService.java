@@ -200,15 +200,17 @@ public class WmsRoleManagementService {
     }
 
     @Transactional(readOnly = true)
-    public List<String> membershipRoles(WmsAuthenticatedPrincipal principal, String membershipPublicId) {
+    public List<String> membershipRoles(WmsAuthenticatedPrincipal principal, String membershipPublicId,
+                                        int page, int size) {
         Access access = access(principal, "WMS_MEMBERSHIP_ROLE_READ");
         Long membershipId = activeMembership(access.tenantId(), membershipPublicId);
+        long offset = boundedOffset(page, size);
         return jdbc.queryForList("""
                 SELECT r.public_id FROM membership_roles mr
                 JOIN roles r ON r.id = mr.role_id AND r.tenant_id = mr.tenant_id
                 WHERE mr.tenant_id = ? AND mr.membership_id = ? AND r.status = 'ACTIVE'
-                ORDER BY r.role_code
-                """, String.class, access.tenantId(), membershipId);
+                ORDER BY r.role_code LIMIT ? OFFSET ?
+                """, String.class, access.tenantId(), membershipId, size, offset);
     }
 
     @Transactional
