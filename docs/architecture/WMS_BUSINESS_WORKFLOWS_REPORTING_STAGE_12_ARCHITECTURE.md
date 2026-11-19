@@ -1,10 +1,11 @@
 # WMS Business Workflows & Reporting — Stage 12 Architecture & Delivery Contract
 
-**Status:** Proposed implementation contract for roadmap Stage 12.
+**Status:** Completed — WP1–WP9 integrated; final Main CI #558 succeeded on `893ad6ba82dfc1ae5acc3a5fa471c047fd9e0e5c`.
 **Runtime:** WMS-only modular monolith (`wms` profile).
 **Schema authority:** Frozen WMS V1 plus additive migrations V2–V26; future schema changes are additive V27+ only.
 **Verification:** Disposable MySQL 8.4 Testcontainers only.
-**Baseline commit:** `8cf37a7558a07481d284d91b2b137f28ed61d8cd`.
+**Stage 12 starting baseline:** `8cf37a7558a07481d284d91b2b137f28ed61d8cd`.
+**Final integrated commit:** `893ad6ba82dfc1ae5acc3a5fa471c047fd9e0e5c` (Main CI #558: success).
 **Scope:** End-to-end integrity across inbound, outbound, inventory lifecycle, inter-warehouse transfer, replenishment/stock control, operational reporting and audit traceability.
 
 ## 1. Stage objective
@@ -238,7 +239,16 @@ Stage 12 is complete when:
 - all nine work packages are merged;
 - final full regression and post-merge Main CI succeed on the exact main commit.
 
-## 7. Evidence labels
+## 7. Final Stage 12 evidence
+
+- **VERIFIED:** WP1–WP7 merged in order through PRs #119–#126; WP8 merged as integrated PR #130 after rebasing onto the outbound-integrated main; WP9 checklist merged as PR #131. The earlier WP8/WP9 PRs #127/#128 and duplicate PR #129 were not merged and are not part of the delivered result.
+- **VERIFIED:** PR #130 and PR #131 have successful PR CI; final Main CI #558 passed on `893ad6ba82dfc1ae5acc3a5fa471c047fd9e0e5c` with Java 21 and the full Maven test step.
+- **VERIFIED:** V1–V25 remain unchanged in the Stage 12 integration diff; V26 adds only `WMS_OPERATIONAL_REPORT_READ`. The WP7 CI validated fresh and upgrade migration paths using disposable MySQL 8.4 Testcontainers.
+- **VERIFIED:** Reporting service uses the authenticated tenant/membership, persisted `WMS_OPERATIONAL_REPORT_READ`, read-only transaction semantics and tenant predicates for each workflow source. The integration test verifies tenant-isolated inventory totals, read-only behavior, permission denial, report timestamp/status scope and response source keys.
+- **PARTIALLY VERIFIED:** The reporting integration test exercises the service boundary and inventory tenant isolation; individual status-count aggregation for every workflow source is supported by tenant-filtered SQL inspection but is not independently asserted for every source table.
+- **VERIFIED:** The putaway replay fix compares task, line, actor, quantity, notes and serial identity before returning the original confirmation; sequential replay after task completion is covered by MySQL integration tests.
+
+## 8. Evidence labels
 
 Use the following labels in WP audit notes and PR descriptions:
 - **VERIFIED** — directly demonstrated by deterministic test/runtime evidence.

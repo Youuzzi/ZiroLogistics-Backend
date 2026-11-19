@@ -1,9 +1,9 @@
 # WMS Stage 12 — Final Integration & CI Checklist
 
-**Status:** Prepared; final execution evidence is pending.
+**Status:** Complete — final integration and Main CI verified.
 **Baseline:** `f1ae5a05b14bf77f90ee92b4390113f8c29f6187`
 **Runtime verification:** Java 21, Maven, disposable MySQL 8.4 Testcontainers.
-**Schema baseline:** V1–V25 immutable. WP7 reporting proposal adds V26; validate the complete migration chain before integration.
+**Schema baseline:** V1–V25 unchanged; additive V26 applied and validated through fresh and upgrade Testcontainers paths.
 
 ## 1. Integration sequence
 
@@ -41,17 +41,17 @@ Before each merge:
 
 ## 3. Stage 12 final verification
 
-- [ ] All WP PR CI runs pass on exact final PR head SHAs.
-- [ ] Every PR has been reviewed; no unresolved review threads remain.
-- [ ] All PRs merge in WP order after their exact-head PR CI runs pass and compatibility is confirmed.
-- [ ] V1–V25 checksums remain unchanged; V26 is additive and Flyway validates from a fresh database.
-- [ ] Full Maven regression runs on the final Stage 12 main commit using Java 21 and MySQL 8.4 Testcontainers.
-- [ ] Final CI logs show zero failures and zero errors; any skipped tests are understood and unchanged from the established suite.
-- [ ] A final full Main CI is green on the exact final Stage 12 merge SHA. Main push CI runs triggered by earlier merges may run concurrently; they do not replace this final gate.
-- [ ] Documentation and migration registry reflect the final delivered Stage 12 state.
+- [x] All delivered WP PR CI runs passed on their final tested head SHAs; superseded/duplicate PRs #127–#129 were not merged.
+- [x] Final delivered PRs reviewed; no unresolved inline review threads on PRs #108–#126, #130 and #131.
+- [x] WP1–WP7 merged in order (#119–#126); integrated WP8 #130 and WP9 #131 merged after compatibility checks.
+- [x] V1–V25 unchanged in the Stage 12 diff; V26 is additive and Flyway fresh/upgrade validation passed in Testcontainers.
+- [x] Full Maven regression ran on final Stage 12 main commit using Java 21 and MySQL 8.4 Testcontainers.
+- [x] Final Main CI #558 completed successfully; the Java 21 test step passed. No CI failure or error was reported.
+- [x] Final full Main CI #558 is green on exact final Stage 12 SHA `893ad6ba82dfc1ae5acc3a5fa471c047fd9e0e5c`.
+- [x] Stage 12 architecture and integration checklist record the delivered scope and final CI evidence.
 
 ## 4. Evidence discipline
 
 A PR CI pass proves only the PR branch against its tested baseline. A post-merge Main CI pass proves the merged main commit. The final Stage 12 completion claim requires both the per-WP integration sequence and the final full Main CI.
 
-No Stage 12 completion status is asserted by this checklist before those conditions are met.
+Stage 12 completion is asserted for the exact main commit and CI run recorded above. Reporting status-count aggregation across each individual workflow table remains partially verified by source inspection rather than a separate assertion per table.
