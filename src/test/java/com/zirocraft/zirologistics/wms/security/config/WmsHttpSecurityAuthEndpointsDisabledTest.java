@@ -28,6 +28,7 @@ import java.util.Set;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -85,8 +86,24 @@ class WmsHttpSecurityAuthEndpointsDisabledTest {
 
     @Test
     void doesNotRegisterPublicAuthenticationRouteWhenPublicAuthEndpointsAreDisabled() throws Exception {
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                        .post("/api/wms/v1/auth/credentials")
+        Instant now = Instant.now();
+        Jwt jwt = Jwt.withTokenValue("valid-test-token")
+                .header("alg", "RS256")
+                .subject("user-public-id")
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(600))
+                .claim("mid", "membership-public-id")
+                .build();
+        WmsAuthenticatedPrincipal principal = new WmsAuthenticatedPrincipal(
+                "user-public-id", 10L, "tenant-public-id",
+                20L, "membership-public-id", Set.of("warehouse.read"));
+        WmsJwtAuthenticationToken authentication = new WmsJwtAuthenticationToken(
+                principal, Set.of(new SimpleGrantedAuthority("PERM_warehouse.read")));
+        when(accessJwtDecoder.decode("valid-test-token")).thenReturn(jwt);
+        when(authenticationConverter.convert(jwt)).thenReturn(authentication);
+
+        mockMvc.perform(post("/api/wms/v1/auth/credentials")
+                        .header("Authorization", "Bearer valid-test-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isNotFound());
