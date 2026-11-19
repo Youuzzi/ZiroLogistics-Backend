@@ -94,6 +94,10 @@ To permanently delete the disposable local Compose database volume and its data:
 docker compose down -v
 ```
 
+### CORS configuration
+
+`WMS_CORS_ALLOWED_ORIGINS` is a comma-separated list of exact browser origins. An empty value denies browser origins by default. The Compose example allows only `http://localhost:5173`; production deployments must configure only trusted frontend origins. CORS headers do not bypass WMS authentication or authorization.
+
 ### Authentication default
 
 The Compose example keeps `WMS_JWT_ENABLED=false` and the public authentication endpoint switch disabled. This is deliberate fail-closed behavior: the WMS HTTP security chain denies requests. Operational APIs require JWT. Anonymous identity routes additionally require `WMS_SECURITY_HTTP_AUTH_ENDPOINTS_ENABLED=true`; this switch does not make operational routes public. Do not enable these settings with placeholder values.
