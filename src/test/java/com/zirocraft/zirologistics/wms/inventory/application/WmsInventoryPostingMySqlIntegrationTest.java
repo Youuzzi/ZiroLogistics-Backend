@@ -101,6 +101,15 @@ class WmsInventoryPostingMySqlIntegrationTest {
         assertEquals(new BigDecimal("9.0000"), otherInventory.get("onHandQty"));
         assertEquals(ledgerBefore, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id IN (?, ?)",
                 fixture.tenantId(), otherTenant.tenantId()));
+
+        jdbc.update("""
+                DELETE rp FROM role_permissions rp
+                JOIN membership_roles mr ON mr.role_id = rp.role_id AND mr.tenant_id = ?
+                JOIN permissions p ON p.id = rp.permission_id
+                WHERE mr.membership_id = ? AND p.permission_code = 'WMS_OPERATIONAL_REPORT_READ'
+                """, fixture.tenantId(), fixture.membershipId());
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> reportingService.operationalSummary(fixture.principal()));
     }
 
     @Test
