@@ -468,6 +468,72 @@ class WmsOutboundShipmentMySqlIntegrationTest {
     }
 
     @Test
+    void shippingAuditFailureRollsBackFinalIssueAndShipmentTransition() {
+        String shipmentId = createShipment(fixture);
+        String lineId = addLine(fixture, shipmentId, "5.0000");
+        shipmentService.allocate(fixture.principal(), shipmentId, lineId,
+                new WmsOutboundShipmentService.AllocationCommand(List.of(
+                        new WmsOutboundShipmentService.AllocationLine(
+                                fixture.receivingLocationPublicId(), null, new BigDecimal("5.0000"), List.of()))));
+        shipmentService.release(fixture.principal(), shipmentId);
+        String taskId = (String) pickingService.create(fixture.principal(),
+                new WmsPickingManagementService.CreatePickingCommand(shipmentId,
+                        "PICK-ROLLBACK-" + UUID.randomUUID().toString().substring(0, 8), "NORMAL", null))
+                .get("public_id");
+        pickingService.assign(fixture.principal(), taskId,
+                new WmsPickingManagementService.AssignPickingCommand(fixture.membershipPublicId()));
+        pickingService.start(fixture.principal(), taskId);
+        String staging = UUID.randomUUID().toString();
+        long warehouseId = jdbc.queryForObject(
+                "SELECT id FROM warehouses WHERE tenant_id=? AND public_id=?", Long.class,
+                fixture.tenantId(), fixture.warehousePublicId());
+        jdbc.update("""
+                INSERT INTO warehouse_locations(public_id,tenant_id,warehouse_id,location_code,
+                  location_name,location_type,status)
+                VALUES(?,?,?,?,'Rollback Staging','STAGING','ACTIVE')
+                """, staging, fixture.tenantId(), warehouseId, "STG_ROLLBACK_" + UUID.randomUUID().toString().substring(0, 6));
+        pickingService.confirm(fixture.principal(), taskId, 1,
+                new WmsPickingManagementService.ConfirmPickingCommand(
+                        UUID.randomUUID(), new BigDecimal("5.0000"), staging, List.of(), null));
+
+        String sessionId = (String) packingService.create(fixture.principal(),
+                new WmsPackingManagementService.CreateSessionCommand(shipmentId,
+                        "PACK-ROLLBACK-" + UUID.randomUUID().toString().substring(0, 8), null)).get("public_id");
+        packingService.ready(fixture.principal(), sessionId);
+        packingService.assign(fixture.principal(), sessionId,
+                new WmsPackingManagementService.AssignSessionCommand(fixture.membershipPublicId()));
+        packingService.start(fixture.principal(), sessionId);
+        String packageId = (String) packingService.createPackage(fixture.principal(), sessionId,
+                new WmsPackingManagementService.CreatePackageCommand(
+                        "BOX-ROLLBACK-" + UUID.randomUUID().toString().substring(0, 8), "CARTON",
+                        null, null, null, null, null)).get("public_id");
+        packingService.addLine(fixture.principal(), sessionId, packageId,
+                new WmsPackingManagementService.AddPackageLineCommand(
+                        UUID.randomUUID(), 1, new BigDecimal("5.0000"), List.of(), null));
+        packingService.sealPackage(fixture.principal(), sessionId, packageId);
+        packingService.complete(fixture.principal(), sessionId);
+
+        int ledgerBeforeShipping = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?", fixture.tenantId());
+        jdbc.execute("""
+                ALTER TABLE tenant_audit_events
+                ADD CONSTRAINT chk_test_block_outbound_ship_audit
+                CHECK (event_type <> 'OUTBOUND_SHIPMENT_SHIPPED')
+                """);
+        try {
+            assertThrows(RuntimeException.class, () -> shippingService.ship(fixture.principal(), shipmentId,
+                    new WmsShippingManagementService.ShipCommand(UUID.randomUUID(), null, "ROLLBACK-TRACK", null)));
+        } finally {
+            jdbc.execute("ALTER TABLE tenant_audit_events DROP CHECK chk_test_block_outbound_ship_audit");
+        }
+
+        assertEquals("PACKED", shipmentStatus(fixture, shipmentId));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+        assertEquals(ledgerBeforeShipping, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?", fixture.tenantId()));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='ISSUE'",
+                fixture.tenantId()));
+    }
+
+    @Test
     void interWarehouseTransferDispatchesAndReceivesPartialGoodDamagedAndShortQuantities() {
         Destination destination = destination(fixture);
         String transferId = createTransfer(fixture, destination, "5.0000", List.of());
