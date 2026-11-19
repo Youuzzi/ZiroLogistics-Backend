@@ -1,8 +1,8 @@
 # WMS Backend API Completion — Stage 13 Architecture & Delivery Contract
 
-**Status:** Proposed delivery contract; WP1 baseline audit in progress.  
-**Starting baseline:** `0441d900f19c028bc5f413695205d04630e73226`.  
-**Runtime:** Java 21, Spring Boot 3.5.13, WMS-only servlet runtime, MySQL 8.4.  
+**Status:** Proposed delivery contract; WP1 baseline audit in progress.
+**Starting baseline:** `0441d900f19c028bc5f413695205d04630e73226`.
+**Runtime:** Java 21, Spring Boot 3.5.13, WMS-only servlet runtime, MySQL 8.4.
 **API prefix:** `/api/wms/v1`.
 
 ## 1. Objective
