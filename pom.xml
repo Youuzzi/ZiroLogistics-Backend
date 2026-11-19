@@ -183,19 +183,5 @@
 				</plugins>
 			</build>
 		</profile>
-		<profile>
-			<id>legacy-runtime</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.springframework.boot</groupId>
-						<artifactId>spring-boot-maven-plugin</artifactId>
-						<configuration>
-							<mainClass>com.zirocraft.zirologistics.ZirologisticsApplication</mainClass>
-						</configuration>
-					</plugin>
-				</plugins>
-			</build>
-		</profile>
 	</profiles>
 </project>

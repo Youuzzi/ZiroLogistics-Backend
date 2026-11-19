@@ -1,66 +1,41 @@
 # Backend Structural Audit — Legacy Disposition
 
-**Baseline:** `d1205f3f4940a792e4839d345790ad7715816fce` (Stage 13 WP11 merged; Main CI #652 successful)  
-**Scope:** Backend source, tests, runtime configuration, migrations, Maven dependencies, packaging, and repository support files.  
-**Status:** Initial inventory completed; dependency-level disposition and migration work in progress.
+**Baseline:** `4b655c3be2f2d245b03d260b3dc9ad9673c06823` (PR #158 merged; Main CI #654 successful)  
+**Implementation:** Legacy runtime retirement in progress; this PR removes the obsolete application surface while preserving WMS-owned migration tests and all WMS production/tests.
 
-## Objective
+## Verified ownership and disposition
 
-Make the repository a single-purpose WMS backend. Legacy code is not retained merely because it exists. Code still required by WMS is to be migrated into the WMS package structure with regression protection; unrelated retired application code and configuration are to be removed after references and runtime ownership are verified.
-
-## Initial inventory (verified from repository tree)
-
-| Area | Current inventory | Initial assessment |
+| Area | Baseline | Disposition |
 |---|---:|---|
-| WMS production Java | 146 files | Active WMS source; retain and review structure |
-| Non-WMS production Java under `com.zirocraft.zirologistics` | 63 files | Legacy application source; not in WMS component scan |
-| WMS-package Java tests | 60 files | Active WMS tests; retain |
-| Tests under the old non-WMS package | 28 files | Mixed ownership; classify individually, do not bulk-delete |
-| Main resources | `application-wms.properties`, `application.properties`, `application-demo.properties`, legacy and WMS migration locations | WMS config is active; legacy config/migration needs reference audit |
-| Test resources | `application-test.properties` | H2 + legacy JWT properties; test ownership and actual loading need verification |
+| WMS production Java | 146 files | Retain unchanged |
+| Non-WMS production Java | 63 files | Remove: old single-tenant Logistics application, not in WMS component/entity/repository scan |
+| WMS-package tests | 73 files after migration-test move | Retain all |
+| Old-package tests remaining after WP #158 | 15 files | Remove: tests target retired controllers/services/entities/demo flow/legacy schema; WMS migration contract tests were moved and retained separately |
+| Legacy runtime config | `application.properties`, `application-demo.properties` | Remove; WMS uses `application-wms.properties` |
+| Legacy test config | `application-test.properties` | Remove with retired legacy test suite |
+| Legacy Flyway migration | `db/migration/V1__initial_schema.sql` | Remove from executable classpath; WMS migrations remain under `db/wms-migration` |
+| Maven runtime profile | `legacy-runtime` | Remove; WMS is the sole packaged runtime |
 
-Counts are file counts from the recursive Git tree at the baseline commit, not test execution counts.
+## Runtime boundary evidence
 
-## Confirmed runtime boundary
+- `WmsRuntimeApplication` explicitly scopes component scan, entity scan, and Spring Data repository scan to `com.zirocraft.zirologistics.wms`.
+- The default Spring Boot Maven plugin entry point is `com.zirocraft.zirologistics.wms.WmsRuntimeApplication`.
+- CI runs `./mvnw --batch-mode --no-transfer-progress -Pwms-runtime clean verify`.
+- `application-wms.properties` points Flyway exclusively at `classpath:db/wms-migration`; Flyway remains opt-in.
+- All WMS Flyway migration tests and the integer display-width policy test were moved into the WMS test namespace by PR #158. The migration policy test is scoped to the WMS migration directory.
+- The retired legacy source/test tree has no place in the WMS runtime or WMS migration history. The build after this deletion is the final compile/test proof that no retained WMS code depends on those classes/resources.
 
-- `WmsRuntimeApplication` is the packaged WMS entry point.
-- Its `@SpringBootApplication(scanBasePackages = "com.zirocraft.zirologistics.wms")`, `@EntityScan`, and `@EnableJpaRepositories` are restricted to the WMS package.
-- CI runs `./mvnw --batch-mode --no-transfer-progress -Pwms-runtime clean verify`. The profile selects the WMS executable entry point; it does **not** exclude legacy-package tests from Maven's test lifecycle.
-- The temporary `legacy-runtime` Maven profile still packages the retired `ZirologisticsApplication`; its removal is a target after the dependency and runtime audit.
+## Safety and scope
 
-## Test ownership findings
-
-The old package's 28 tests are not all legacy tests.
-
-- WMS migration tests V1–V12 currently live under `com.zirocraft.zirologistics.integration`; they test `classpath:db/wms-migration` and must be retained and moved under the WMS test namespace.
-- `IntegerDisplayWidthMigrationPolicyTest` checks both legacy and WMS migration locations. It is WMS-relevant and should be narrowed to the WMS migration location after legacy migration retirement, then moved under WMS tests.
-- `MySqlInventoryLockingIntegrationTest`, the legacy Flyway schema test, old application/controller/security/service/repository tests are coupled to legacy entities, services, endpoints, and schema. They are candidates for removal only after confirming no WMS behavior or unique invariant is lost. Any WMS-relevant behavior must first have an equivalent WMS test.
-- The 60 tests already under the WMS namespace remain in place.
-
-## Configuration and migration findings
-
-- `application-wms.properties` is the WMS runtime configuration and points only to `db/wms-migration`; Flyway is opt-in.
-- Root `application.properties` contains legacy `DB_*`, `JWT_SECRET_KEY`, `FLYWAY_ENABLED`, and legacy JPA settings. It is not the WMS runtime configuration.
-- `application-demo.properties` and `DemoAccountInitializer` belong to the old demo-account flow.
-- `src/main/resources/db/migration/V1__initial_schema.sql` creates the old single-tenant legacy schema. It is separate from the WMS migration history.
-- `src/test/resources/application-test.properties` contains H2 and legacy JWT settings. Its use by WMS tests must be checked before deletion.
-- WMS migrations V1–V26 are frozen and must not be edited, reordered, renamed, deleted, or checksummed differently during this audit.
-
-## Planned disposition
-
-1. Build a source/reference map for every non-WMS production class, old configuration, legacy migration, Maven dependency, and legacy test.
-2. Move WMS-owned migration/policy tests from the old package into a clear WMS test namespace without changing test behavior.
-3. Replace or remove old-package tests only after equivalent WMS coverage is verified; remove retired legacy-only tests and source.
-4. Remove legacy application entry point, controllers, entities, repositories, services, configuration, DTOs, old application properties, demo profile, legacy migration, and `legacy-runtime` profile when references are proven absent.
-5. Remove dependencies and resources only when dependency analysis confirms no remaining WMS use.
-6. Keep historical design/audit evidence in documentation only where it remains useful and clearly marked historical; do not keep executable legacy runtime code just for history.
-7. Run full regression on disposable Testcontainers MySQL 8.4, verify packaged WMS Start-Class and Docker image, and inspect the final runtime/resource boundary.
-
-## Safety constraints
-
+- No WMS production classes or WMS tests are deleted by this cleanup.
+- No WMS migration V1–V26 is changed.
 - No developer-owned database is accessed or modified.
-- Do not run legacy migrations against WMS or any existing database.
-- Do not change frozen WMS migrations V1–V26.
-- Do not reduce WMS test coverage to simplify cleanup.
-- Do not remove a test merely because it is outside the WMS package; first establish ownership and equivalent protection.
-- Every implementation slice is isolated in a PR with full CI; merge sequentially and verify Main CI after each merge.
+- Legacy single-tenant schema SQL is removed from the application classpath, not run against any database.
+- Historical design/audit documentation remains documentation; it is not an executable runtime.
+
+## Validation required
+
+- Full Maven/Testcontainers MySQL 8.4 regression.
+- WMS executable Start-Class verification.
+- Docker image build and Compose configuration validation.
+- Final tree check: no non-WMS production Java package, legacy runtime profile, legacy application properties, or legacy migration path.
