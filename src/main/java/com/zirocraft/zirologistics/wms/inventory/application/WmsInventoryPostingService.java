@@ -889,7 +889,7 @@ public class WmsInventoryPostingService {
 
     private long requiredId(String sql, Object a, Object b, String message) {
         List<Long> ids = jdbc.queryForList(sql, Long.class, a, b);
-        if (ids.isEmpty()) throw new WmsResourceNotFoundException(message);
+        if (ids.isEmpty()) throw new IllegalStateException(message);
         return ids.getFirst();
     }
 
