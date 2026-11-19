@@ -52,6 +52,11 @@ public class WmsRoleManagementService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>>     @Transactional(readOnly = true)
+    public List<Map<String, Object>> listRoles(WmsAuthenticatedPrincipal principal) {
+        return listRoles(principal, 0, 200);
+    }
+
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> listRoles(WmsAuthenticatedPrincipal principal, int page, int size) {
         Access access = access(principal, "WMS_ROLE_READ");
         long offset = boundedOffset(page, size);
