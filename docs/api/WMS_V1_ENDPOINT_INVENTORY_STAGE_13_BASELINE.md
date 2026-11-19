@@ -1,7 +1,7 @@
 # WMS v1 HTTP Endpoint Inventory — Stage 13 Baseline
 
-**Baseline commit:** `0441d900f19c028bc5f413695205d04630e73226`  
-**Status:** Source inventory; authentication, permission and runtime status must be verified per WP2/WP6.  
+**Baseline commit:** `0441d900f19c028bc5f413695205d04630e73226`
+**Status:** Source inventory; authentication, permission and runtime status must be verified per WP2/WP6.
 **Prefix:** `/api/wms/v1`
 
 This inventory records controller route declarations, not a claim that every route is enabled in every deployment profile. All listed controllers currently carry `@Profile("wms")`, servlet-web conditional registration and `WmsIdentityHttpEnabledCondition`.
