@@ -216,8 +216,9 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                   location_name,location_type,status)
                 VALUES(?,?,?,?,'Staging','STAGING','ACTIVE')
                 """,staging,fixture.tenantId(),warehouseId,"STG_"+UUID.randomUUID().toString().substring(0,8));
+        UUID pickingRequestId = UUID.randomUUID();
         pickingService.confirm(fixture.principal(),taskId,1,
-                new WmsPickingManagementService.ConfirmPickingCommand(UUID.randomUUID(),
+                new WmsPickingManagementService.ConfirmPickingCommand(pickingRequestId,
                         new BigDecimal("5.0000"),staging,List.of(),null));
 
         int ledgerBefore=count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?",fixture.tenantId());
@@ -260,6 +261,59 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 """,fixture.tenantId()));
         assertThrows(IllegalStateException.class,()->shippingService.ship(fixture.principal(),shipmentId,
                 new WmsShippingManagementService.ShipCommand(shippingRequestId,null,null,null)));
+
+        long actorMembershipId = jdbc.queryForObject(
+                "SELECT id FROM tenant_memberships WHERE tenant_id=? AND public_id=?",
+                Long.class, fixture.tenantId(), fixture.membershipPublicId());
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id=? AND subject_public_id=? AND event_type='OUTBOUND_SHIPMENT_SHIPPED'
+                  AND actor_type='TENANT_MEMBER' AND actor_membership_id=?
+                  AND JSON_UNQUOTE(JSON_EXTRACT(change_payload,'$.requestId'))=?
+                """, fixture.tenantId(), shipmentId, actorMembershipId, shippingRequestId.toString()));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id=? AND subject_public_id=? AND event_type='PICKING_CONFIRMED'
+                  AND actor_type='TENANT_MEMBER' AND actor_membership_id=?
+                  AND JSON_UNQUOTE(JSON_EXTRACT(change_payload,'$.requestId'))=?
+                """, fixture.tenantId(), taskId, actorMembershipId, pickingRequestId.toString()));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id=? AND event_type='PACKING_SESSION_COMPLETED'
+                  AND subject_public_id=? AND actor_membership_id=? AND actor_type='TENANT_MEMBER'
+                """, fixture.tenantId(), sessionId, actorMembershipId));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id=? AND event_type='OUTBOUND_SHIPMENT_RELEASED'
+                  AND subject_public_id=? AND actor_membership_id=? AND actor_type='TENANT_MEMBER'
+                """, fixture.tenantId(), shipmentId, actorMembershipId));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id=? AND event_type IN (
+                  'OUTBOUND_SHIPMENT_CREATED','OUTBOUND_SHIPMENT_LINE_ADDED',
+                  'OUTBOUND_SHIPMENT_ALLOCATED','OUTBOUND_SHIPMENT_RELEASED',
+                  'PICKING_TASK_CREATED','PICKING_TASK_ASSIGNED','PICKING_TASK_STARTED',
+                  'PICKING_CONFIRMED','PACKING_SESSION_CREATED','PACKING_SESSION_READY',
+                  'PACKING_SESSION_ASSIGNED','PACKING_SESSION_STARTED','PACKING_PACKAGE_CREATED',
+                  'PACKING_PACKAGE_LINE_ADDED','PACKING_PACKAGE_SEALED','PACKING_SESSION_COMPLETED',
+                  'OUTBOUND_SHIPMENT_SHIPPED'
+                ) AND operation_ref IS NULL
+                """, fixture.tenantId()));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM (
+                  SELECT operation_ref FROM tenant_audit_events
+                  WHERE tenant_id=? AND event_type IN (
+                    'OUTBOUND_SHIPMENT_CREATED','OUTBOUND_SHIPMENT_LINE_ADDED',
+                    'OUTBOUND_SHIPMENT_ALLOCATED','OUTBOUND_SHIPMENT_RELEASED',
+                    'PICKING_TASK_CREATED','PICKING_TASK_ASSIGNED','PICKING_TASK_STARTED',
+                    'PICKING_CONFIRMED','PACKING_SESSION_CREATED','PACKING_SESSION_READY',
+                    'PACKING_SESSION_ASSIGNED','PACKING_SESSION_STARTED','PACKING_PACKAGE_CREATED',
+                    'PACKING_PACKAGE_LINE_ADDED','PACKING_PACKAGE_SEALED','PACKING_SESSION_COMPLETED',
+                    'OUTBOUND_SHIPMENT_SHIPPED'
+                  )
+                  GROUP BY operation_ref HAVING COUNT(*) > 1
+                ) duplicate_refs
+                """, fixture.tenantId()));
     }
 
     @Test
