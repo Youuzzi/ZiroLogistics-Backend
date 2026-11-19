@@ -26,7 +26,7 @@ Operational routes remain registered and authenticated when JWT is enabled, rega
 
 - WMS entry point: `com.zirocraft.zirologistics.wms.WmsRuntimeApplication`.
 - WMS component/entity/repository scanning remains isolated to the WMS namespace.
-- Maven profile `wms-runtime` selects the WMS entry point for the executable artifact.
+- WMS is the default executable JAR entry point; explicit Maven profile `wms-runtime` selects it for Docker/CI packaging, while the legacy application is opt-in only through temporary profile `legacy-runtime`.
 - Root Dockerfile packages the WMS artifact.
 - Root Compose provisions a dedicated MySQL 8.4 WMS database and volume, without publishing MySQL to the host.
 - Legacy root entry point remains transitional source/test material, not the WMS container entry point.

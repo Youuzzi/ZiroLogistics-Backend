@@ -13,7 +13,7 @@ The repository contains a tenant-based WMS runtime and transitional legacy appli
 - Spring profile: `wms`
 - Maven packaging profile: `wms-runtime`
 
-The root Dockerfile and Compose stack package and run this WMS entry point. The Maven profile overrides the legacy Spring Boot main class only for the WMS artifact. The default Maven build remains available for transitional legacy source/tests until the dedicated structural audit resolves them.
+The default executable JAR, root Dockerfile, and Compose stack package and run this WMS entry point. The explicit `wms-runtime` Maven profile keeps deployment packaging unambiguous. The legacy entry point is available only through the temporary `legacy-runtime` profile for compatibility investigation; it must never be pointed at the WMS database. The legacy profile and source are scheduled for removal after the structural audit migrates/replaces legacy-only tests.
 
 Only WMS modules placed under this namespace are discovered by the WMS runtime. Legacy controllers, services, configuration, repositories, and entities remain outside the WMS scan and are not imported.
 

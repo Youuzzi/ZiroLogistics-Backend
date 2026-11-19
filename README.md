@@ -41,7 +41,7 @@ See [WMS v1 API Reference](docs/api/WMS_V1_API_REFERENCE_STAGE_13.md). Route exi
 
 The supported WMS entry point is `com.zirocraft.zirologistics.wms.WmsRuntimeApplication`. It scans only `com.zirocraft.zirologistics.wms` for WMS components, entities, and repositories.
 
-The legacy entry point and technical-layer packages remain isolated transitional source/test material. They are not the WMS domain model and must not be wired to the WMS database. Their final disposition belongs to the dedicated Backend Structural Audit & Refactoring after Stage 13.
+The legacy entry point and technical-layer packages remain isolated transitional source/test material. They are not the WMS domain model and must not be wired to the WMS database. The default executable JAR is WMS; the legacy entry point is available only through the temporary explicit `legacy-runtime` Maven profile. Its final disposition belongs to the dedicated Backend Structural Audit & Refactoring after Stage 13.
 
 WMS migrations are under `classpath:db/wms-migration`. Frozen migrations V1–V26 remain immutable; future schema evolution is additive (V27+). Read [WMS Runtime Boundary](docs/runtime/WMS_RUNTIME_BOUNDARY.md) before configuring a database.
 
