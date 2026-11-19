@@ -7,25 +7,25 @@ import com.zirocraft.zirologistics.wms.tenancy.application.WmsTenantProfileConfl
 import com.zirocraft.zirologistics.wms.warehouse.application.WmsWarehouseNotFoundException;
 import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationException;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(basePackages = {
-        "com.zirocraft.zirologistics.wms.security.authentication.http",
-        "com.zirocraft.zirologistics.wms.identity.http",
-        "com.zirocraft.zirologistics.wms.tenancy.http",
-        "com.zirocraft.zirologistics.wms.authorization.http",
-        "com.zirocraft.zirologistics.wms.warehouse.http",
-        "com.zirocraft.zirologistics.wms.inventory.http"
-})
+@Order(Ordered.HIGHEST_PRECEDENCE)
+@RestControllerAdvice(basePackages = "com.zirocraft.zirologistics.wms")
 @Profile("wms")
 @Conditional(WmsHttpApiEnabledCondition.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -56,13 +56,15 @@ public class WmsAuthenticationExceptionHandler {
     }
 
     @ExceptionHandler({IllegalArgumentException.class, MethodArgumentNotValidException.class,
-            ConstraintViolationException.class})
+            ConstraintViolationException.class, HttpMessageNotReadableException.class,
+            MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class})
     public ResponseEntity<ApiError> invalidRequest(Exception ignored) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiError("INVALID_REQUEST", "The request is invalid"));
     }
 
-    @ExceptionHandler({IllegalStateException.class, WmsTenantProfileConflictException.class})
+    @ExceptionHandler({IllegalStateException.class, WmsTenantProfileConflictException.class,
+            DataIntegrityViolationException.class})
     public ResponseEntity<ApiError> conflict(Exception ignored) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError("REQUEST_CONFLICT", "The requested operation cannot be completed"));
