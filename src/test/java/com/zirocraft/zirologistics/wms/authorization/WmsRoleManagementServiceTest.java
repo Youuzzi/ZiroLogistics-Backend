@@ -4,12 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsRoleManagementService;
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -49,6 +51,33 @@ class WmsRoleManagementServiceTest {
         assertThrows(AccessDeniedException.class, () -> service.listRoles(principal));
 
         verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void reportsMissingRoleAsResourceNotFound() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_UPDATE")));
+        when(jdbc.queryForList(contains("SELECT id FROM tenants"), eq(Long.class), eq(10L)))
+                .thenReturn(List.of(10L));
+        when(jdbc.queryForList(contains("SELECT id, public_id, role_code"), eq(10L), eq("missing-role")))
+                .thenReturn(List.of());
+
+        assertThrows(WmsResourceNotFoundException.class,
+                () -> service.updateRole(principal(), "missing-role", "Updated", null, 0));
+
+        verify(jdbc, never()).update(anyString(), any());
+    }
+
+    @Test
+    void reportsMissingMembershipAsResourceNotFound() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_MEMBERSHIP_ROLE_READ")));
+        when(jdbc.queryForList(contains("SELECT m.id"), eq(Long.class), eq(10L), eq("missing-membership")))
+                .thenReturn(List.of());
+
+        assertThrows(WmsResourceNotFoundException.class,
+                () -> service.membershipRoles(principal(), "missing-membership"));
+
     }
 
     private static WmsAuthenticatedPrincipal principal() {
