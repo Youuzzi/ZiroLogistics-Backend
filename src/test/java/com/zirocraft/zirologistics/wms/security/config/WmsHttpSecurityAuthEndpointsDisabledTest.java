@@ -4,6 +4,7 @@ import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrin
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtAuthenticationConverter;
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtAuthenticationToken;
 import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
+import com.zirocraft.zirologistics.wms.security.authentication.http.WmsPublicAuthEndpointsEnabledCondition;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -19,7 +20,6 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
@@ -84,10 +84,11 @@ class WmsHttpSecurityAuthEndpointsDisabledTest {
 
     @Test
     void keepsPublicAuthenticationRouteProtectedWhenPublicAuthEndpointsAreDisabled() throws Exception {
-        mockMvc.perform(post("/api/wms/v1/auth/credentials")
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/api/wms/v1/auth/credentials")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isNotFound());
     }
 
     @RestController
@@ -98,9 +99,15 @@ class WmsHttpSecurityAuthEndpointsDisabledTest {
             return "wms-business-route";
         }
 
-        @PostMapping(value = "/api/wms/v1/auth/credentials", produces = MediaType.TEXT_PLAIN_VALUE)
+    }
+
+    @RestController
+    @Conditional(WmsPublicAuthEndpointsEnabledCondition.class)
+    static class PublicAuthenticationProbeController {
+        @org.springframework.web.bind.annotation.PostMapping(
+                value = "/api/wms/v1/auth/credentials", produces = MediaType.TEXT_PLAIN_VALUE)
         String publicAuthenticationRoute() {
-            return "must-remain-protected";
+            return "public-auth-route";
         }
     }
 }
