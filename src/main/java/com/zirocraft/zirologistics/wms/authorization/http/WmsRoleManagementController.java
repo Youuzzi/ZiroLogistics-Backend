@@ -32,8 +32,10 @@ public class WmsRoleManagementController {
     }
 
     @GetMapping("/roles")
-    public List<Map<String, Object>> listRoles(Authentication authentication) {
-        return service.listRoles(principal(authentication));
+    public List<Map<String, Object>> listRoles(Authentication authentication,
+                                               @RequestParam(defaultValue = "0") int page,
+                                               @RequestParam(defaultValue = "200") int size) {
+        return service.listRoles(principal(authentication), page, size);
     }
 
     @PostMapping("/roles")
