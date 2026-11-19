@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.adjustment.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
@@ -826,13 +827,13 @@ public class WmsInventoryAdjustmentService {
 
     private Map<String, Object> requiredRow(String sql, Object... args) {
         List<Map<String, Object>> rows = jdbc.queryForList(sql, args);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Inventory adjustment or referenced record not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Inventory adjustment or referenced record not found");
         return rows.getFirst();
     }
 
     private Map<String, Object> requiredRowForUpdate(String sql, Object... args) {
         List<Map<String, Object>> rows = jdbc.queryForList(sql + " FOR UPDATE", args);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Approved stock count or linked record not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Approved stock count or linked record not found");
         return rows.getFirst();
     }
 

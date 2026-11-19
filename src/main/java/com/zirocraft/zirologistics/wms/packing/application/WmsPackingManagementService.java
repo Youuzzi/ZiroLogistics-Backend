@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.packing.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
@@ -255,7 +256,7 @@ public class WmsPackingManagementService {
                 """,a.tenantId(),number(p,"id"),number(s,"id"),number(s,"outbound_shipment_id"),number(s,"warehouse_id"),
                 pickingLineId,number(line,"allocation_id"),number(line,"item_id"),lineNo,qty,optional(command.notes(),1000));
         if(inserted!=1) throw new IllegalStateException("Package line could not be created");
-        long packageLineId=requiredLong("SELECT id FROM packing_package_lines WHERE tenant_id=? AND packing_package_id=? AND line_number=?",
+        long packageLineId=requiredLongCreated("SELECT id FROM packing_package_lines WHERE tenant_id=? AND packing_package_id=? AND line_number=?",
                 a.tenantId(),number(p,"id"),lineNo);
         for(Map<String,Object> serial:serialRows) {
             jdbc.update("""
@@ -415,12 +416,17 @@ public class WmsPackingManagementService {
     }
     private Map<String,Object> requiredRow(String sql,Object...args) {
         List<Map<String,Object>> rows=jdbc.queryForList(sql,args);
-        if(rows.isEmpty()) throw new IllegalArgumentException("Referenced packing record was not found");
+        if(rows.isEmpty()) throw new WmsResourceNotFoundException("Referenced packing record was not found");
         return rows.getFirst();
     }
     private long requiredLong(String sql,Object...args) {
         List<Long> rows=jdbc.queryForList(sql,Long.class,args);
-        if(rows.isEmpty()) throw new IllegalArgumentException("Referenced record was not found");
+        if(rows.isEmpty()) throw new WmsResourceNotFoundException("Referenced record was not found");
+        return rows.getFirst();
+    }
+    private long requiredLongCreated(String sql,Object...args) {
+        List<Long> rows=jdbc.queryForList(sql,Long.class,args);
+        if(rows.isEmpty()) throw new IllegalStateException("Created packing record was not found");
         return rows.getFirst();
     }
     private int count(String sql,Object...args) {

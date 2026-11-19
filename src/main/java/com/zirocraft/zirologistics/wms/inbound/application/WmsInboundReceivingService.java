@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.inbound.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
@@ -354,10 +355,15 @@ public class WmsInboundReceivingService {
         }
 
         for (SerialLink link : serialLinks) {
-            Long serialId = requiredLong("""
-                    SELECT id FROM inventory_serials
-                    WHERE tenant_id = ? AND item_id = ? AND serial_number = ?
-                    """, access.tenantId(), link.itemId(), link.serialNumber(), "Posted serial was not registered");
+            Long serialId;
+            try {
+                serialId = requiredLong("""
+                        SELECT id FROM inventory_serials
+                        WHERE tenant_id = ? AND item_id = ? AND serial_number = ?
+                        """, access.tenantId(), link.itemId(), link.serialNumber(), "Posted serial was not registered");
+            } catch (WmsResourceNotFoundException missingPostedSerial) {
+                throw new IllegalStateException("Posted serial was not registered", missingPostedSerial);
+            }
             jdbc.update("""
                     INSERT INTO inbound_receipt_line_serials
                       (tenant_id, inbound_receipt_line_id, item_id, serial_id)
@@ -484,19 +490,19 @@ public class WmsInboundReceivingService {
 
     private Map<String, Object> requiredRow(String sql, Object a, Object b, String message) {
         List<Map<String, Object>> rows = jdbc.queryForList(sql, a, b);
-        if (rows.isEmpty()) throw new IllegalArgumentException(message);
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException(message);
         return rows.getFirst();
     }
 
     private Map<String, Object> requiredRow(String sql, Object a, Object b, Object c, String message) {
         List<Map<String, Object>> rows = jdbc.queryForList(sql, a, b, c);
-        if (rows.isEmpty()) throw new IllegalArgumentException(message);
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException(message);
         return rows.getFirst();
     }
 
     private Long requiredLong(String sql, Object a, Object b, Object c, String message) {
         List<Long> values = jdbc.queryForList(sql, Long.class, a, b, c);
-        if (values.isEmpty()) throw new IllegalArgumentException(message);
+        if (values.isEmpty()) throw new WmsResourceNotFoundException(message);
         return values.getFirst();
     }
 

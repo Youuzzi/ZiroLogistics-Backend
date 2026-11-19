@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.putaway.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
@@ -118,7 +119,7 @@ public class WmsPutawayManagementService {
         } catch (DuplicateKeyException duplicate) {
             throw new IllegalStateException("Putaway task number already exists", duplicate);
         }
-        long taskId = requiredLong("SELECT id FROM putaway_tasks WHERE tenant_id = ? AND public_id = ?",
+        long taskId = requiredLongCreated("SELECT id FROM putaway_tasks WHERE tenant_id = ? AND public_id = ?",
                 "Created putaway task not found", access.tenantId(), taskPublicId);
 
         Set<String> serialsInRequest = new HashSet<>();
@@ -475,7 +476,7 @@ public class WmsPutawayManagementService {
                 """, linePublicId, access.tenantId(), taskId, warehouseId, receiptId,
                 number(receiptLine, "id"), number(receiptLine, "item_id"), lotId,
                 sourceLocationId, number(destination, "id"), planned, optional(requested.notes(), 1000));
-        long taskLineId = requiredLong("SELECT id FROM putaway_task_lines WHERE tenant_id = ? AND public_id = ?",
+        long taskLineId = requiredLongCreated("SELECT id FROM putaway_task_lines WHERE tenant_id = ? AND public_id = ?",
                 "Created putaway line not found", access.tenantId(), linePublicId);
         for (Long serialId : serialDatabaseIds) {
             jdbc.update("""
@@ -575,13 +576,19 @@ public class WmsPutawayManagementService {
 
     private Map<String, Object> requiredRow(String sql, String message, Object... args) {
         List<Map<String, Object>> rows = jdbc.queryForList(sql, args);
-        if (rows.isEmpty()) throw new IllegalArgumentException(message);
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException(message);
         return rows.getFirst();
     }
 
     private long requiredLong(String sql, String message, Object... args) {
         List<Long> rows = jdbc.queryForList(sql, Long.class, args);
-        if (rows.isEmpty()) throw new IllegalArgumentException(message);
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException(message);
+        return rows.getFirst();
+    }
+
+    private long requiredLongCreated(String sql, String message, Object... args) {
+        List<Long> rows = jdbc.queryForList(sql, Long.class, args);
+        if (rows.isEmpty()) throw new IllegalStateException(message);
         return rows.getFirst();
     }
 

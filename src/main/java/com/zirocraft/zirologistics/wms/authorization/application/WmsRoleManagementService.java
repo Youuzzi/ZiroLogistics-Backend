@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.authorization.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
@@ -302,7 +303,7 @@ public class WmsRoleManagementService {
                 JOIN users u ON u.id = m.user_id AND u.status = 'ACTIVE'
                 WHERE m.tenant_id = ? AND m.public_id = ? AND m.status = 'ACTIVE'
                 """, Long.class, tenantId, publicId);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Membership not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Membership not found");
         return rows.getFirst();
     }
 
@@ -311,7 +312,7 @@ public class WmsRoleManagementService {
                 SELECT id, public_id, role_code, role_name, description, is_system_role, status, version
                 FROM roles WHERE tenant_id = ? AND public_id = ?
                 """, tenantId, publicId);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Role not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Role not found");
         return rows.getFirst();
     }
 
