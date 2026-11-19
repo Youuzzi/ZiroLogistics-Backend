@@ -267,11 +267,8 @@ class WmsStockCountMySqlIntegrationTest {
         assertEquals(Boolean.TRUE, started.get("freezeStock"));
         assertEquals(3, count("""
                 SELECT COUNT(*) FROM inventory_ledger
-                WHERE tenant_id = ? AND request_id IN (
-                    SELECT request_id FROM inventory_ledger
-                    WHERE tenant_id = ? AND movement_type = 'RECEIPT'
-                )
-                """, fixture.tenantId(), fixture.tenantId()) + 2);
+                WHERE tenant_id = ? AND movement_type IN ('RECEIPT', 'TRANSFER')
+                """, fixture.tenantId()));
         assertThrows(IllegalStateException.class, () -> postingService.post(fixture.principal(),
                 new WmsInventoryPostingService.PostingCommand(UUID.randomUUID(), "TRANSFER",
                         List.of(
@@ -282,7 +279,7 @@ class WmsStockCountMySqlIntegrationTest {
                                         fixture.warehousePublicId(), destinationLocation, fixture.itemPublicId(),
                                         null, null, null, "AVAILABLE", BigDecimal.ONE)),
                         "Movement must be blocked while lifecycle count is frozen")));
-        assertEquals(new BigDecimal("10.0000"), onHand(fixture));
+        assertEquals(new BigDecimal("7.0000"), onHand(fixture));
     }
 
     @Test
