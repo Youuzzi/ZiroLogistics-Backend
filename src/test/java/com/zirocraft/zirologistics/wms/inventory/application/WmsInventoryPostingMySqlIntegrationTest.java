@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -53,11 +55,72 @@ class WmsInventoryPostingMySqlIntegrationTest {
     @Autowired private WmsInventoryReservationService reservationService;
     @Autowired private WmsInterWarehouseTransferService transferService;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private PlatformTransactionManager transactionManager;
     private Fixture fixture;
 
     @BeforeEach
     void setUp() {
         fixture = fixture("NONE");
+    }
+
+    @Test
+    void inventoryPostingWaitsForConcurrentPermissionRevocationBeforeResolvingAccess() throws Exception {
+        post(fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "5.0000"));
+        long ledgerBefore = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId());
+
+        CountDownLatch revocationLockedTenant = new CountDownLatch(1);
+        CountDownLatch releaseRevocation = new CountDownLatch(1);
+        CompletableFuture<Void> revocation = CompletableFuture.runAsync(() ->
+                new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                    jdbc.queryForObject("SELECT id FROM tenants WHERE id = ? FOR UPDATE",
+                            Long.class, fixture.tenantId());
+                    jdbc.update("""
+                            DELETE rp FROM role_permissions rp
+                            JOIN membership_roles mr ON mr.role_id = rp.role_id AND mr.tenant_id = ?
+                            WHERE mr.membership_id = ?
+                              AND rp.permission_id = (
+                                SELECT id FROM permissions WHERE permission_code = 'WMS_INVENTORY_POST'
+                              )
+                            """, fixture.tenantId(), fixture.membershipId());
+                    revocationLockedTenant.countDown();
+                    try {
+                        if (!releaseRevocation.await(20, TimeUnit.SECONDS)) {
+                            throw new IllegalStateException("Permission revocation barrier timed out");
+                        }
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("Permission revocation was interrupted", interrupted);
+                    }
+                }));
+
+        assertTrue(revocationLockedTenant.await(10, TimeUnit.SECONDS),
+                "Permission revocation must hold the tenant authorization lock");
+
+        CountDownLatch postingStarted = new CountDownLatch(1);
+        CompletableFuture<Boolean> posting = CompletableFuture.supplyAsync(() -> {
+            postingStarted.countDown();
+            try {
+                postingService.post(fixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                        UUID.randomUUID(), "ISSUE",
+                        List.of(leg(fixture, null, null, "AVAILABLE", "1.0000")),
+                        "permission revocation race"));
+                return true;
+            } catch (org.springframework.security.access.AccessDeniedException revoked) {
+                return false;
+            }
+        });
+
+        assertTrue(postingStarted.await(10, TimeUnit.SECONDS), "Posting worker must start");
+        assertFalse(posting.isDone(), "Posting must not pass the tenant authorization lock");
+        releaseRevocation.countDown();
+        revocation.get(20, TimeUnit.SECONDS);
+
+        assertFalse(posting.get(20, TimeUnit.SECONDS),
+                "Posting must re-resolve permissions after the revocation transaction commits");
+        assertEquals(new BigDecimal("5.0000"), balance(fixture));
+        assertEquals(ledgerBefore,
+                count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
     }
 
     @Test
