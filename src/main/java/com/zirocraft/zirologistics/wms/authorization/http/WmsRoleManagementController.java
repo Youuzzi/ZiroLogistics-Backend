@@ -32,8 +32,10 @@ public class WmsRoleManagementController {
     }
 
     @GetMapping("/roles")
-    public List<Map<String, Object>> listRoles(Authentication authentication) {
-        return service.listRoles(principal(authentication));
+    public List<Map<String, Object>> listRoles(Authentication authentication,
+                                               @RequestParam(defaultValue = "0") int page,
+                                               @RequestParam(defaultValue = "200") int size) {
+        return service.listRoles(principal(authentication), page, size);
     }
 
     @PostMapping("/roles")
@@ -73,8 +75,10 @@ public class WmsRoleManagementController {
 
     @GetMapping("/memberships/{membershipPublicId}/roles")
     public List<String> membershipRoles(
-            Authentication authentication, @PathVariable String membershipPublicId) {
-        return service.membershipRoles(principal(authentication), membershipPublicId);
+            Authentication authentication, @PathVariable String membershipPublicId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size) {
+        return service.membershipRoles(principal(authentication), membershipPublicId, page, size);
     }
 
     @PostMapping("/memberships/{membershipPublicId}/roles/{rolePublicId}")

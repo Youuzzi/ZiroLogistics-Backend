@@ -10,9 +10,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class WmsRoleManagementServiceTest {
@@ -47,6 +50,52 @@ class WmsRoleManagementServiceTest {
                 .thenReturn(access(Set.of("WMS_ROLE_READ")));
 
         assertThrows(AccessDeniedException.class, () -> service.listRoles(principal));
+
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void appliesDeterministicLimitAndOffsetForRequestedRolePage() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_READ")));
+
+        service.listRoles(principal, 2, 50);
+
+        verify(jdbc).queryForList(contains("LIMIT ? OFFSET ?"), eq(10L), eq(50), eq(100L));
+    }
+
+    @Test
+    void appliesDeterministicLimitAndOffsetForMembershipRolePage() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_MEMBERSHIP_ROLE_READ")));
+        when(jdbc.queryForList(contains("SELECT m.id"), eq(Long.class), eq(10L), eq("target-membership")))
+                .thenReturn(List.of(44L));
+
+        service.membershipRoles(principal(), "target-membership", 2, 50);
+
+        verify(jdbc).queryForList(contains("ORDER BY r.role_code LIMIT ? OFFSET ?"),
+                eq(String.class), eq(10L), eq(44L), eq(50), eq(100L));
+    }
+
+    @Test
+    void rejectsNegativePageBeforeExecutingCollectionQuery() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_READ")));
+
+        assertThrows(IllegalArgumentException.class, () -> service.listRoles(principal, -1, 50));
+
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void rejectsPageSizeAboveHardMaximumBeforeExecutingCollectionQuery() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_READ")));
+
+        assertThrows(IllegalArgumentException.class, () -> service.listRoles(principal, 0, 201));
 
         verifyNoInteractions(jdbc);
     }
