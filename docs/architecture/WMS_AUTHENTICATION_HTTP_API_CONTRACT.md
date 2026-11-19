@@ -1,6 +1,6 @@
 # WMS Authentication and Account Lifecycle HTTP API Contract
 
-Status: Implemented as opt-in WMS HTTP adapters. The endpoints remain disabled unless both `wms.security.jwt.enabled=true` and `wms.security.http.auth-endpoints-enabled=true` are explicitly configured; see the deployment gates below.
+Status: Implemented as opt-in WMS HTTP adapters. The WMS HTTP API is registered only when `wms.security.jwt.enabled=true`. The separate `wms.security.http.auth-endpoints-enabled=true` switch controls only the exact anonymous authentication POST allowlist; protected operational and identity routes remain registered and JWT-protected when that switch is false.
 
 ## Principles
 
@@ -72,7 +72,7 @@ Success: short-lived access token containing only subject, membership reference,
 
 ## Deployment gates
 
-HTTP identity endpoints remain disabled unless both `wms.security.jwt.enabled=true` and `wms.security.http.auth-endpoints-enabled=true` are explicitly set. Credential login additionally requires all of the following configuration:
+All WMS HTTP routes remain unregistered unless `wms.security.jwt.enabled=true`. With JWT enabled, protected operational and identity routes are registered and require authentication. The `wms.security.http.auth-endpoints-enabled=true` switch is separately required only to permit the exact public POST allowlist in the security chain; disabling it does not unregister protected routes. Credential login additionally requires all of the following configuration:
 - WMS profile and WMS-only datasource;
 - WMS JWT signing/verification key material and issuer/audiences;
 - reviewed login throttle policy, dedicated Base64 HMAC key of at least 256 bits, and explicit key version;
