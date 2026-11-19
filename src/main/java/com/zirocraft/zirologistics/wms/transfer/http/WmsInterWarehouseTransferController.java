@@ -34,8 +34,10 @@ public class WmsInterWarehouseTransferController {
     }
 
     @GetMapping
-    public List<Map<String,Object>> list(Authentication authentication) {
-        return service.list(principal(authentication));
+    public List<Map<String,Object>> list(Authentication authentication,
+                                          @RequestParam(defaultValue = "0") int page,
+                                          @RequestParam(defaultValue = "200") int size) {
+        return service.list(principal(authentication), page, size);
     }
 
     @GetMapping("/{transferPublicId}")
