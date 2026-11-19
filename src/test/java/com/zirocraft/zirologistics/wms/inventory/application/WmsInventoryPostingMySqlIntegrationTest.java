@@ -181,8 +181,8 @@ class WmsInventoryPostingMySqlIntegrationTest {
                         return "ACQUIRED";
                     } catch (java.sql.SQLException failure) {
                         waiting.rollback();
-                        if (failure.getErrorCode() == 1205 && "HY000".equals(failure.getSQLState())) {
-                            return "LOCK_TIMEOUT_1205_HY000";
+                        if (failure.getErrorCode() == 1205 && "40001".equals(failure.getSQLState())) {
+                            return "LOCK_TIMEOUT_1205_40001";
                         }
                         throw new IllegalStateException("Unexpected MySQL lock-wait failure", failure);
                     }
@@ -193,9 +193,12 @@ class WmsInventoryPostingMySqlIntegrationTest {
 
             assertTrue(waiterReady.await(10, TimeUnit.SECONDS),
                     "The waiting transaction must be ready while the blocker holds the tenant row");
-            assertEquals("LOCK_TIMEOUT_1205_HY000", waiter.get(5, TimeUnit.SECONDS),
-                    "MySQL lock wait timeout must be surfaced and must not be retried automatically");
+            assertEquals("LOCK_TIMEOUT_1205_40001", waiter.get(5, TimeUnit.SECONDS),
+                    "MySQL lock wait timeout must preserve vendor code 1205 and Connector/J SQLState 40001");
             blocker.rollback();
+            assertEquals("Inventory Test", jdbc.queryForObject(
+                    "SELECT display_name FROM tenants WHERE id = ?", String.class, fixture.tenantId()),
+                    "The timed-out transaction must not leave a partial write");
         }
     }
 
