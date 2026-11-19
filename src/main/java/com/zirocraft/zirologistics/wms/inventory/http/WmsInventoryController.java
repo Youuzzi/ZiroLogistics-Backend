@@ -1,9 +1,11 @@
 package com.zirocraft.zirologistics.wms.inventory.http;
 
+import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
+
 import com.zirocraft.zirologistics.wms.inventory.application.WmsInventoryPostingService;
 import com.zirocraft.zirologistics.wms.inventory.application.WmsInventoryQueryService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
-import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityHttpEnabledCondition;
+import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -23,7 +25,7 @@ import java.util.UUID;
 @RestController
 @Profile("wms")
 @RequestMapping("/api/wms/v1/tenants/current/inventory")
-@Conditional(WmsIdentityHttpEnabledCondition.class)
+@Conditional(WmsHttpApiEnabledCondition.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class WmsInventoryController {
     private final WmsInventoryPostingService postingService;
