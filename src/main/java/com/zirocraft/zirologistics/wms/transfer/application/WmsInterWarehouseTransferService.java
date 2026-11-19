@@ -40,7 +40,6 @@ public class WmsInterWarehouseTransferService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String,Object>>     @Transactional(readOnly = true)
     public List<Map<String,Object>> list(WmsAuthenticatedPrincipal principal) {
         return list(principal, 0, 200);
     }
