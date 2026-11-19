@@ -202,7 +202,7 @@ public class WmsInterWarehouseTransferService {
             throw new IllegalArgumentException("Transfer locations must be active");
         Long lotId=null;
         if(command.lotPublicId()!=null&&!command.lotPublicId().isBlank()){
-            lotId=requiredLong("SELECT id FROM inventory_lots WHERE tenant_id=? AND item_id=? AND public_id=? AND status='ACTIVE'",
+            lotId=requiredResourceLong("SELECT id FROM inventory_lots WHERE tenant_id=? AND item_id=? AND public_id=? AND status='ACTIVE'",
                     a.tenantId(),itemId,command.lotPublicId().trim(),"Active item lot not found");
         }
         boolean lotTracked=Set.of("LOT","LOT_AND_SERIAL").contains(tracking);
@@ -603,6 +603,11 @@ public class WmsInterWarehouseTransferService {
     }
     private long requiredLong(String sql,Object a,Object b,Object c,Object d,Object e,Object f,String message){
         List<Long> rows=jdbc.queryForList(sql,Long.class,a,b,c,d,e,f);if(rows.isEmpty())throw new WmsResourceNotFoundException(message);return rows.getFirst();
+    }
+    private long requiredResourceLong(String sql,Object a,Object b,Object c,String message){
+        List<Long> rows=jdbc.queryForList(sql,Long.class,a,b,c);
+        if(rows.isEmpty())throw new WmsResourceNotFoundException(message);
+        return rows.getFirst();
     }
     private static long number(Map<String,Object> row,String key){return ((Number)row.get(key)).longValue();}
     private static boolean bool(Object v){return v instanceof Boolean b?b: v instanceof Number n&&n.intValue()!=0;}
