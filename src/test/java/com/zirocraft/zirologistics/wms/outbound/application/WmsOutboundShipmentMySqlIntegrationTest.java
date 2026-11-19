@@ -335,6 +335,42 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 """,serialFixture.tenantId()));
     }
 
+    @Test
+    void outboundShipmentAndPickingResourcesAreTenantIsolatedAcrossWorkflowServices() {
+        String shipmentId = createShipment(fixture);
+        String lineId = addLine(fixture, shipmentId, "5.0000");
+        shipmentService.allocate(fixture.principal(), shipmentId, lineId,
+                new WmsOutboundShipmentService.AllocationCommand(List.of(
+                        new WmsOutboundShipmentService.AllocationLine(
+                                fixture.receivingLocationPublicId(), null, new BigDecimal("5.0000"), List.of()))));
+        shipmentService.release(fixture.principal(), shipmentId);
+
+        String taskId = (String) pickingService.create(fixture.principal(),
+                new WmsPickingManagementService.CreatePickingCommand(shipmentId,
+                        "PICK-" + UUID.randomUUID().toString().substring(0, 8), "NORMAL", null))
+                .get("public_id");
+
+        Fixture otherTenant = fixture("NONE");
+        assertThrows(IllegalArgumentException.class,
+                () -> shipmentService.get(otherTenant.principal(), shipmentId));
+        assertThrows(IllegalArgumentException.class,
+                () -> shippingService.get(otherTenant.principal(), shipmentId));
+        assertThrows(IllegalArgumentException.class,
+                () -> pickingService.get(otherTenant.principal(), taskId));
+        assertThrows(IllegalArgumentException.class,
+                () -> pickingService.create(otherTenant.principal(),
+                        new WmsPickingManagementService.CreatePickingCommand(shipmentId,
+                                "CROSS-" + UUID.randomUUID().toString().substring(0, 8), "NORMAL", null)));
+        assertThrows(IllegalArgumentException.class,
+                () -> packingService.create(otherTenant.principal(),
+                        new WmsPackingManagementService.CreateSessionCommand(shipmentId,
+                                "CROSS-PACK-" + UUID.randomUUID().toString().substring(0, 8), null)));
+
+        assertEquals("RELEASED", shipmentStatus(fixture, shipmentId));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+        assertEquals(new BigDecimal("5.0000"), reserved(fixture));
+    }
+
     private String createShipment(Fixture f) {
         return (String) shipmentService.create(f.principal(),
                 new WmsOutboundShipmentService.CreateShipmentCommand(
