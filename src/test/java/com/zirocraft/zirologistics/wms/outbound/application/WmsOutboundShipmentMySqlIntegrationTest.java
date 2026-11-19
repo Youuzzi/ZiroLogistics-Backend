@@ -284,7 +284,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 WHERE tenant_id=? AND event_type='OUTBOUND_SHIPMENT_RELEASED'
                   AND subject_public_id=? AND actor_membership_id=? AND actor_type='TENANT_MEMBER'
                 """, fixture.tenantId(), shipmentId, fixture.membershipId()));
-        assertEquals(1, count("""
+        assertEquals(0, count("""
                 SELECT COUNT(*) FROM tenant_audit_events
                 WHERE tenant_id=? AND event_type IN (
                   'OUTBOUND_SHIPMENT_CREATED','OUTBOUND_SHIPMENT_LINE_ADDED',
@@ -295,7 +295,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                   'PACKING_PACKAGE_LINE_ADDED','PACKING_PACKAGE_SEALED','PACKING_SESSION_COMPLETED',
                   'OUTBOUND_SHIPMENT_SHIPPED'
                 ) AND operation_ref IS NULL
-                """, fixture.tenantId()) == 0 ? 1 : 0);
+                """, fixture.tenantId()));
         assertEquals(0, count("""
                 SELECT COUNT(*) FROM (
                   SELECT operation_ref FROM tenant_audit_events
