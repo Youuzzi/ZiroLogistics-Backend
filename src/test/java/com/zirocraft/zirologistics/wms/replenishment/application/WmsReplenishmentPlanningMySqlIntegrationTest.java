@@ -2,6 +2,7 @@ package com.zirocraft.zirologistics.wms.replenishment.application;
 
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.inventory.application.WmsInventoryPostingService;
+import com.zirocraft.zirologistics.wms.stockcount.application.WmsStockCountManagementService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,7 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
     @Autowired private WmsReplenishmentPlanningService service;
     @Autowired private WmsReplenishmentTaskService taskService;
     @Autowired private WmsInventoryPostingService postingService;
+    @Autowired private WmsStockCountManagementService stockCountService;
     @Autowired private JdbcTemplate jdbc;
 
     private Fixture fixture;
@@ -236,6 +238,43 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
         assertThrows(IllegalStateException.class, () -> taskService.reverse(fixture.principal(),
                 firstConfirmation, new WmsReplenishmentTaskService.ReverseCommand(
                         UUID.randomUUID(), "Duplicate reversal")));
+    }
+
+    @Test
+    void replenishmentConfirmationCannotMoveStockFromLocationFrozenByActiveStockCount() {
+        receive(fixture, fixture.sourceLocationPublicId(), "10.0000");
+        String ruleId = createRule(fixture, "MIN_MAX", "3.0000", "8.0000", null);
+        Map<String, Object> task = service.plan(fixture.principal(), ruleId, null);
+        String taskId = (String) task.get("public_id");
+        taskService.release(fixture.principal(), taskId, 0L);
+        taskService.assign(fixture.principal(), taskId, 1L, fixture.principal().membershipPublicId());
+        taskService.start(fixture.principal(), taskId, 2L);
+
+        Map<String, Object> count = stockCountService.create(fixture.principal(),
+                new WmsStockCountManagementService.CreateCountCommand(
+                        fixture.warehousePublicId(), "RPL-FREEZE-" + UUID.randomUUID().toString().substring(0, 8),
+                        "CYCLE_COUNT", "BLIND", List.of(fixture.sourceLocationPublicId()),
+                        "Replenishment must respect stock count freeze"));
+        String countId = (String) count.get("publicId");
+        stockCountService.plan(fixture.principal(), countId);
+        stockCountService.start(fixture.principal(), countId);
+
+        assertThrows(IllegalStateException.class, () -> taskService.confirm(fixture.principal(), taskId,
+                new WmsReplenishmentTaskService.ConfirmCommand(
+                        UUID.randomUUID(), 1, new BigDecimal("3.0000"), List.of(), "Must be blocked by count freeze")));
+        assertEquals("IN_PROGRESS", taskService.get(fixture.principal(), taskId).get("status"));
+        assertEquals(new BigDecimal("10.0000"), onHand(fixture, fixture.sourceLocationPublicId()));
+        assertEquals(BigDecimal.ZERO.setScale(4), onHand(fixture, fixture.destinationLocationPublicId()));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM replenishment_confirmations
+                WHERE tenant_id=? AND replenishment_task_id=(
+                  SELECT id FROM replenishment_tasks WHERE tenant_id=? AND public_id=?
+                )
+                """, fixture.tenantId(), fixture.tenantId(), taskId));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id=? AND movement_type='TRANSFER'
+                """, fixture.tenantId()));
     }
 
     @Test
@@ -570,7 +609,8 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                   'WMS_REPLENISHMENT_RULE_MANAGE','WMS_REPLENISHMENT_TASK_CREATE',
                   'WMS_REPLENISHMENT_TASK_RELEASE','WMS_REPLENISHMENT_TASK_ASSIGN',
                   'WMS_REPLENISHMENT_TASK_START','WMS_REPLENISHMENT_TASK_CONFIRM',
-                  'WMS_REPLENISHMENT_TASK_CANCEL','WMS_REPLENISHMENT_CONFIRMATION_REVERSE'
+                  'WMS_REPLENISHMENT_TASK_CANCEL','WMS_REPLENISHMENT_CONFIRMATION_REVERSE',
+                  'WMS_STOCK_COUNT_CREATE','WMS_STOCK_COUNT_PLAN','WMS_STOCK_COUNT_START'
                 )
                 """, roleId);
         jdbc.update("""
