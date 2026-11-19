@@ -412,11 +412,11 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 () -> shippingService.get(otherTenant.principal(), shipmentId));
         assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
                 () -> pickingService.get(otherTenant.principal(), taskId));
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
                 () -> pickingService.create(otherTenant.principal(),
                         new WmsPickingManagementService.CreatePickingCommand(shipmentId,
                                 "CROSS-" + UUID.randomUUID().toString().substring(0, 8), "NORMAL", null)));
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
                 () -> packingService.create(otherTenant.principal(),
                         new WmsPackingManagementService.CreateSessionCommand(shipmentId,
                                 "CROSS-PACK-" + UUID.randomUUID().toString().substring(0, 8), null)));
@@ -729,7 +729,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
                 () -> transferService.get(otherTenant.principal(), transferId));
 
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class, () ->
                 transferService.create(
                         otherTenant.principal(),
                         new WmsInterWarehouseTransferService.TransferCommand(
