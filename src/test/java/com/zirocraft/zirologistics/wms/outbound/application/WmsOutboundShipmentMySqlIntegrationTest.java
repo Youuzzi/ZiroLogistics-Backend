@@ -258,7 +258,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 WHERE tenant_id=? AND movement_type='ISSUE' AND quantity_delta<0
                 """,fixture.tenantId()));
         assertThrows(IllegalStateException.class,()->shippingService.ship(fixture.principal(),shipmentId,
-                new WmsShippingManagementService.ShipCommand(UUID.randomUUID(),null,null,null)));
+                new WmsShippingManagementService.ShipCommand(shippingRequestId,null,null,null)));
     }
 
     @Test
