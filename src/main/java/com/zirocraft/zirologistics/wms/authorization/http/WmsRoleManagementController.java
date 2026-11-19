@@ -75,8 +75,10 @@ public class WmsRoleManagementController {
 
     @GetMapping("/memberships/{membershipPublicId}/roles")
     public List<String> membershipRoles(
-            Authentication authentication, @PathVariable String membershipPublicId) {
-        return service.membershipRoles(principal(authentication), membershipPublicId);
+            Authentication authentication, @PathVariable String membershipPublicId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size) {
+        return service.membershipRoles(principal(authentication), membershipPublicId, page, size);
     }
 
     @PostMapping("/memberships/{membershipPublicId}/roles/{rolePublicId}")
