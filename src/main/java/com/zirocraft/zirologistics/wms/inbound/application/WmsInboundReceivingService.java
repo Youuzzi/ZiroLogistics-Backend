@@ -355,10 +355,15 @@ public class WmsInboundReceivingService {
         }
 
         for (SerialLink link : serialLinks) {
-            Long serialId = requiredLong("""
-                    SELECT id FROM inventory_serials
-                    WHERE tenant_id = ? AND item_id = ? AND serial_number = ?
-                    """, access.tenantId(), link.itemId(), link.serialNumber(), "Posted serial was not registered");
+            Long serialId;
+            try {
+                serialId = requiredLong("""
+                        SELECT id FROM inventory_serials
+                        WHERE tenant_id = ? AND item_id = ? AND serial_number = ?
+                        """, access.tenantId(), link.itemId(), link.serialNumber(), "Posted serial was not registered");
+            } catch (WmsResourceNotFoundException missingPostedSerial) {
+                throw new IllegalStateException("Posted serial was not registered", missingPostedSerial);
+            }
             jdbc.update("""
                     INSERT INTO inbound_receipt_line_serials
                       (tenant_id, inbound_receipt_line_id, item_id, serial_id)
@@ -497,7 +502,7 @@ public class WmsInboundReceivingService {
 
     private Long requiredLong(String sql, Object a, Object b, Object c, String message) {
         List<Long> values = jdbc.queryForList(sql, Long.class, a, b, c);
-        if (values.isEmpty()) throw new IllegalArgumentException(message);
+        if (values.isEmpty()) throw new WmsResourceNotFoundException(message);
         return values.getFirst();
     }
 
