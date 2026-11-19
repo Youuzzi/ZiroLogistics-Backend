@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.inventory.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
@@ -51,7 +52,7 @@ public class WmsInventoryReservationService {
                 WHERE tenant_id = ? AND public_id = ? AND status = 'ACTIVE' AND is_stock_item = 1
                 """, rs -> rs.next() ? new Item(rs.getLong("id"), rs.getString("tracking_method")) : null,
                 access.tenantId(), required(command.itemPublicId()));
-        if (item == null) throw new IllegalArgumentException("Active stock item not found");
+        if (item == null) throw new WmsResourceNotFoundException("Active stock item not found");
         lockIds("items", List.of(item.id()), access.tenantId(), "Item");
 
         Long lotId = null;
@@ -211,25 +212,25 @@ public class WmsInventoryReservationService {
             List<Long> rows = jdbc.queryForList(
                     "SELECT id FROM " + table + " WHERE id = ? AND tenant_id = ? FOR UPDATE",
                     Long.class, id, tenantId);
-            if (rows.isEmpty()) throw new IllegalArgumentException(label + " is no longer available");
+            if (rows.isEmpty()) throw new WmsResourceNotFoundException(label + " is no longer available");
         });
     }
 
     private long id(String sql, Object a, Object b, String message) {
         List<Long> rows = jdbc.queryForList(sql, Long.class, a, b);
-        if (rows.isEmpty()) throw new IllegalArgumentException(message);
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException(message);
         return rows.getFirst();
     }
 
     private long id(String sql, Object a, Object b, Object c, String message) {
         List<Long> rows = jdbc.queryForList(sql, Long.class, a, b, c);
-        if (rows.isEmpty()) throw new IllegalArgumentException(message);
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException(message);
         return rows.getFirst();
     }
 
     private long id(String sql, Object a, Object b, Object c, Object d, Object e, Object f, String message) {
         List<Long> rows = jdbc.queryForList(sql, Long.class, a, b, c, d, e, f);
-        if (rows.isEmpty()) throw new IllegalArgumentException(message);
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException(message);
         return rows.getFirst();
     }
 
