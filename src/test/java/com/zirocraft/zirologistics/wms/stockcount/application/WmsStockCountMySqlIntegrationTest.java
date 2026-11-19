@@ -223,6 +223,69 @@ class WmsStockCountMySqlIntegrationTest {
     }
 
     @Test
+    void receiptTransferAndStockCountSnapshotReconcileAcrossBothLocations() {
+        receive(fixture, "10.0000");
+        String destinationLocation = createLocation(fixture);
+
+        postingService.post(fixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                UUID.randomUUID(), "TRANSFER",
+                List.of(
+                        new WmsInventoryPostingService.PostingLeg(
+                                fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                null, null, null, "AVAILABLE", new BigDecimal("3.0000")),
+                        new WmsInventoryPostingService.PostingLeg(
+                                fixture.warehousePublicId(), destinationLocation, fixture.itemPublicId(),
+                                null, null, null, "AVAILABLE", new BigDecimal("3.0000"))),
+                "Inventory lifecycle integration transfer"));
+
+        Map<String, Object> created = stockCountService.create(fixture.principal(),
+                new WmsStockCountManagementService.CreateCountCommand(
+                        fixture.warehousePublicId(), "LIFECYCLE-" + UUID.randomUUID().toString().substring(0, 8),
+                        "CYCLE_COUNT", "BLIND", List.of(fixture.locationPublicId(), destinationLocation),
+                        "Receipt, transfer and count lifecycle integration"));
+        String countPublicId = (String) created.get("publicId");
+        stockCountService.plan(fixture.principal(), countPublicId);
+        Map<String, Object> started = stockCountService.start(fixture.principal(), countPublicId);
+
+        Map<String, BigDecimal> expectedByLocation = new java.util.HashMap<>();
+        jdbc.query("""
+                SELECT l.public_id, scl.expected_qty
+                FROM stock_count_lines scl
+                JOIN stock_count_scopes scs
+                  ON scs.id = scl.stock_count_scope_id AND scs.tenant_id = scl.tenant_id
+                JOIN stock_counts sc
+                  ON sc.id = scs.stock_count_id AND sc.tenant_id = scs.tenant_id
+                JOIN warehouse_locations l
+                  ON l.id = scs.location_id AND l.tenant_id = scs.tenant_id
+                WHERE sc.tenant_id = ? AND sc.public_id = ?
+                """, rs -> {
+            while (rs.next()) expectedByLocation.put(rs.getString("public_id"), rs.getBigDecimal("expected_qty"));
+        }, fixture.tenantId(), countPublicId);
+
+        assertEquals(new BigDecimal("7.0000"), expectedByLocation.get(fixture.locationPublicId()));
+        assertEquals(new BigDecimal("3.0000"), expectedByLocation.get(destinationLocation));
+        assertEquals(Boolean.TRUE, started.get("freezeStock"));
+        assertEquals(3, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND request_id IN (
+                    SELECT request_id FROM inventory_ledger
+                    WHERE tenant_id = ? AND movement_type = 'RECEIPT'
+                )
+                """, fixture.tenantId(), fixture.tenantId()) + 2);
+        assertThrows(IllegalStateException.class, () -> postingService.post(fixture.principal(),
+                new WmsInventoryPostingService.PostingCommand(UUID.randomUUID(), "TRANSFER",
+                        List.of(
+                                new WmsInventoryPostingService.PostingLeg(
+                                        fixture.warehousePublicId(), fixture.locationPublicId(), fixture.itemPublicId(),
+                                        null, null, null, "AVAILABLE", BigDecimal.ONE),
+                                new WmsInventoryPostingService.PostingLeg(
+                                        fixture.warehousePublicId(), destinationLocation, fixture.itemPublicId(),
+                                        null, null, null, "AVAILABLE", BigDecimal.ONE)),
+                        "Movement must be blocked while lifecycle count is frozen")));
+        assertEquals(new BigDecimal("10.0000"), onHand(fixture));
+    }
+
+    @Test
     void overlappingActiveCountCannotFreezeTheSameLocationTwice() {
         String firstCount = createAndPlan(fixture);
         Map<String, Object> firstStarted = stockCountService.start(fixture.principal(), firstCount);
