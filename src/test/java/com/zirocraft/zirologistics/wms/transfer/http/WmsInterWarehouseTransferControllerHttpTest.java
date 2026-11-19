@@ -74,6 +74,17 @@ class WmsInterWarehouseTransferControllerHttpTest {
     }
 
     @Test
+    void mapsServicePageSizeRejectionToStableBadRequestContract() throws Exception {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(service.list(principal, 0, 201)).thenThrow(new IllegalArgumentException("size must be between 1 and 200"));
+
+        mockMvc.perform(get(ROUTE + "?size=201")
+                        .with(authentication(authenticated(principal))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
     void rejectsTransferCreationWithEmptyLinesBeforeCallingService() throws Exception {
         WmsAuthenticatedPrincipal principal = principal();
 
