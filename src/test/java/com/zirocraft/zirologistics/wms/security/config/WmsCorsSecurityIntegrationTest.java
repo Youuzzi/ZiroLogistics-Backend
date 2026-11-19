@@ -1,12 +1,14 @@
-package com.zirocraft.zirologistics.config;
+package com.zirocraft.zirologistics.wms.security.config;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.containsString;
@@ -15,10 +17,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(classes = WmsHttpSecurityTestApplication.class)
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
-class CorsSecurityIntegrationTest {
+@Import({WmsSecurityConfiguration.class, WmsCorsConfiguration.class})
+@ActiveProfiles("wms")
+@TestPropertySource(properties = {
+        "wms.security.jwt.enabled=false",
+        "wms.security.cors.allowed-origins=http://localhost:5173"
+})
+class WmsCorsSecurityIntegrationTest {
 
     private static final String ALLOWED_ORIGIN = "http://localhost:5173";
     private static final String FOREIGN_ORIGIN = "https://foreign-example.com";
@@ -28,28 +35,21 @@ class CorsSecurityIntegrationTest {
 
     @Test
     void preflightFromConfiguredFrontendOriginMustBeAccepted() throws Exception {
-        mockMvc.perform(options("/api/v1.0/warehouses")
+        mockMvc.perform(options("/api/wms/v1/warehouses")
                         .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN)
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.GET.name())
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization, Content-Type"))
                 .andExpect(status().isOk())
-                .andExpect(header().string(
-                        HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
-                        ALLOWED_ORIGIN
-                ))
-                .andExpect(header().string(
-                        HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS,
-                        "true"
-                ))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
                 .andExpect(header().string(
                         HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS,
-                        containsString("Authorization")
-                ));
+                        containsString("Authorization")));
     }
 
     @Test
     void preflightFromUnconfiguredOriginMustBeRejected() throws Exception {
-        mockMvc.perform(options("/api/v1.0/warehouses")
+        mockMvc.perform(options("/api/wms/v1/warehouses")
                         .header(HttpHeaders.ORIGIN, FOREIGN_ORIGIN)
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.GET.name())
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization"))
@@ -58,17 +58,12 @@ class CorsSecurityIntegrationTest {
     }
 
     @Test
-    void actualRequestFromConfiguredFrontendOriginMustReceiveCorsHeader() throws Exception {
-        // No JWT is supplied: this test checks CORS response headers, not endpoint authorization.
-        mockMvc.perform(get("/api/v1.0/warehouses")
+    void actualRequestFromConfiguredFrontendOriginReceivesCorsHeadersWithoutBypassingAuthentication()
+            throws Exception {
+        mockMvc.perform(get("/api/wms/v1/warehouses")
                         .header(HttpHeaders.ORIGIN, ALLOWED_ORIGIN))
-                .andExpect(header().string(
-                        HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
-                        ALLOWED_ORIGIN
-                ))
-                .andExpect(header().string(
-                        HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS,
-                        "true"
-                ));
+                .andExpect(status().isForbidden())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, ALLOWED_ORIGIN))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
     }
 }
