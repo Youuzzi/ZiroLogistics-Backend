@@ -86,6 +86,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> workflows = (Map<String, Object>) summary.get("workflowDocumentsByStatus");
         assertTrue(workflows.containsKey("inboundReceipts"));
+        assertTrue(workflows.containsKey("putawayTasks"));
         assertTrue(workflows.containsKey("outboundShipments"));
         assertTrue(workflows.containsKey("interWarehouseTransfers"));
         assertTrue(workflows.containsKey("replenishmentTasks"));
