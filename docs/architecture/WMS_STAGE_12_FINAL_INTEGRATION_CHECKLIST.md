@@ -17,7 +17,7 @@ Merge order remains:
 5. WP5 — Inter-Warehouse Workflow (PR #124).
 6. WP6 — Replenishment & Stock Control Integration (PR #125).
 7. WP7 — Operational Reporting (PR #126; additive V26).
-8. WP8 — Workflow Audit & Traceability (PR #127).
+8. WP8 — Workflow Audit & Traceability (PR #130; rebased after outbound test integration).
 9. WP9 — Final integration validation (this checklist).
 
 Before each merge:
