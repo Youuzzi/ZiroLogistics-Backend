@@ -3,7 +3,7 @@ package com.zirocraft.zirologistics.wms.warehouse.http;
 import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
 
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
-import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
+
 import com.zirocraft.zirologistics.wms.warehouse.application.WmsWarehouseManagementService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
