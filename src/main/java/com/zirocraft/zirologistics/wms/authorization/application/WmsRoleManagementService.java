@@ -51,14 +51,23 @@ public class WmsRoleManagementService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listRoles(WmsAuthenticatedPrincipal principal) {
+    public List<Map<String, Object>>     @Transactional(readOnly = true)
+    public List<Map<String, Object>> listRoles(WmsAuthenticatedPrincipal principal, int page, int size) {
         Access access = access(principal, "WMS_ROLE_READ");
+        long offset = boundedOffset(page, size);
         return jdbc.queryForList("""
                 SELECT public_id, role_code, role_name, description, is_system_role, status, version
                 FROM roles WHERE tenant_id = ? ORDER BY is_system_role DESC, role_name, role_code
-                """, access.tenantId());
+                LIMIT ? OFFSET ?
+                """, access.tenantId(), size, offset);
     }
 
+    private static long boundedOffset(int page, int size) {
+        if (page < 0 || size < 1 || size > 200) throw new IllegalArgumentException("Invalid page or size");
+        long offset = (long) page * size;
+        if (offset > Integer.MAX_VALUE) throw new IllegalArgumentException("Page is too large");
+        return offset;
+    }
     @Transactional
     public Map<String, Object> createRole(
             WmsAuthenticatedPrincipal principal, String code, String name, String description) {
