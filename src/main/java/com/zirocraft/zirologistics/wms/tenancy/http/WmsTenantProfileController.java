@@ -1,7 +1,7 @@
 package com.zirocraft.zirologistics.wms.tenancy.http;
 
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
-import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityHttpEnabledCondition;
+import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
 import com.zirocraft.zirologistics.wms.tenancy.application.WmsTenantProfile;
 import com.zirocraft.zirologistics.wms.tenancy.application.WmsTenantProfileService;
 import com.zirocraft.zirologistics.wms.tenancy.application.WmsTenantProfileUpdate;
@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @Profile("wms")
 @RequestMapping("/api/wms/v1/tenants/current/profile")
-@Conditional(WmsIdentityHttpEnabledCondition.class)
+@Conditional(WmsHttpApiEnabledCondition.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class WmsTenantProfileController {
     private final WmsTenantProfileService profileService;
