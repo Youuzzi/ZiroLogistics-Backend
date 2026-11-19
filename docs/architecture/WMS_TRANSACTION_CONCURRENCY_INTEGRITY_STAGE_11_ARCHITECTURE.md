@@ -1,6 +1,6 @@
 # WMS Transaction & Concurrency Integrity — Stage 11 Architecture Contract
 
-**Status:** Proposed implementation contract for roadmap Stage 11.  
+**Status:** Completed — WP1–WP8 merged; final Main CI #503 succeeded on `8cf37a7558a07481d284d91b2b137f28ed61d8cd`.  
 **Runtime:** WMS-only modular monolith.  
 **Schema authority:** Frozen WMS V1 plus immutable additive migrations V2–V25; future schema changes are additive V26+.  
 **Verification:** Disposable MySQL 8.4 Testcontainers only.  
@@ -199,6 +199,15 @@ Stage 11 is complete only when:
 
 Evidence labels remain mandatory: VERIFIED, PARTIALLY VERIFIED, INFERRED, UNVERIFIED and PROPOSED. Code inspection alone does not establish runtime concurrency safety.
 
-## 10. Handoff
+## 10. Final audit evidence and boundaries
+
+- **VERIFIED:** Stage 11 PRs #108–#118 are integrated; final Main CI #503 passed on the exact Stage 11 merge commit. The final suite reported 308 tests, 0 failures, 0 errors and 2 skipped.
+- **VERIFIED:** Deterministic MySQL 8.4 tests cover competing issues/reservations, issue-versus-reservation, replenishment shared-source and same-line races, one-time reversal, serial movement races, count/freeze and adjustment races, duplicate request replay, injected rollback, and MySQL deadlock/lock-timeout classification.
+- **PARTIALLY VERIFIED:** The deadlock and lock-timeout classification tests deliberately exercise independent MySQL transactions directly; they establish MySQL rollback/error behavior, not a guarantee that every production workflow is deadlock-free.
+- **PARTIALLY VERIFIED:** Lock ordering is explicit inside the inventory posting boundary and tested on selected opposing transfer operations. Workflow aggregate locks remain operation-specific; do not infer one universal global lock order or concurrency safety for untested interleavings.
+- **VERIFIED:** No automatic transaction retry was introduced. Deadlock/timeout outcomes must surface to the caller; only commands with documented request identity may be safely replayed using the same request ID.
+- These boundaries are residual evidence limitations, not known production defects. Keep them visible in future structural audit and API contract work; do not weaken the existing tests.
+
+## 11. Handoff
 
 Stage 11 follows Stage 10 Inventory Control. Stage 12 Business Workflows & Reporting may begin only after Stage 11 is complete and its final post-merge Main CI is green. Backend structural audit/refactoring remains scheduled after Stage 13 and before frontend implementation. Frontend work remains blocked until all backend stages and production-readiness gates are complete.
