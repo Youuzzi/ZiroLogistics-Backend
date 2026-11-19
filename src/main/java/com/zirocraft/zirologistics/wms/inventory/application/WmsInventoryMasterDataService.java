@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.inventory.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
@@ -391,7 +392,7 @@ public class WmsInventoryMasterDataService {
                   AND i.status = 'ACTIVE'
                 LIMIT 2
                 """, access.tenantId(), type, value);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Active item was not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Active item was not found");
         if (rows.size() > 1) throw new IllegalStateException("Identifier uniqueness invariant is violated");
         return rows.getFirst();
     }
