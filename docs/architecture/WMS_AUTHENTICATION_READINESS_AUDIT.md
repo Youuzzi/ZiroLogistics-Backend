@@ -59,23 +59,25 @@ Do not pass a BCrypt hash to the Argon2id encoder, do not treat a hash as plaint
 
 ## 4. Login throttling readiness
 
-### 4.1 Current gap
+### 4.1 Implemented baseline
 
-No shared/durable throttle exists in the current WMS backend. A process-local counter or local cache is insufficient for multiple application instances because each instance would maintain independent limits and resets.
+WMS V2 provides the `wms_login_throttle_buckets` table. The WMS runtime includes a MySQL 8.4 adapter implementing `WmsThrottleStoragePort`, an application throttle service, privacy-preserving HMAC account/source keys, atomic transactional bucket updates, bounded account cooldowns, successful-account reset, and bounded cleanup operations. Credential authentication invokes the throttle before user lookup/password verification and records failed/successful outcomes. Testcontainers integration coverage exercises the MySQL adapter and authentication orchestration.
 
-### 4.2 Recommended direction
+A process-local counter or local cache is not used as a substitute. No Redis dependency is introduced.
 
-**Recommendation for the current architecture:** design an additive, database-backed WMS throttle slice (Flyway V2) using atomic MySQL operations, unless deployment operations confirms a managed shared Redis service is available and supported.
+### 4.2 Remaining production-readiness work
 
-Reasons:
-- MySQL is already a required WMS dependency.
-- An atomic database operation can coordinate attempts across WMS instances.
-- It avoids silently introducing an undeclared production Redis dependency.
-- It keeps V1 immutable; V2 must be additive and separately reviewed.
+The code-level implementation does not approve numeric production thresholds or establish production performance. Before production enablement:
+- review source/account windows, limits, cooldown, retention, and cleanup cadence;
+- benchmark Argon2id and the complete login path on representative deployment hardware;
+- load-test concurrent requests, NAT/shared-IP behavior, and source/account threshold boundaries;
+- validate HMAC key provisioning/rotation and trusted-proxy CIDRs;
+- configure monitoring, alerting, database timeout budgets, and a throttle-store outage runbook;
+- confirm the operational impact of fail-closed behavior during database outages.
 
-This is a recommendation, not an implemented or approved migration. If a managed Redis service is already part of the deployment platform, compare its availability, atomicity, outage behavior, monitoring, and operational ownership before choosing it.
+V1 remains immutable; throttle persistence is additive V2. A managed shared Redis service is an alternative only if deployment operations explicitly adopts and supports it.
 
-### 4.3 Minimum control design to specify before implementation
+### 4.3 Minimum control design to validate operationally
 
 The detailed policy must define:
 - account-scoped throttling so distributed source IPs cannot bypass account protection;

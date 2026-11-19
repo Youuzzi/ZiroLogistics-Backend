@@ -1,17 +1,17 @@
 # WMS Login Throttling Design
 
-**Status:** Design proposal; implementation and numeric policy are not approved by this document.  
+**Status:** Historical design proposal; MySQL V2 persistence, adapter, and credential-flow integration are now implemented. Production numeric policy and deployment evidence remain subject to sign-off.  
 **Scope:** WMS credential-login abuse resistance only.  
 **Schema:** Frozen V1 is immutable. Any persistent implementation must be an additive Flyway V2 migration.  
 **Database safety:** All implementation and integration tests must use disposable MySQL 8.4 Testcontainers. Never connect to or mutate `zirowms_v1` or `zirologistics_db`.
 
 ## 1. Decision summary
 
-The repository currently has no shared login-throttling implementation. A process-local counter or Caffeine cache cannot coordinate multiple backend instances and is not an acceptable production control.
+At the time this proposal was written, the repository had no shared login-throttling implementation. The current implementation uses additive MySQL V2 persistence, the `MySqlWmsThrottleStorageAdapter`, and the WMS application throttle service integrated into credential authentication. A process-local counter or Caffeine cache remains unacceptable as the shared production control.
 
-**Proposed default:** use an additive MySQL-backed throttle store unless deployment infrastructure confirms that a managed, shared Redis service is already available and operationally supported.
+**Implemented adapter:** MySQL 8.4. Redis remains optional and is not introduced without a managed service and operational owner.
 
-This document deliberately does not create V2 DDL, choose final thresholds, or enable login. It records a design that can be reviewed before implementation.
+The design sections below record the security and concurrency rationale. Numeric production thresholds, load evidence, HMAC key rotation operations, monitoring, and the outage runbook remain deployment release gates.
 
 ## 2. Threat model and objectives
 
@@ -43,11 +43,9 @@ For invalid/un-normalizable email input, apply the source bucket and request-sha
 - Canonicalize IPv4/IPv6 addresses before HMAC. Only honor forwarding headers from explicitly trusted proxy hops; otherwise use the socket peer address.
 - Document key rotation: during a bounded overlap, either accept old and new bucket keys or intentionally reset throttle history with an operationally approved procedure. Never log the secret.
 
-## 4. Proposed persistence shape (conceptual only)
+## 4. Implemented V2 persistence shape
 
-An additive table such as `wms_login_throttle_buckets` may store one row per bucket key and time window.
-
-Conceptual columns:
+The additive V2 migration creates `wms_login_throttle_buckets` to store one row per bucket key and time window. The implemented columns are:
 
 | Column | Purpose |
 |---|---|
@@ -89,7 +87,7 @@ If the account and source updates cannot be committed together, define and test 
 
 ## 6. Evaluation order and behavior
 
-Proposed request flow:
+Implemented credential-authentication flow:
 
 1. Apply HTTP payload size, content-type, and basic request-shape validation.
 2. Resolve the client source using the trusted-proxy policy.
@@ -250,16 +248,16 @@ Minimum test matrix:
 - logs and metrics contain no raw email, IP, password, hash, or token;
 - multi-instance service test shares the same database state.
 
-## 12. Implementation sequence
+## 12. Remaining production release sequence
 
-1. Confirm deployment has no supported managed Redis dependency, or complete the Redis-vs-MySQL decision record.
-2. Approve the threshold/cooldown and outage policy after workload and abuse-case review.
-3. Finalize additive V2 DDL and migration naming. Do not modify V1.
-4. Implement a WMS-profile-only throttle repository/service with atomic MySQL operations, including successful-account reset.
-5. Add Testcontainers integration and concurrency tests.
-6. Add safe metrics, cleanup, and operational documentation.
-7. Benchmark Argon2id and the combined login path.
-8. Only then implement credential login and expose the explicitly allow-listed login route.
+1. Approve source/account thresholds, windows, cooldown, retention, and cleanup policy using expected workload and abuse-case review.
+2. Benchmark Argon2id and the complete credential-login path on representative deployment hardware.
+3. Complete load testing for concurrent requests, NAT/shared-IP scenarios, and threshold boundaries.
+4. Provision and rehearse HMAC key rotation and trusted-proxy configuration.
+5. Add production metrics, alerts, cleanup scheduling, bounded JDBC/transaction timeouts, and the throttle-store outage runbook.
+6. Complete password-hash provenance review and production security sign-off.
+
+The MySQL V2 migration, adapter, service, and credential endpoint integration are already implemented; do not create a duplicate throttle schema or another adapter without a separate decision.
 
 ## 13. References
 
