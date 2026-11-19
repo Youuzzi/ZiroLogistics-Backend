@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.transfer.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
@@ -509,7 +510,7 @@ public class WmsInterWarehouseTransferService {
                 WHERE t.tenant_id=? AND t.public_id=?
                 """+(lock?" FOR UPDATE":"");
         List<Map<String,Object>> rows=jdbc.queryForList(sql,tenantId,required(publicId,"transfer public ID"));
-        if(rows.isEmpty())throw new IllegalArgumentException("Transfer not found");
+        if(rows.isEmpty())throw new WmsResourceNotFoundException("Transfer not found");
         return rows.getFirst();
     }
 
@@ -530,7 +531,7 @@ public class WmsInterWarehouseTransferService {
                 WHERE a.tenant_id=? AND l.stock_transfer_id=? AND a.public_id=?
                 """+(lock?" FOR UPDATE":"");
         List<Map<String,Object>> rows=jdbc.queryForList(sql,tenantId,transferId,required(publicId,"allocation public ID"));
-        if(rows.isEmpty())throw new IllegalArgumentException("Transfer allocation not found");
+        if(rows.isEmpty())throw new WmsResourceNotFoundException("Transfer allocation not found");
         return rows.getFirst();
     }
 
