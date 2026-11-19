@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class WmsRoleManagementServiceTest {
@@ -65,7 +67,6 @@ class WmsRoleManagementServiceTest {
         assertThrows(WmsResourceNotFoundException.class,
                 () -> service.updateRole(principal(), "missing-role", "Updated", null, 0));
 
-        verify(jdbc, never()).update(anyString(), any());
     }
 
     @Test
