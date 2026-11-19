@@ -1,10 +1,10 @@
 # WMS Business Workflows & Reporting — Stage 12 Architecture & Delivery Contract
 
-**Status:** Proposed implementation contract for roadmap Stage 12.  
-**Runtime:** WMS-only modular monolith (`wms` profile).  
-**Schema authority:** Frozen WMS V1 plus additive migrations V2–V25; future schema changes are additive V26+ only.  
-**Verification:** Disposable MySQL 8.4 Testcontainers only.  
-**Baseline commit:** `8cf37a7558a07481d284d91b2b137f28ed61d8cd`.  
+**Status:** Proposed implementation contract for roadmap Stage 12.
+**Runtime:** WMS-only modular monolith (`wms` profile).
+**Schema authority:** Frozen WMS V1 plus additive migrations V2–V25; future schema changes are additive V26+ only.
+**Verification:** Disposable MySQL 8.4 Testcontainers only.
+**Baseline commit:** `8cf37a7558a07481d284d91b2b137f28ed61d8cd`.
 **Scope:** End-to-end integrity across inbound, outbound, inventory lifecycle, inter-warehouse transfer, replenishment/stock control, operational reporting and audit traceability.
 
 ## 1. Stage objective
