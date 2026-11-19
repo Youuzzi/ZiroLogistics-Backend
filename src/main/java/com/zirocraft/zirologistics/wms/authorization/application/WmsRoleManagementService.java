@@ -205,6 +205,11 @@ public class WmsRoleManagementService {
     }
 
     @Transactional(readOnly = true)
+    public List<String> membershipRoles(WmsAuthenticatedPrincipal principal, String membershipPublicId) {
+        return membershipRoles(principal, membershipPublicId, 0, 200);
+    }
+
+    @Transactional(readOnly = true)
     public List<String> membershipRoles(WmsAuthenticatedPrincipal principal, String membershipPublicId,
                                         int page, int size) {
         Access access = access(principal, "WMS_MEMBERSHIP_ROLE_READ");
