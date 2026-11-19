@@ -52,13 +52,26 @@ public class WmsRoleManagementService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> listRoles(WmsAuthenticatedPrincipal principal) {
+        return listRoles(principal, 0, 200);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listRoles(WmsAuthenticatedPrincipal principal, int page, int size) {
         Access access = access(principal, "WMS_ROLE_READ");
+        long offset = boundedOffset(page, size);
         return jdbc.queryForList("""
                 SELECT public_id, role_code, role_name, description, is_system_role, status, version
                 FROM roles WHERE tenant_id = ? ORDER BY is_system_role DESC, role_name, role_code
-                """, access.tenantId());
+                LIMIT ? OFFSET ?
+                """, access.tenantId(), size, offset);
     }
 
+    private static long boundedOffset(int page, int size) {
+        if (page < 0 || size < 1 || size > 200) throw new IllegalArgumentException("Invalid page or size");
+        long offset = (long) page * size;
+        if (offset > Integer.MAX_VALUE) throw new IllegalArgumentException("Page is too large");
+        return offset;
+    }
     @Transactional
     public Map<String, Object> createRole(
             WmsAuthenticatedPrincipal principal, String code, String name, String description) {
@@ -192,14 +205,21 @@ public class WmsRoleManagementService {
 
     @Transactional(readOnly = true)
     public List<String> membershipRoles(WmsAuthenticatedPrincipal principal, String membershipPublicId) {
+        return membershipRoles(principal, membershipPublicId, 0, 200);
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> membershipRoles(WmsAuthenticatedPrincipal principal, String membershipPublicId,
+                                        int page, int size) {
         Access access = access(principal, "WMS_MEMBERSHIP_ROLE_READ");
         Long membershipId = activeMembership(access.tenantId(), membershipPublicId);
+        long offset = boundedOffset(page, size);
         return jdbc.queryForList("""
                 SELECT r.public_id FROM membership_roles mr
                 JOIN roles r ON r.id = mr.role_id AND r.tenant_id = mr.tenant_id
                 WHERE mr.tenant_id = ? AND mr.membership_id = ? AND r.status = 'ACTIVE'
-                ORDER BY r.role_code
-                """, String.class, access.tenantId(), membershipId);
+                ORDER BY r.role_code LIMIT ? OFFSET ?
+                """, String.class, access.tenantId(), membershipId, size, offset);
     }
 
     @Transactional
