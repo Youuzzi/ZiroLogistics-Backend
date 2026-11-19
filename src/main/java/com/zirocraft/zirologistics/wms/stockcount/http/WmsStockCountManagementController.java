@@ -1,7 +1,7 @@
 package com.zirocraft.zirologistics.wms.stockcount.http;
 
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
-import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityHttpEnabledCondition;
+import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
 import com.zirocraft.zirologistics.wms.stockcount.application.WmsStockCountManagementService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -18,7 +18,7 @@ import java.util.Map;
 @RestController
 @Profile("wms")
 @RequestMapping("/api/wms/v1/tenants/current/stock-counts")
-@Conditional(WmsIdentityHttpEnabledCondition.class)
+@Conditional(WmsHttpApiEnabledCondition.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class WmsStockCountManagementController {
     private final WmsStockCountManagementService service;
