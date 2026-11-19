@@ -431,7 +431,7 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                 List.of(new WmsReplenishmentTaskService.ManualTaskLine(
                         otherTenant.itemPublicId(), fixture.sourceLocationPublicId(),
                         fixture.destinationLocationPublicId(), null, BigDecimal.ONE, null)));
-        assertThrows(IllegalArgumentException.class, () -> taskService.createManual(fixture.principal(), crossTenant));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class, () -> taskService.createManual(fixture.principal(), crossTenant));
         assertEquals(before, count("SELECT COUNT(*) FROM replenishment_tasks WHERE tenant_id=?", fixture.tenantId()));
     }
 
@@ -445,7 +445,7 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                 List.of(new WmsReplenishmentTaskService.ManualTaskLine(
                         lotFixture.itemPublicId(), lotFixture.sourceLocationPublicId(),
                         lotFixture.destinationLocationPublicId(), null, BigDecimal.ONE, null)));
-        assertThrows(IllegalArgumentException.class, () -> taskService.createManual(lotFixture.principal(), missingLot));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class, () -> taskService.createManual(lotFixture.principal(), missingLot));
 
         Fixture foreign = fixture("LOT");
         String foreignLot = createLot(foreign, "FOREIGN-LOT");
@@ -454,7 +454,7 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                 List.of(new WmsReplenishmentTaskService.ManualTaskLine(
                         lotFixture.itemPublicId(), lotFixture.sourceLocationPublicId(),
                         lotFixture.destinationLocationPublicId(), foreignLot, BigDecimal.ONE, null)));
-        assertThrows(IllegalArgumentException.class, () -> taskService.createManual(lotFixture.principal(), wrongLot));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class, () -> taskService.createManual(lotFixture.principal(), wrongLot));
     }
 
     @Test
