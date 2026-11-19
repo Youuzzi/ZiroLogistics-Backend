@@ -41,7 +41,13 @@ public class WmsInterWarehouseTransferService {
 
     @Transactional(readOnly = true)
     public List<Map<String,Object>> list(WmsAuthenticatedPrincipal principal) {
+        return list(principal, 0, 200);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String,Object>> list(WmsAuthenticatedPrincipal principal, int page, int size) {
         Access a = access(principal, "WMS_TRANSFER_READ");
+        long offset = boundedOffset(page, size);
         return jdbc.queryForList("""
                 SELECT t.public_id,t.document_number,t.external_reference,t.transfer_type,t.status,
                        sw.public_id source_warehouse_public_id,sw.warehouse_code source_warehouse_code,
@@ -51,10 +57,16 @@ public class WmsInterWarehouseTransferService {
                 FROM stock_transfers t
                 JOIN warehouses sw ON sw.id=t.source_warehouse_id AND sw.tenant_id=t.tenant_id
                 JOIN warehouses dw ON dw.id=t.destination_warehouse_id AND dw.tenant_id=t.tenant_id
-                WHERE t.tenant_id=? ORDER BY t.created_at DESC,t.id DESC
-                """, a.tenantId());
+                WHERE t.tenant_id=? ORDER BY t.created_at DESC,t.id DESC LIMIT ? OFFSET ?
+                """, a.tenantId(), size, offset);
     }
 
+    private static long boundedOffset(int page, int size) {
+        if (page < 0 || size < 1 || size > 200) throw new IllegalArgumentException("Invalid page or size");
+        long offset = (long) page * size;
+        if (offset > Integer.MAX_VALUE) throw new IllegalArgumentException("Page is too large");
+        return offset;
+    }
     @Transactional(readOnly = true)
     public Map<String,Object> get(WmsAuthenticatedPrincipal principal, String transferPublicId) {
         Access a = access(principal, "WMS_TRANSFER_READ");
