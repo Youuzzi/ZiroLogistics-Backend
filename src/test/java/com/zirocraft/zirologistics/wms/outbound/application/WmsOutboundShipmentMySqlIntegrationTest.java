@@ -406,11 +406,11 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 .get("public_id");
 
         Fixture otherTenant = fixture("NONE");
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
                 () -> shipmentService.get(otherTenant.principal(), shipmentId));
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
                 () -> shippingService.get(otherTenant.principal(), shipmentId));
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
                 () -> pickingService.get(otherTenant.principal(), taskId));
         assertThrows(IllegalArgumentException.class,
                 () -> pickingService.create(otherTenant.principal(),
@@ -726,7 +726,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 .anyMatch(row -> transferId.equals(row.get("public_id"))));
         assertFalse(transferService.list(otherTenant.principal()).stream()
                 .anyMatch(row -> transferId.equals(row.get("public_id"))));
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
                 () -> transferService.get(otherTenant.principal(), transferId));
 
         assertThrows(IllegalArgumentException.class, () ->
