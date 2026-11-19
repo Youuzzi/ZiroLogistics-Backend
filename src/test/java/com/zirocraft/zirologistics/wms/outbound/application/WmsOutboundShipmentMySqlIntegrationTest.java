@@ -267,23 +267,23 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 WHERE tenant_id=? AND subject_public_id=? AND event_type='OUTBOUND_SHIPMENT_SHIPPED'
                   AND actor_type='TENANT_MEMBER' AND actor_membership_id=?
                   AND JSON_UNQUOTE(JSON_EXTRACT(change_payload,'$.requestId'))=?
-                """, fixture.tenantId(), shipmentId, fixture.membershipId(), shippingRequestId.toString()));
+                """, fixture.tenantId(), shipmentId, jdbc.queryForObject("SELECT id FROM tenant_memberships WHERE tenant_id=? AND public_id=?", Long.class, fixture.tenantId(), fixture.membershipPublicId()), shippingRequestId.toString()));
         assertEquals(1, count("""
                 SELECT COUNT(*) FROM tenant_audit_events
                 WHERE tenant_id=? AND subject_public_id=? AND event_type='PICKING_CONFIRMED'
                   AND actor_type='TENANT_MEMBER' AND actor_membership_id=?
                   AND JSON_UNQUOTE(JSON_EXTRACT(change_payload,'$.requestId'))=?
-                """, fixture.tenantId(), taskId, fixture.membershipId(), pickingRequestId.toString()));
+                """, fixture.tenantId(), taskId, jdbc.queryForObject("SELECT id FROM tenant_memberships WHERE tenant_id=? AND public_id=?", Long.class, fixture.tenantId(), fixture.membershipPublicId()), pickingRequestId.toString()));
         assertEquals(1, count("""
                 SELECT COUNT(*) FROM tenant_audit_events
                 WHERE tenant_id=? AND event_type='PACKING_SESSION_COMPLETED'
                   AND subject_public_id=? AND actor_membership_id=? AND actor_type='TENANT_MEMBER'
-                """, fixture.tenantId(), sessionId, fixture.membershipId()));
+                """, fixture.tenantId(), sessionId, jdbc.queryForObject("SELECT id FROM tenant_memberships WHERE tenant_id=? AND public_id=?", Long.class, fixture.tenantId(), fixture.membershipPublicId())));
         assertEquals(1, count("""
                 SELECT COUNT(*) FROM tenant_audit_events
                 WHERE tenant_id=? AND event_type='OUTBOUND_SHIPMENT_RELEASED'
                   AND subject_public_id=? AND actor_membership_id=? AND actor_type='TENANT_MEMBER'
-                """, fixture.tenantId(), shipmentId, fixture.membershipId()));
+                """, fixture.tenantId(), shipmentId, jdbc.queryForObject("SELECT id FROM tenant_memberships WHERE tenant_id=? AND public_id=?", Long.class, fixture.tenantId(), fixture.membershipPublicId())));
         assertEquals(0, count("""
                 SELECT COUNT(*) FROM tenant_audit_events
                 WHERE tenant_id=? AND event_type IN (
