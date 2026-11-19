@@ -216,6 +216,8 @@ public class WmsWarehouseManagementService {
             throw new IllegalStateException("Locations can only be created in an active warehouse");
         }
         LocationCommand normalized = normalize(command);
+        validateCapacityUom(normalized.weightUom(), "MASS", "Weight");
+        validateCapacityUom(normalized.volumeUom(), "VOLUME", "Volume");
         Long parentId = resolveParent(access.tenantId(), number(warehouse, "id"),
                 normalized.parentLocationPublicId());
         String publicId = UUID.randomUUID().toString();
@@ -260,6 +262,8 @@ public class WmsWarehouseManagementService {
             throw new IllegalStateException("Location version conflict");
         }
         LocationCommand normalized = normalize(command);
+        validateCapacityUom(normalized.weightUom(), "MASS", "Weight");
+        validateCapacityUom(normalized.volumeUom(), "VOLUME", "Volume");
         Long parentId = resolveParent(access.tenantId(), warehouseId, normalized.parentLocationPublicId());
         ensureNoCycle(access.tenantId(), warehouseId, number(beforeInternal, "id"), parentId);
         try {
@@ -485,6 +489,17 @@ public class WmsWarehouseManagementService {
                 normalizeUom(c.volumeUom()), Boolean.TRUE.equals(c.pickable()),
                 Boolean.TRUE.equals(c.receivable()), Boolean.TRUE.equals(c.allowMixedSkus()),
                 Boolean.TRUE.equals(c.allowMixedLots()), c.pickingSequence(), c.putawaySequence());
+    }
+
+    private void validateCapacityUom(String uom, String dimension, String label) {
+        if (uom == null) return;
+        Integer count = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM units_of_measure
+                WHERE uom_code = ? AND dimension = ? AND is_active = 1
+                """, Integer.class, uom, dimension);
+        if (count == null || count != 1) {
+            throw new IllegalArgumentException(label + " capacity UOM must be an active " + dimension.toLowerCase(Locale.ROOT) + " unit");
+        }
     }
 
     private static void validateCapacity(BigDecimal value, String uom, String label) {

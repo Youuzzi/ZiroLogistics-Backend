@@ -86,6 +86,42 @@ class WmsInventoryMasterDataServiceTest {
 
 
     @Test
+    void itemWeightAndMassUomMustBeSuppliedTogetherBeforeUomResolution() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ITEM_CREATE")));
+        when(jdbc.queryForList(contains("FROM tenants"), eq(Long.class), eq(10L)))
+                .thenReturn(List.of(10L));
+
+        WmsInventoryMasterDataService.ItemCommand command = new WmsInventoryMasterDataService.ItemCommand(
+                "SKU-WEIGHT", "Weighted Item", null, null, "EA", "NONE",
+                true, true, true, java.math.BigDecimal.ZERO,
+                new java.math.BigDecimal("1.250000"), null);
+
+        assertThrows(IllegalArgumentException.class, () -> service.createItem(principal(), command));
+
+        verify(jdbc).queryForList(contains("FROM tenants"), eq(Long.class), eq(10L));
+        verify(jdbc, never()).queryForList(contains("FROM units_of_measure"), eq(Long.class), any());
+    }
+
+    @Test
+    void itemWeightMustFitDatabasePrecisionBeforeUomResolution() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ITEM_CREATE")));
+        when(jdbc.queryForList(contains("FROM tenants"), eq(Long.class), eq(10L)))
+                .thenReturn(List.of(10L));
+
+        WmsInventoryMasterDataService.ItemCommand command = new WmsInventoryMasterDataService.ItemCommand(
+                "SKU-WEIGHT", "Weighted Item", null, null, "EA", "NONE",
+                true, true, true, java.math.BigDecimal.ZERO,
+                new java.math.BigDecimal("1.1234567"), "KG");
+
+        assertThrows(IllegalArgumentException.class, () -> service.createItem(principal(), command));
+
+        verify(jdbc).queryForList(contains("FROM tenants"), eq(Long.class), eq(10L));
+        verify(jdbc, never()).queryForList(contains("FROM units_of_measure"), eq(Long.class), any());
+    }
+
+    @Test
     void identifierLookupPreservesLeadingZeroesAndIsTenantScoped() {
         when(accessService.resolve("user-public", "membership-public"))
                 .thenReturn(access(Set.of("WMS_ITEM_READ")));

@@ -175,10 +175,12 @@ public class WmsInventoryMasterDataService {
                 SELECT i.public_id, i.sku, i.item_name, i.description,
                        c.public_id AS category_public_id, c.category_name,
                        u.uom_code AS base_uom_code, u.uom_name AS base_uom_name,
+                       i.weight_per_base_uom, weight_uom.uom_code AS weight_uom_code,
                        i.tracking_method, i.is_stock_item, i.is_purchasable, i.is_sellable,
                        i.minimum_stock_level, i.status, i.version, i.created_at, i.updated_at
                 FROM items i
                 JOIN units_of_measure u ON u.id = i.base_uom_id
+                LEFT JOIN units_of_measure weight_uom ON weight_uom.id = i.weight_uom_id
                 LEFT JOIN item_categories c ON c.id = i.category_id AND c.tenant_id = i.tenant_id
                 WHERE i.tenant_id = ?
                 ORDER BY i.sku LIMIT 500
@@ -199,6 +201,7 @@ public class WmsInventoryMasterDataService {
         NormalizedItem item = normalize(command);
         Long categoryId = resolveActiveCategory(access.tenantId(), command.categoryPublicId());
         Long baseUomId = resolveActiveUom(item.baseUomCode());
+        Long weightUomId = item.weightUomCode() == null ? null : resolveActiveMassUom(item.weightUomCode());
         if (!item.stockItem() && !item.trackingMethod().equals("NONE")) {
             throw new IllegalArgumentException("Non-stock items cannot use lot or serial tracking");
         }
@@ -207,11 +210,12 @@ public class WmsInventoryMasterDataService {
             jdbc.update("""
                     INSERT INTO items
                       (public_id, tenant_id, category_id, sku, item_name, description, base_uom_id,
-                       tracking_method, is_stock_item, is_purchasable, is_sellable, minimum_stock_level)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       weight_per_base_uom, weight_uom_id, tracking_method, is_stock_item, is_purchasable,
+                       is_sellable, minimum_stock_level)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, publicId, access.tenantId(), categoryId, item.sku(), item.name(),
-                    item.description(), baseUomId, item.trackingMethod(), item.stockItem(),
-                    item.purchasable(), item.sellable(), item.minimumStock());
+                    item.description(), baseUomId, item.weightPerBaseUom(), weightUomId,
+                    item.trackingMethod(), item.stockItem(), item.purchasable(), item.sellable(), item.minimumStock());
         } catch (DuplicateKeyException duplicate) {
             throw new IllegalStateException("Item SKU already exists");
         }
@@ -232,9 +236,12 @@ public class WmsInventoryMasterDataService {
         NormalizedItem item = normalize(command);
         Long categoryId = resolveActiveCategory(access.tenantId(), command.categoryPublicId());
         Long baseUomId = resolveActiveUom(item.baseUomCode());
+        Long weightUomId = item.weightUomCode() == null ? null : resolveActiveMassUom(item.weightUomCode());
         boolean stockDefinitionChanged = !Objects.equals(before.get("base_uom_code"), item.baseUomCode())
                 || !Objects.equals(before.get("tracking_method"), item.trackingMethod())
-                || !Objects.equals(bool(before.get("is_stock_item")), item.stockItem());
+                || !Objects.equals(bool(before.get("is_stock_item")), item.stockItem())
+                || !sameDecimal(before.get("weight_per_base_uom"), item.weightPerBaseUom())
+                || !Objects.equals(before.get("weight_uom_code"), item.weightUomCode());
         if (stockDefinitionChanged && hasInventoryHistory(access.tenantId(), number(before, "id"))) {
             throw new IllegalStateException("Stock-defining item attributes are immutable after inventory history exists");
         }
@@ -245,12 +252,14 @@ public class WmsInventoryMasterDataService {
             int changed = jdbc.update("""
                     UPDATE items
                     SET category_id = ?, sku = ?, item_name = ?, description = ?, base_uom_id = ?,
-                        tracking_method = ?, is_stock_item = ?, is_purchasable = ?, is_sellable = ?,
-                        minimum_stock_level = ?, version = version + 1, updated_at = UTC_TIMESTAMP(6)
+                        weight_per_base_uom = ?, weight_uom_id = ?, tracking_method = ?, is_stock_item = ?,
+                        is_purchasable = ?, is_sellable = ?, minimum_stock_level = ?,
+                        version = version + 1, updated_at = UTC_TIMESTAMP(6)
                     WHERE tenant_id = ? AND public_id = ? AND version = ?
                     """, categoryId, item.sku(), item.name(), item.description(), baseUomId,
-                    item.trackingMethod(), item.stockItem(), item.purchasable(), item.sellable(),
-                    item.minimumStock(), access.tenantId(), itemPublicId, expectedVersion);
+                    item.weightPerBaseUom(), weightUomId, item.trackingMethod(), item.stockItem(),
+                    item.purchasable(), item.sellable(), item.minimumStock(),
+                    access.tenantId(), itemPublicId, expectedVersion);
             if (changed != 1) throw new IllegalStateException("Item version conflict");
         } catch (DuplicateKeyException duplicate) {
             throw new IllegalStateException("Item SKU already exists");
@@ -736,6 +745,15 @@ public class WmsInventoryMasterDataService {
         return rows.getFirst();
     }
 
+    private Long resolveActiveMassUom(String code) {
+        List<Long> rows = jdbc.queryForList("""
+                SELECT id FROM units_of_measure
+                WHERE uom_code = ? AND dimension = 'MASS' AND is_active = 1
+                """, Long.class, code);
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Weight UOM not found, inactive, or not a mass unit");
+        return rows.getFirst();
+    }
+
     private Map<String, Object> categoryByPublicId(Long tenantId, String publicId) {
         List<Map<String, Object>> rows = jdbc.queryForList("""
                 SELECT c.id, c.public_id, c.category_code, c.category_name, c.description,
@@ -754,10 +772,12 @@ public class WmsInventoryMasterDataService {
                 SELECT i.id, i.public_id, i.sku, i.item_name, i.description,
                        c.public_id AS category_public_id, c.category_name,
                        u.uom_code AS base_uom_code, u.uom_name AS base_uom_name,
+                       i.weight_per_base_uom, weight_uom.uom_code AS weight_uom_code,
                        i.tracking_method, i.is_stock_item, i.is_purchasable, i.is_sellable,
                        i.minimum_stock_level, i.status, i.version, i.created_at, i.updated_at
                 FROM items i
                 JOIN units_of_measure u ON u.id = i.base_uom_id
+                LEFT JOIN units_of_measure weight_uom ON weight_uom.id = i.weight_uom_id
                 LEFT JOIN item_categories c ON c.id = i.category_id AND c.tenant_id = i.tenant_id
                 WHERE i.tenant_id = ? AND i.public_id = ?
                 """, tenantId, publicId);
@@ -823,9 +843,26 @@ public class WmsInventoryMasterDataService {
         if (minimum.signum() < 0 || minimum.scale() > 4 || minimum.precision() > 19) {
             throw new IllegalArgumentException("Minimum stock quantity is invalid");
         }
+        BigDecimal weight = command.weightPerBaseUom();
+        String weightUom = command.weightUomCode() == null || command.weightUomCode().isBlank()
+                ? null : command.weightUomCode().trim().toUpperCase(Locale.ROOT);
+        if ((weight == null) != (weightUom == null)) {
+            throw new IllegalArgumentException("Item weight and weight UOM must be supplied together");
+        }
+        if (weight != null && (weight.signum() < 0 || weight.scale() > 6 || weight.precision() > 19)) {
+            throw new IllegalArgumentException("Item weight per base UOM is invalid");
+        }
+        if (weightUom != null && !weightUom.matches("[A-Z0-9_-]{1,20}")) {
+            throw new IllegalArgumentException("Item weight UOM code is invalid");
+        }
         return new NormalizedItem(sku, name, description, baseUom, tracking,
                 Boolean.TRUE.equals(command.stockItem()), Boolean.TRUE.equals(command.purchasable()),
-                Boolean.TRUE.equals(command.sellable()), minimum);
+                Boolean.TRUE.equals(command.sellable()), minimum, weight, weightUom);
+    }
+
+    private static boolean sameDecimal(Object existing, BigDecimal requested) {
+        if (existing == null || requested == null) return existing == null && requested == null;
+        return decimal(existing).compareTo(requested) == 0;
     }
 
     private static String normalizeCode(String value, String field) {
@@ -878,9 +915,17 @@ public class WmsInventoryMasterDataService {
     public record ItemCommand(
             String sku, String name, String description, String categoryPublicId,
             String baseUomCode, String trackingMethod, Boolean stockItem, Boolean purchasable,
-            Boolean sellable, BigDecimal minimumStock) {}
+            Boolean sellable, BigDecimal minimumStock, BigDecimal weightPerBaseUom, String weightUomCode) {
+        public ItemCommand(String sku, String name, String description, String categoryPublicId,
+                           String baseUomCode, String trackingMethod, Boolean stockItem, Boolean purchasable,
+                           Boolean sellable, BigDecimal minimumStock) {
+            this(sku, name, description, categoryPublicId, baseUomCode, trackingMethod, stockItem,
+                    purchasable, sellable, minimumStock, null, null);
+        }
+    }
     private record Access(Long tenantId, Long membershipId, String userPublicId, Set<String> permissions) {}
     private record NormalizedItem(
             String sku, String name, String description, String baseUomCode, String trackingMethod,
-            boolean stockItem, boolean purchasable, boolean sellable, BigDecimal minimumStock) {}
+            boolean stockItem, boolean purchasable, boolean sellable, BigDecimal minimumStock,
+            BigDecimal weightPerBaseUom, String weightUomCode) {}
 }

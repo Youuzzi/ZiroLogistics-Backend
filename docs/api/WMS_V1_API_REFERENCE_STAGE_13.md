@@ -71,6 +71,8 @@ Invitation issuance, existing-account invitation acceptance, password changes an
 - Every inspected `@RequestBody` parameter in the 19-controller inventory is annotated with `@Valid`.
 - Public identifiers are used at the API boundary; internal database primary keys are not intended as client identifiers.
 - Quantities use decimal types and domain-specific precision validation; do not coerce them to floating-point values in clients.
+- Item master weight metadata is optional but must be supplied as the pair `weightPerBaseUom` and `weightUomCode`; the UOM must be an active MASS unit and weight is expressed per item base UOM.
+- A warehouse location may define `maxWeightCapacity` with `weightUom`; the UOM must be an active MASS unit. When configured, every positive inventory posting into that location is checked against projected on-hand weight. Items already held in a capacity-controlled location must have weight metadata before further stock can be added.
 - Versioned workflow commands carry expected version values where required.
 - Idempotent commands use command-specific request identifiers. A POST is not automatically idempotent.
 - Some scheduled date-time fields use `LocalDateTime`, which contains no timezone/offset. Their business-local interpretation remains an explicit contract item to settle before frontend integration.

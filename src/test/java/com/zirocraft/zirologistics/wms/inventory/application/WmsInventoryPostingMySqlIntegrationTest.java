@@ -1006,6 +1006,65 @@ class WmsInventoryPostingMySqlIntegrationTest {
         }
     }
 
+    @Test
+    void receiptCannotExceedConfiguredLocationWeightCapacity() {
+        setItemWeight(fixture, "2.000000", "KG");
+        setLocationWeightCapacity(fixture, "10.0000", "KG");
+
+        assertThrows(IllegalStateException.class, () -> post(
+                fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "6.0000")));
+
+        assertEquals(new BigDecimal("0.0000"), balance(fixture));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+    }
+
+    @Test
+    void locationWeightCapacityConvertsMassUnitsAndAllowsExactCapacityOnly() {
+        setItemWeight(fixture, "500.000000", "G");
+        setLocationWeightCapacity(fixture, "1.0000", "KG");
+
+        post(fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "2.0000"));
+        assertEquals(new BigDecimal("2.0000"), balance(fixture));
+
+        assertThrows(IllegalStateException.class, () -> post(
+                fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "1.0000")));
+
+        assertEquals(new BigDecimal("2.0000"), balance(fixture));
+        assertEquals(1, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+    }
+
+    @Test
+    void capacityControlledLocationRejectsInboundStockWhenItemWeightIsMissing() {
+        setLocationWeightCapacity(fixture, "10.0000", "KG");
+
+        assertThrows(IllegalStateException.class, () -> post(
+                fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "1.0000")));
+
+        assertEquals(new BigDecimal("0.0000"), balance(fixture));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+    }
+
+    private void setItemWeight(Fixture f, String weight, String uomCode) {
+        jdbc.update("""
+                UPDATE items
+                SET weight_per_base_uom = ?,
+                    weight_uom_id = (SELECT id FROM units_of_measure WHERE uom_code = ?)
+                WHERE tenant_id = ? AND public_id = ?
+                """, new BigDecimal(weight), uomCode, f.tenantId(), f.itemPublicId());
+    }
+
+    private void setLocationWeightCapacity(Fixture f, String capacity, String uomCode) {
+        jdbc.update("""
+                UPDATE warehouse_locations
+                SET max_weight_capacity = ?, weight_uom = ?
+                WHERE tenant_id = ? AND public_id = ?
+                """, new BigDecimal(capacity), uomCode, f.tenantId(), f.locationPublicId());
+    }
+
     private Fixture fixture(String trackingMethod) {
         String tenantPublicId = UUID.randomUUID().toString();
         jdbc.update("""
