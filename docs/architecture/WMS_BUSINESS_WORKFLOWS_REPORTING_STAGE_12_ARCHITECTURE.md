@@ -189,7 +189,7 @@ Required integrity:
 
 ### WP7 — Operational Reporting
 
-- Add a dedicated WMS reporting boundary inside the WMS runtime. WP7 delivers a read-only operational summary across inventory position, inbound receipts and putaway tasks, outbound shipments, inter-warehouse transfers, replenishment tasks, stock counts and adjustments.
+- Add a dedicated WMS reporting boundary inside the WMS runtime. WP7 delivers a read-only operational summary across inventory position, inbound receipts and putaway tasks, outbound shipments, inter-warehouse transfers, replenishment tasks, stock counts and adjustments. The summary reports current document-status totals across the tenant (not a date-window count) and returns an explicit UTC generation timestamp.
 - Define tenant-scoped, permission-protected operational summaries based on authoritative WMS documents and inventory sources.
 - Start with actionable operational views: inventory position/availability, inbound receiving and putaway progress, outbound picking/packing/shipping progress, transfer status, replenishment workload, stock-count/adjustment status.
 - Define time basis, status semantics, filters, pagination/limits and aggregation behavior explicitly.
