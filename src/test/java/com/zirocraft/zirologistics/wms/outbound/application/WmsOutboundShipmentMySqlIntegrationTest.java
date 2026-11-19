@@ -351,6 +351,49 @@ class WmsOutboundShipmentMySqlIntegrationTest {
 
 
     @Test
+    void duplicateInterWarehouseDispatchAndReceiptRequestIdsCannotRepeatInventoryMovements() {
+        Destination destination = destination(fixture);
+        String transferId = createTransfer(fixture, destination, "5.0000", List.of());
+        String allocationId = allocationPublicId(fixture, transferId);
+        transferService.release(fixture.principal(), transferId, UUID.randomUUID());
+
+        UUID dispatchRequestId = UUID.randomUUID();
+        WmsInterWarehouseTransferService.DispatchCommand dispatch =
+                new WmsInterWarehouseTransferService.DispatchCommand(dispatchRequestId,
+                        List.of(new WmsInterWarehouseTransferService.DispatchAllocation(
+                                allocationId, new BigDecimal("2.0000"), List.of())), null);
+        transferService.dispatch(fixture.principal(), transferId, dispatch);
+        assertThrows(IllegalStateException.class,
+                () -> transferService.dispatch(fixture.principal(), transferId, dispatch));
+
+        assertEquals(new BigDecimal("3.0000"), balanceAt(fixture, fixture.warehousePublicId(),
+                fixture.receivingLocationPublicId(), "AVAILABLE"));
+        assertEquals(BigDecimal.ZERO.setScale(4), balanceAt(fixture, destination.warehousePublicId(),
+                destination.locationPublicId(), "AVAILABLE"));
+        assertEquals(1, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_DISPATCH'",
+                fixture.tenantId()));
+
+        UUID receiveRequestId = UUID.randomUUID();
+        WmsInterWarehouseTransferService.ReceiveCommand receive =
+                new WmsInterWarehouseTransferService.ReceiveCommand(receiveRequestId,
+                        List.of(new WmsInterWarehouseTransferService.ReceiveAllocation(
+                                allocationId, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ZERO,
+                                List.of(), List.of(), List.of())), null);
+        transferService.receive(fixture.principal(), transferId, receive);
+        assertThrows(IllegalStateException.class,
+                () -> transferService.receive(fixture.principal(), transferId, receive));
+
+        assertEquals(new BigDecimal("1.0000"), balanceAt(fixture, destination.warehousePublicId(),
+                destination.locationPublicId(), "AVAILABLE"));
+        assertEquals(new BigDecimal("1.0000"), balanceAt(fixture, destination.warehousePublicId(),
+                destination.locationPublicId(), "DAMAGED"));
+        assertEquals(2, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_RECEIPT'",
+                fixture.tenantId()));
+        assertEquals(2, count("SELECT COUNT(*) FROM stock_transfer_commands WHERE tenant_id=?",
+                fixture.tenantId()) - 1);
+    }
+
+    @Test
     void interWarehouseTransferDispatchesAndReceivesPartialGoodDamagedAndShortQuantities() {
         Destination destination = destination(fixture);
         String transferId = createTransfer(fixture, destination, "5.0000", List.of());
