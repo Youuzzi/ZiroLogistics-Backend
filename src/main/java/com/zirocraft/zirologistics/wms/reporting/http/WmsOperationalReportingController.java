@@ -2,7 +2,7 @@ package com.zirocraft.zirologistics.wms.reporting.http;
 
 import com.zirocraft.zirologistics.wms.reporting.application.WmsOperationalReportingService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
-import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityHttpEnabledCondition;
+import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Profile;
@@ -16,7 +16,7 @@ import java.util.Map;
 @RestController
 @Profile("wms")
 @RequestMapping("/api/wms/v1/tenants/current/reports")
-@Conditional(WmsIdentityHttpEnabledCondition.class)
+@Conditional(WmsHttpApiEnabledCondition.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class WmsOperationalReportingController {
     private final WmsOperationalReportingService service;
