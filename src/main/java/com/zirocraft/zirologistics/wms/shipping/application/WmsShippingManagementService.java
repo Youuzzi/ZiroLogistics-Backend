@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.shipping.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
@@ -412,13 +413,13 @@ public class WmsShippingManagementService {
 
     private Map<String, Object> requiredRow(String sql, Object... args) {
         List<Map<String, Object>> rows = jdbc.queryForList(sql, args);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Referenced shipping record was not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Referenced shipping record was not found");
         return rows.getFirst();
     }
 
     private long requiredLong(String sql, Object... args) {
         List<Long> rows = jdbc.queryForList(sql, Long.class, args);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Referenced record was not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Referenced record was not found");
         return rows.getFirst();
     }
 
