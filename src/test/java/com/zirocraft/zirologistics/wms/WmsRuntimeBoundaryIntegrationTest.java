@@ -7,6 +7,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(
         classes = WmsRuntimeApplication.class,
@@ -30,8 +31,9 @@ class WmsRuntimeBoundaryIntegrationTest {
                 "Legacy authentication controller must not be loaded by WMS runtime");
         assertFalse(applicationContext.containsBean("warehouseController"),
                 "Legacy warehouse controller must not be loaded by WMS runtime");
-        assertFalse(applicationContext.containsBean("userRepository"),
-                "Legacy user repository must not be loaded by WMS runtime");
+        assertTrue(applicationContext.getType("userRepository").getName()
+                        .startsWith("com.zirocraft.zirologistics.wms."),
+                "The user repository bean must resolve to the WMS identity persistence package");
         assertFalse(applicationContext.containsBean("authServiceImpl"),
                 "Legacy authentication service must not be loaded by WMS runtime");
         assertFalse(applicationContext.containsBean("jwtRequestFilter"),
