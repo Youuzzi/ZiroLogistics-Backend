@@ -64,7 +64,7 @@ class WmsPutawayManagementMySqlIntegrationTest {
         putawayService.confirm(fixture.principal(), taskId, lineId,
                 new WmsPutawayManagementService.ConfirmPutawayCommand(
                         UUID.randomUUID(), new BigDecimal("2.0000"), List.of(), "First pallet"));
-        assertEquals(BigDecimal.ZERO.setScale(4), balance(fixture, fixture.receivingLocationPublicId()));
+        assertEquals(new BigDecimal("3.0000"), balance(fixture, fixture.receivingLocationPublicId()));
         assertEquals(new BigDecimal("2.0000"), balance(fixture, fixture.storageLocationPublicId()));
         assertEquals("IN_PROGRESS", taskStatus(fixture, taskId));
         assertEquals("IN_PROGRESS", lineStatus(fixture, lineId));
@@ -99,7 +99,7 @@ class WmsPutawayManagementMySqlIntegrationTest {
         var retry = putawayService.confirm(fixture.principal(), taskId, lineId, command);
 
         assertEquals(first.get("confirmationPublicId"), retry.get("confirmationPublicId"));
-        assertEquals(new BigDecimal("3.0000"), balance(fixture, fixture.receivingLocationPublicId()));
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(fixture, fixture.receivingLocationPublicId()));
         assertEquals(new BigDecimal("2.0000"), balance(fixture, fixture.storageLocationPublicId()));
         assertEquals(new BigDecimal("2.0000"), jdbc.queryForObject("""
                 SELECT confirmed_qty FROM putaway_task_lines WHERE tenant_id = ? AND public_id = ?
