@@ -1,41 +1,115 @@
 # Backend Structural Audit — Legacy Disposition
 
 **Baseline:** `4b655c3be2f2d245b03d260b3dc9ad9673c06823` (PR #158 merged; Main CI #654 successful)  
-**Implementation:** Legacy runtime retirement in progress; this PR removes the obsolete application surface while preserving WMS-owned migration tests and all WMS production/tests.
+**Status:** Audit and migration in progress. PR #159 remains Draft and is not mergeable until all migration gates below are met.
 
-## Verified ownership and disposition
+## 1. Audit method and evidence labels
 
-| Area | Baseline | Disposition |
+This audit distinguishes:
+
+- **VERIFIED:** directly confirmed from source, configuration, or test/runtime evidence.
+- **PARTIALLY VERIFIED:** a WMS replacement exists, but exact legacy behavior parity is not yet proven.
+- **MOVE / REIMPLEMENT:** business behavior remains relevant but must be implemented with WMS models and boundaries; do not copy legacy classes.
+- **REMOVE:** legacy-only runtime or contract with no intended WMS role.
+- **PROPOSED:** cleanup action that still requires final CI and diff review.
+
+Package exclusion alone is not proof that a class is useless. Each disposition below also considers its dependencies, data model, WMS equivalent and test coverage.
+
+## 2. Runtime boundary
+
+**VERIFIED**
+
+- `WmsRuntimeApplication` scopes component scan, entity scan and Spring Data repository scan to `com.zirocraft.zirologistics.wms`.
+- The WMS executable entry point is `com.zirocraft.zirologistics.wms.WmsRuntimeApplication`.
+- CI builds with `./mvnw --batch-mode --no-transfer-progress -Pwms-runtime clean verify`.
+- `application-wms.properties` points Flyway only to `classpath:db/wms-migration`; Flyway remains opt-in.
+- WMS migrations V1–V26 are frozen and must not be changed during this cleanup.
+- PR #158 moved the 13 WMS migration contract tests into the WMS namespace; they remain retained.
+
+## 3. Production source disposition — 63 legacy classes
+
+These classes belong to the old single-tenant Logistics application. Their implementations are not copied wholesale into WMS. The WMS modules below are the intended replacements.
+
+| Legacy group / classes | Count | WMS disposition |
 |---|---:|---|
-| WMS production Java | 146 files | Retain unchanged |
-| Non-WMS production Java | 63 files | Remove: old single-tenant Logistics application, not in WMS component/entity/repository scan |
-| WMS-package tests | 73 files after migration-test move | Retain all |
-| Old-package tests remaining after WP #158 | 15 files | Remove: tests target retired controllers/services/entities/demo flow/legacy schema; WMS migration contract tests were moved and retained separately |
-| Legacy runtime config | `application.properties`, `application-demo.properties` | Remove; WMS uses `application-wms.properties` |
-| Legacy test config | `application-test.properties` | Remove with retired legacy test suite |
-| Legacy Flyway migration | `db/migration/V1__initial_schema.sql` | Remove from executable classpath; WMS migrations remain under `db/wms-migration` |
-| Maven runtime profile | `legacy-runtime` | Remove; WMS is the sole packaged runtime |
+| `ZirologisticsApplication` | 1 | **REMOVE.** WMS runtime has its own application entry point. |
+| Config: `AuditConfig`, `DemoAccountInitializer`, `SecurityConfig`, `WebConfig` | 4 | **REMOVE.** WMS has explicit tenant audit, platform bootstrap/invitation, JWT security and WMS CORS. The old custom `X-Powered-By` header is not retained. CORS migration is implemented separately in PR #160. |
+| Controllers: `AuthController`, `BinController`, `DashboardController`, `InboundController`, `InventoryController`, `ItemController`, `OutboundController`, `TransferController`, `WarehouseController` | 9 | **REMOVE.** Replaced by versioned WMS HTTP controllers for authentication/invitations, warehouse/location, operational reporting, inbound, inventory, item master, outbound fulfilment and inter-warehouse transfer. |
+| Entities: `BaseEntity`, `BinEntity`, `InventoryLedgerEntity`, `InventoryStockEntity`, `ItemEntity`, `UserEntity`, `WarehouseEntity` | 7 | **REMOVE.** These map the old schema and single-tenant identity model. WMS uses tenant-scoped schema tables, explicit audit events, inventory balances/ledger, item master and warehouse locations. |
+| Exceptions: `ApiException`, `GlobalExceptionHandler` | 2 | **REMOVE.** WMS owns its stable error contract and authentication exception advice. The WMS error-contract test no longer imports the legacy handler. |
+| Filter: `JwtRequestFilter` | 1 | **REMOVE.** WMS uses Spring Security OAuth2 Resource Server JWT processing. |
+| Request DTOs: `AuthRequest`, `BinRequest`, `InboundRequest`, `ItemRequest`, `OutboundRequest`, `TransferRequest`, `WarehouseRequest` | 7 | **REMOVE.** Old `/api/v1.0` payloads are not the WMS v1 contract; WMS uses module command/request records. |
+| Response DTOs: `AuthResponse`, `BinResponse`, `DashboardSummaryResponse`, `ItemResponse`, `LedgerResponse`, `LowStockAlertResponse`, `StockResponse`, `WarehouseResponse` | 8 | **REMOVE.** WMS response contracts are tenant-scoped and owned by the new API services. |
+| Repositories: `BinRepository`, `InventoryLedgerRepository`, `InventoryStockRepository`, `ItemRepository`, `LowStockAlertProjection`, `UserRepository`, `WarehouseRepository` | 7 | **REMOVE.** These query old entities/tables. WMS services use tenant-scoped JDBC queries against WMS schema. |
+| Service interfaces: `BinService`, `InboundService`, `ItemService`, `OutboundService`, `TransferService`, `WarehouseService` | 6 | **REMOVE.** Their contracts are superseded by WMS application services. |
+| Service implementations: `AppUserDetailService`, `AuthServiceImpl`, `BinServiceImpl`, `DashboardServiceImpl`, `InboundServiceImpl`, `InventoryServiceImpl`, `ItemServiceImpl`, `OutboundServiceImpl`, `TransferServiceImpl`, `WarehouseServiceImpl` | 10 | **REMOVE old implementations; preserve relevant behavior through WMS-native services.** See detailed mapping below. |
+| Utility: `JwtUtil` | 1 | **REMOVE.** Legacy JJWT token utility is replaced by WMS JWT encoder/decoder and token services. JJWT dependencies are removed from the cleanup branch; full CI is the dependency proof. |
+| **Total** | **63** | **No old Logistics runtime is intended to remain.** |
 
-## Runtime boundary evidence
+### 3.1 Service behavior mapping
 
-- `WmsRuntimeApplication` explicitly scopes component scan, entity scan, and Spring Data repository scan to `com.zirocraft.zirologistics.wms`.
-- The default Spring Boot Maven plugin entry point is `com.zirocraft.zirologistics.wms.WmsRuntimeApplication`.
-- CI runs `./mvnw --batch-mode --no-transfer-progress -Pwms-runtime clean verify`.
-- `application-wms.properties` points Flyway exclusively at `classpath:db/wms-migration`; Flyway remains opt-in.
-- All WMS Flyway migration tests and the integer display-width policy test were moved into the WMS test namespace by PR #158. The migration policy test is scoped to the WMS migration directory.
-- The retired legacy source/test tree has no place in the WMS runtime or WMS migration history. The build after this deletion is the final compile/test proof that no retained WMS code depends on those classes/resources.
+| Legacy implementation | WMS implementation / finding |
+|---|---|
+| `AppUserDetailService`, `AuthServiceImpl` | WMS credential authentication, JWT token service, invitation acceptance and controlled platform bootstrap. Public self-registration is not part of the WMS onboarding model. |
+| `DashboardServiceImpl` | `WmsOperationalReportingService`. |
+| `InboundServiceImpl` | `WmsInboundReceivingService` plus inventory posting and immutable ledger. |
+| `InventoryServiceImpl` | `WmsInventoryPostingService`, operational reporting and rule-based replenishment planning. |
+| `ItemServiceImpl` | `WmsInventoryMasterDataService`. Legacy minimum-stock alert query is not claimed to have exact endpoint parity; WMS min/max replenishment rules are the current workflow. |
+| `OutboundServiceImpl` | `WmsOutboundShipmentService`, picking, packing, shipping and inventory posting. |
+| `TransferServiceImpl` | `WmsInterWarehouseTransferService` and inventory posting lock-order/concurrency controls. |
+| `WarehouseServiceImpl` | `WmsWarehouseManagementService`. |
+| `BinServiceImpl` | Warehouse locations in `WmsWarehouseManagementService`. The old weight-capacity behavior is relevant and is being reimplemented at the WMS inventory-posting boundary in PR #161. |
 
-## Safety and scope
+### 3.2 Capacity behavior — required migration
 
-- No WMS production classes or WMS tests are deleted by this cleanup.
-- No WMS migration V1–V26 is changed.
-- No developer-owned database is accessed or modified.
-- Legacy single-tenant schema SQL is removed from the application classpath, not run against any database.
-- Historical design/audit documentation remains documentation; it is not an executable runtime.
+**PARTIALLY VERIFIED → MOVE / REIMPLEMENT**
 
-## Validation required
+The old bin/inbound/outbound/transfer flow calculates item weight, prevents inbound or transfer stock from exceeding a bin's configured weight capacity, and updates bin occupancy.
 
-- Full Maven/Testcontainers MySQL 8.4 regression.
-- WMS executable Start-Class verification.
-- Docker image build and Compose configuration validation.
-- Final tree check: no non-WMS production Java package, legacy runtime profile, legacy application properties, or legacy migration path.
+WMS already has `items.weight_per_base_uom`, `items.weight_uom_id`, `warehouse_locations.max_weight_capacity` and `warehouse_locations.weight_uom`. However, before PR #161, WMS item master did not expose item weight and inventory posting did not enforce location weight capacity. Therefore the old behavior was not proven to be replaced merely because WMS has capacity columns.
+
+PR #161 reimplements this behavior with WMS tenant-scoped item/location data, mass-UOM validation, tenant-serialized posting checks and MySQL regression tests. **Do not merge the legacy deletion until PR #161 is green and merged.**
+
+## 4. Remaining 15 legacy-package tests
+
+| Legacy test | Disposition / WMS evidence |
+|---|---|
+| `ZirologisticsApplicationTests` | **REMOVE.** It only loads the retired application context. WMS runtime boundary has its own test. |
+| `CorsSecurityIntegrationTest` | **MOVE / REWRITE.** Replaced by `WmsCorsSecurityIntegrationTest` in PR #160, including allowed/foreign origins and proof that CORS does not bypass authentication. |
+| `DemoAccountInitializerTest` | **REMOVE.** Old demo account flow is replaced by controlled platform bootstrap and invitation lifecycle. |
+| `AuthRegistrationSecurityIntegrationTest`, `AuthServiceImplTest` | **REMOVE old tests.** WMS invitation acceptance tests and the exact anonymous auth-route allowlist protect the new onboarding model; no public self-registration route exists. |
+| `InactiveAccountJwtSecurityIntegrationTest`, `AppUserDetailServiceTest` | **REMOVE old tests.** WMS credential authentication rejects inactive users; JWT conversion validates active tenant membership and token binding. |
+| `GlobalExceptionHandlerTest` | **REMOVE old test.** `WmsApiErrorContractTest` protects WMS validation, not-found, conflict, forbidden, malformed JSON and safe internal-error responses. |
+| `FlywayInitialSchemaIntegrationTest` | **REMOVE.** It tests the old Logistics schema; WMS migration tests protect WMS V1–V26. |
+| `MySqlInventoryLockingIntegrationTest` | **REMOVE old test.** WMS inventory-posting MySQL tests protect no-oversell, idempotency, locking, ledger/balance atomicity and concurrency. |
+| `InventoryStockRepositoryTest`, `InventoryServiceImplTest` | **REMOVE old tests.** Rule-based WMS min/max replenishment planning supersedes the old per-warehouse low-stock query. Exact low-stock alert endpoint parity is not claimed. |
+| `InboundServiceImplTest` | **REMOVE old test.** WMS inbound receiving and inventory-posting tests cover receipt lifecycle, atomic ledger posting and idempotency. |
+| `OutboundServiceImplTest` | **REMOVE old test.** WMS outbound shipment/picking/packing/shipping and inventory-posting tests cover the current workflow. Capacity parity is protected by PR #161. |
+| `TransferServiceImplTest` | **REMOVE old test.** WMS transfer and inventory-posting tests cover transfer lifecycle, deterministic locking and opposite-direction deadlock prevention. Capacity parity is protected by PR #161. |
+
+The WMS runtime-boundary test was rewritten to assert absence of legacy bean names rather than import deleted legacy classes. The WMS API error-contract test was decoupled from the legacy global exception handler.
+
+## 5. Configuration and dependency disposition
+
+| Legacy artifact | Disposition |
+|---|---|
+| Root `application.properties` | **REMOVE.** WMS configuration is explicit in `application-wms.properties`; no legacy DB/JWT fallback is retained. |
+| `application-demo.properties` | **REMOVE.** Legacy demo profile is retired. |
+| `application-test.properties` | **REMOVE.** Legacy test profile is retired. WMS runtime-boundary test now activates only `wms` and declares its own H2 test datasource. |
+| `src/main/resources/db/migration/V1__initial_schema.sql` | **REMOVE from executable classpath.** WMS Flyway uses only `db/wms-migration`. Historical source schema export remains documentation/reference data. |
+| Maven `legacy-runtime` profile | **REMOVE.** WMS is the sole executable runtime. |
+| JJWT dependencies | **REMOVE.** WMS uses Spring Security OAuth2 JWT components. |
+| H2 test dependency | **KEEP.** WMS runtime-boundary test uses H2 to boot an isolated context. |
+| WMS `application-wms.properties`, WMS migrations V1–V26 | **KEEP unchanged.** |
+
+## 6. Merge gates
+
+1. PR #160 WMS CORS migration must pass full CI.
+2. PR #161 WMS item-weight/location-capacity migration must pass full CI and be merged.
+3. Review the final PR #159 tree and ensure no WMS test imports a legacy class.
+4. Remove only legacy-only source, tests, configuration, schema migration and dependencies listed above.
+5. Full Testcontainers MySQL 8.4 regression must pass.
+6. Verify WMS executable Start-Class, Docker image build, Compose configuration and final tree.
+7. Re-audit the exact PR #159 diff before removing Draft status.
+
+No developer-owned database is accessed or modified. Frozen WMS migrations V1–V26 are not changed.
