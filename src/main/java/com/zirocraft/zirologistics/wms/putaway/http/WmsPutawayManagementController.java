@@ -2,7 +2,7 @@ package com.zirocraft.zirologistics.wms.putaway.http;
 
 import com.zirocraft.zirologistics.wms.putaway.application.WmsPutawayManagementService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
-import com.zirocraft.zirologistics.wms.security.authentication.http.WmsIdentityHttpEnabledCondition;
+import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -24,7 +24,7 @@ import java.util.UUID;
 @RestController
 @Profile("wms")
 @RequestMapping("/api/wms/v1/tenants/current/putaway-tasks")
-@Conditional(WmsIdentityHttpEnabledCondition.class)
+@Conditional(WmsHttpApiEnabledCondition.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class WmsPutawayManagementController {
     private final WmsPutawayManagementService service;
