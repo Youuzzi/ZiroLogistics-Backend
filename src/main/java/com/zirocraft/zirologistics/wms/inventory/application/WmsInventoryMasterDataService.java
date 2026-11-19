@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.inventory.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
@@ -391,7 +392,7 @@ public class WmsInventoryMasterDataService {
                   AND i.status = 'ACTIVE'
                 LIMIT 2
                 """, access.tenantId(), type, value);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Active item was not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Active item was not found");
         if (rows.size() > 1) throw new IllegalStateException("Identifier uniqueness invariant is violated");
         return rows.getFirst();
     }
@@ -508,7 +509,7 @@ public class WmsInventoryMasterDataService {
                 SELECT public_id, identifier_type, identifier_value, is_primary, created_at
                 FROM item_identifiers WHERE tenant_id = ? AND item_id = ? AND public_id = ?
                 """, tenantId, itemId, publicId);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Identifier not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Identifier not found");
         return rows.getFirst();
     }
 
@@ -535,7 +536,7 @@ public class WmsInventoryMasterDataService {
                 SELECT id, uom_code, dimension, decimal_places
                 FROM units_of_measure WHERE uom_code = ? AND is_active = 1
                 """, code);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Active UOM was not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Active UOM was not found");
         return rows.getFirst();
     }
 
@@ -549,7 +550,7 @@ public class WmsInventoryMasterDataService {
                 WHERE c.tenant_id = ? AND c.item_id = ?
                   AND f.uom_code = ? AND t.uom_code = ?
                 """, tenantId, itemId, fromCode, toCode);
-        if (rows.isEmpty()) throw new IllegalArgumentException("UOM conversion not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("UOM conversion not found");
         return rows.getFirst();
     }
 
@@ -650,7 +651,7 @@ public class WmsInventoryMasterDataService {
                        received_date, expiry_date, status, notes, version, created_at, updated_at
                 FROM inventory_lots WHERE tenant_id = ? AND item_id = ? AND public_id = ?
                 """, tenantId, itemId, publicId);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Lot not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Lot not found");
         return rows.getFirst();
     }
 
@@ -697,7 +698,7 @@ public class WmsInventoryMasterDataService {
                 SELECT id FROM item_categories
                 WHERE tenant_id = ? AND public_id = ? AND status = 'ACTIVE'
                 """, Long.class, tenantId, publicId);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Parent category not found or inactive");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Parent category not found or inactive");
         return rows.getFirst();
     }
 
@@ -724,14 +725,14 @@ public class WmsInventoryMasterDataService {
                 SELECT id FROM item_categories
                 WHERE tenant_id = ? AND public_id = ? AND status = 'ACTIVE'
                 """, Long.class, tenantId, publicId);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Category not found or inactive");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Category not found or inactive");
         return rows.getFirst();
     }
 
     private Long resolveActiveUom(String code) {
         List<Long> rows = jdbc.queryForList(
                 "SELECT id FROM units_of_measure WHERE uom_code = ? AND is_active = 1", Long.class, code);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Base UOM not found or inactive");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Base UOM not found or inactive");
         return rows.getFirst();
     }
 
@@ -744,7 +745,7 @@ public class WmsInventoryMasterDataService {
                 LEFT JOIN item_categories p ON p.id = c.parent_category_id AND p.tenant_id = c.tenant_id
                 WHERE c.tenant_id = ? AND c.public_id = ?
                 """, tenantId, publicId);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Category not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Category not found");
         return rows.getFirst();
     }
 
@@ -760,7 +761,7 @@ public class WmsInventoryMasterDataService {
                 LEFT JOIN item_categories c ON c.id = i.category_id AND c.tenant_id = i.tenant_id
                 WHERE i.tenant_id = ? AND i.public_id = ?
                 """, tenantId, publicId);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Item not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Item not found");
         return rows.getFirst();
     }
 

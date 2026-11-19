@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.replenishment.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
@@ -661,7 +662,7 @@ public class WmsReplenishmentTaskService {
 
     private Map<String, Object> requiredRow(String sql, Object... args) {
         List<Map<String, Object>> rows = jdbc.queryForList(sql, args);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Replenishment task or referenced record not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Replenishment task or referenced record not found");
         return rows.getFirst();
     }
 

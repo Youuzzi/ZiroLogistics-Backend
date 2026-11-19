@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.picking.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
@@ -114,7 +115,7 @@ public class WmsPickingManagementService {
                     VALUES(?,?,?,?,?,'READY',?,?,?)
                     """,taskPublicId,a.tenantId(),warehouseId,shipmentId,taskNo,priority,a.membershipId(),optional(command.notes(),1000));
         } catch(DuplicateKeyException ex){throw new IllegalStateException("Picking task number already exists",ex);}
-        long taskId=requiredLong("SELECT id FROM picking_tasks WHERE tenant_id=? AND public_id=?",a.tenantId(),taskPublicId);
+        long taskId=requiredLongCreated("SELECT id FROM picking_tasks WHERE tenant_id=? AND public_id=?",a.tenantId(),taskPublicId);
         int lineNo=0;
         for(Map<String,Object> allocation:allocations){
             long allocationId=number(allocation,"allocation_id");
@@ -127,7 +128,7 @@ public class WmsPickingManagementService {
                     allocationId,warehouseId,number(allocation,"item_id"),number(allocation,"location_id"),
                     ++lineNo,allocation.get("allocated_qty"));
             if(inserted!=1) throw new IllegalStateException("Picking task line could not be created");
-            long lineId=requiredLong("SELECT id FROM picking_task_lines WHERE tenant_id=? AND picking_task_id=? AND line_number=?",
+            long lineId=requiredLongCreated("SELECT id FROM picking_task_lines WHERE tenant_id=? AND picking_task_id=? AND line_number=?",
                     a.tenantId(),taskId,lineNo);
             jdbc.update("""
                     INSERT INTO picking_task_line_serials(tenant_id,picking_task_line_id,
@@ -343,8 +344,9 @@ public class WmsPickingManagementService {
                 """,UUID.randomUUID().toString(),UUID.randomUUID().toString(),type,subject,json,a.membershipId(),a.userPublicId(),a.tenantId());
         if(rows!=1)throw new AccessDeniedException("Audit actor is no longer active");
     }
-    private Map<String,Object> requiredRow(String sql,Object...args){List<Map<String,Object>>r=jdbc.queryForList(sql,args);if(r.isEmpty())throw new IllegalArgumentException("Referenced picking record was not found");return r.getFirst();}
-    private long requiredLong(String sql,Object...args){List<Long>r=jdbc.queryForList(sql,Long.class,args);if(r.isEmpty())throw new IllegalArgumentException("Referenced record was not found");return r.getFirst();}
+    private Map<String,Object> requiredRow(String sql,Object...args){List<Map<String,Object>>r=jdbc.queryForList(sql,args);if(r.isEmpty())throw new WmsResourceNotFoundException("Referenced picking record was not found");return r.getFirst();}
+    private long requiredLong(String sql,Object...args){List<Long>r=jdbc.queryForList(sql,Long.class,args);if(r.isEmpty())throw new WmsResourceNotFoundException("Referenced record was not found");return r.getFirst();}
+    private long requiredLongCreated(String sql,Object...args){List<Long>r=jdbc.queryForList(sql,Long.class,args);if(r.isEmpty())throw new IllegalStateException("Created picking record was not found");return r.getFirst();}
     private int count(String sql,Object...args){Integer n=jdbc.queryForObject(sql,Integer.class,args);return n==null?0:n;}
     private static long number(Map<String,Object>m,String k){Object v=m.get(k);if(v instanceof Number n)return n.longValue();throw new IllegalStateException("Missing numeric field "+k);}
     private static BigDecimal decimal(Map<String,Object>m,String k){Object v=m.get(k);if(v instanceof BigDecimal d)return d;throw new IllegalStateException("Missing decimal field "+k);}

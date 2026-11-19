@@ -589,7 +589,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
         WmsInventoryPostingService.PostingLeg crossTenantLeg = new WmsInventoryPostingService.PostingLeg(
                 otherTenant.warehousePublicId(), otherTenant.locationPublicId(), fixture.itemPublicId(),
                 null, null, null, "AVAILABLE", new BigDecimal("1.0000"));
-        assertThrows(IllegalArgumentException.class, () -> postingService.post(fixture.principal(),
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class, () -> postingService.post(fixture.principal(),
                 new WmsInventoryPostingService.PostingCommand(UUID.randomUUID(), "RECEIPT",
                         List.of(crossTenantLeg), null)));
         assertEquals(BigDecimal.ZERO.setScale(4), balance(fixture));

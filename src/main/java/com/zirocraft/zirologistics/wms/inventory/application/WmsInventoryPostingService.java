@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.inventory.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
@@ -420,7 +421,7 @@ public class WmsInventoryPostingService {
 
     private Map<String, Object> requiredRowForUpdate(String sql, Object... args) {
         List<Map<String, Object>> rows = jdbc.queryForList(sql + " FOR UPDATE", args);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Referenced inventory record is no longer available");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Referenced inventory record is no longer available");
         return rows.getFirst();
     }
 
@@ -882,37 +883,37 @@ public class WmsInventoryPostingService {
             List<Long> rows = jdbc.queryForList(
                     "SELECT id FROM " + table + " WHERE id = ? AND tenant_id = ? FOR UPDATE",
                     Long.class, id, tenantId);
-            if (rows.isEmpty()) throw new IllegalArgumentException(label + " is no longer available");
+            if (rows.isEmpty()) throw new WmsResourceNotFoundException(label + " is no longer available");
         });
     }
 
     private long requiredId(String sql, Object a, Object b, String message) {
         List<Long> ids = jdbc.queryForList(sql, Long.class, a, b);
-        if (ids.isEmpty()) throw new IllegalArgumentException(message);
+        if (ids.isEmpty()) throw new IllegalStateException(message);
         return ids.getFirst();
     }
 
     private long requiredId(String sql, Object a, Object b, Object c, String message) {
         List<Long> ids = jdbc.queryForList(sql, Long.class, a, b, c);
-        if (ids.isEmpty()) throw new IllegalArgumentException(message);
+        if (ids.isEmpty()) throw new WmsResourceNotFoundException(message);
         return ids.getFirst();
     }
 
     private Map<String, Object> requiredRow(String sql, Object... args) {
         List<Map<String, Object>> rows = jdbc.queryForList(sql, args);
-        if (rows.isEmpty()) throw new IllegalArgumentException("Referenced inventory record was not found");
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException("Referenced inventory record was not found");
         return rows.getFirst();
     }
 
     private Map<String, Object> requiredRow(String sql, Object a, Object b, String message) {
         List<Map<String, Object>> rows = jdbc.queryForList(sql, a, b);
-        if (rows.isEmpty()) throw new IllegalArgumentException(message);
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException(message);
         return rows.getFirst();
     }
 
     private Map<String, Object> requiredRow(String sql, Object a, Object b, Object c, String message) {
         List<Map<String, Object>> rows = jdbc.queryForList(sql, a, b, c);
-        if (rows.isEmpty()) throw new IllegalArgumentException(message);
+        if (rows.isEmpty()) throw new WmsResourceNotFoundException(message);
         return rows.getFirst();
     }
 

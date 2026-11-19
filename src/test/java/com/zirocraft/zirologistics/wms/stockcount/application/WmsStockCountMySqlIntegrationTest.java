@@ -171,7 +171,7 @@ class WmsStockCountMySqlIntegrationTest {
         String foreignAdjustment = insertDraftAdjustment(foreign);
 
         assertEquals(ownAdjustment, adjustmentService.get(fixture.principal(), ownAdjustment).get("publicId"));
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
                 () -> adjustmentService.get(fixture.principal(), foreignAdjustment));
         assertEquals(1, adjustmentService.list(fixture.principal()).size());
     }
@@ -433,7 +433,7 @@ class WmsStockCountMySqlIntegrationTest {
     @Test
     void countCannotUseForeignTenantWarehouseOrLocation() {
         Fixture other = fixture();
-        assertThrows(IllegalArgumentException.class, () -> stockCountService.create(fixture.principal(),
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class, () -> stockCountService.create(fixture.principal(),
                 new WmsStockCountManagementService.CreateCountCommand(
                         other.warehousePublicId(), "CROSS-" + UUID.randomUUID(),
                         "CYCLE_COUNT", "BLIND", List.of(other.locationPublicId()), null)));
@@ -1084,7 +1084,7 @@ class WmsStockCountMySqlIntegrationTest {
         adjustmentService.approve(secondCounter(fixture), adjustmentId, "Independent approval");
 
         Fixture otherTenant = fixture();
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
                 () -> adjustmentService.post(otherTenant.principal(), adjustmentId));
         assertEquals("APPROVED", jdbc.queryForObject("""
                 SELECT status FROM inventory_adjustments WHERE tenant_id = ? AND public_id = ?
