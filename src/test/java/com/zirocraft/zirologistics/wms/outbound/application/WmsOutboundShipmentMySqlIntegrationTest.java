@@ -367,7 +367,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                         new WmsPackingManagementService.CreateSessionCommand(shipmentId,
                                 "CROSS-PACK-" + UUID.randomUUID().toString().substring(0, 8), null)));
 
-        assertEquals("RELEASED", shipmentStatus(fixture, shipmentId));
+        assertEquals("PICKING", shipmentStatus(fixture, shipmentId));
         assertEquals(new BigDecimal("5.0000"), onHand(fixture));
         assertEquals(new BigDecimal("5.0000"), reserved(fixture));
     }
