@@ -862,7 +862,7 @@ public class WmsInventoryMasterDataService {
 
     private static boolean sameDecimal(Object existing, BigDecimal requested) {
         if (existing == null || requested == null) return existing == null && requested == null;
-        return decimal(existing).compareTo(requested) == 0;
+        return new BigDecimal(existing.toString()).compareTo(requested) == 0;
     }
 
     private static String normalizeCode(String value, String field) {
