@@ -51,7 +51,6 @@ public class WmsRoleManagementService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>>     @Transactional(readOnly = true)
     public List<Map<String, Object>> listRoles(WmsAuthenticatedPrincipal principal) {
         return listRoles(principal, 0, 200);
     }
