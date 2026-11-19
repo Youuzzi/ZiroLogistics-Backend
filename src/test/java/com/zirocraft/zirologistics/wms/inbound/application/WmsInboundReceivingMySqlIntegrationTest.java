@@ -77,6 +77,62 @@ class WmsInboundReceivingMySqlIntegrationTest {
     }
 
     @Test
+    void rejectedOnlyReceiptCompletesWithoutCreatingInventoryOrLedgerEntries() {
+        String receiptId = createReceipt(fixture);
+        String lineId = addLine(fixture, receiptId, fixture.itemPublicId(), "5.0000");
+
+        receivingService.post(fixture.principal(), receiptId,
+                new WmsInboundReceivingService.PostReceiptCommand(UUID.randomUUID(), List.of(
+                        new WmsInboundReceivingService.LineReceiptCommand(
+                                lineId, new BigDecimal("5.0000"), BigDecimal.ZERO,
+                                new BigDecimal("5.0000"), "Entire delivery rejected", List.of(), List.of()))));
+
+        assertEquals("POSTED", receiptStatus(fixture, receiptId));
+        assertEquals(BigDecimal.ZERO.setScale(4), stockBalance(fixture, fixture.itemPublicId()));
+        assertEquals(new BigDecimal("5.0000"), jdbc.queryForObject(
+                "SELECT received_qty FROM inbound_receipt_lines WHERE tenant_id = ? AND public_id = ?",
+                BigDecimal.class, fixture.tenantId(), lineId));
+        assertEquals(BigDecimal.ZERO.setScale(4), jdbc.queryForObject(
+                "SELECT accepted_qty FROM inbound_receipt_lines WHERE tenant_id = ? AND public_id = ?",
+                BigDecimal.class, fixture.tenantId(), lineId));
+        assertEquals(new BigDecimal("5.0000"), jdbc.queryForObject(
+                "SELECT rejected_qty FROM inbound_receipt_lines WHERE tenant_id = ? AND public_id = ?",
+                BigDecimal.class, fixture.tenantId(), lineId));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_balances WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id = ? AND event_type = 'INBOUND_RECEIPT_POSTED'
+                """, fixture.tenantId()));
+    }
+
+    @Test
+    void receivedQuantityMismatchRollsBackReceiptFactsStockAndPostingAudit() {
+        String receiptId = createReceipt(fixture);
+        String lineId = addLine(fixture, receiptId, fixture.itemPublicId(), "5.0000");
+
+        assertThrows(IllegalArgumentException.class, () -> receivingService.post(fixture.principal(), receiptId,
+                new WmsInboundReceivingService.PostReceiptCommand(UUID.randomUUID(), List.of(
+                        new WmsInboundReceivingService.LineReceiptCommand(
+                                lineId, new BigDecimal("5.0000"), new BigDecimal("3.0000"),
+                                BigDecimal.ONE, "Rejected remainder", List.of(), List.of())))));
+
+        assertEquals("DRAFT", receiptStatus(fixture, receiptId));
+        assertEquals(BigDecimal.ZERO.setScale(4), stockBalance(fixture, fixture.itemPublicId()));
+        assertEquals("PENDING", jdbc.queryForObject(
+                "SELECT status FROM inbound_receipt_lines WHERE tenant_id = ? AND public_id = ?",
+                String.class, fixture.tenantId(), lineId));
+        assertEquals(BigDecimal.ZERO.setScale(4), jdbc.queryForObject(
+                "SELECT received_qty FROM inbound_receipt_lines WHERE tenant_id = ? AND public_id = ?",
+                BigDecimal.class, fixture.tenantId(), lineId));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id = ? AND event_type = 'INBOUND_RECEIPT_POSTED'
+                """, fixture.tenantId()));
+    }
+
+    @Test
     void serialTrackedReceiptRegistersAndLinksEverySerialInSameTransaction() {
         String serialItem = createItem(fixture.tenantId(), "SERIAL");
         String receiptId = createReceipt(fixture);
