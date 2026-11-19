@@ -8,7 +8,7 @@ import com.zirocraft.zirologistics.wms.identity.application.WmsInvitationAccepta
 import com.zirocraft.zirologistics.wms.identity.application.WmsInvitationIssueResult;
 import com.zirocraft.zirologistics.wms.identity.application.WmsTenantInvitationService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
-import com.zirocraft.zirologistics.wms.security.authentication.http.WmsHttpApiEnabledCondition;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
