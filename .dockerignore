@@ -6,5 +6,12 @@ target/
 *.iml
 *.log
 .env
+.env.*
 *.env
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
 zirologistics-schema-reference.sql

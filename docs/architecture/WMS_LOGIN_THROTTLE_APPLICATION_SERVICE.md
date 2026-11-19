@@ -1,12 +1,12 @@
 # WMS Login Throttle Application Service
 
-**Status:** Application orchestration foundation implemented; not wired to a public login use case.  
+**Status:** Application orchestration implemented and composed by the WMS credential-authentication configuration when the JWT and public-auth endpoint gates are enabled.  
 **Scope:** WMS security application layer only.  
 **Database:** Uses the existing semantic storage port and additive V2 adapter; no migration in this change.
 
 ## 1. Purpose
 
-This layer coordinates the already-established throttle primitives without coupling application policy to HTTP, Servlet, JDBC, MySQL, or Redis APIs.
+This layer coordinates the throttle primitives without coupling application policy to HTTP, Servlet, JDBC, MySQL, or Redis APIs. `WmsCredentialAuthenticationConfiguration` explicitly creates the service when the WMS public-auth condition is satisfied and the configured MySQL throttle storage port is available. It is not component-scanned by annotation; its bean lifecycle is explicit.
 
 It composes:
 
@@ -16,7 +16,7 @@ It composes:
 - WmsLoginThrottlePolicy for explicit policy inputs.
 - Clock for deterministic time and fixed-window boundaries.
 
-The service is deliberately not annotated as a Spring component and is not automatically enabled. A future login use case must explicitly construct it only after deployment policy and secret configuration are approved.
+The service is deliberately not annotated as a component. The explicit WMS authentication configuration constructs it only when the required JWT/public-auth conditions and MySQL throttle adapter are present. Required HMAC key, trusted-proxy, and policy properties must be configured; missing configuration fails closed.
 
 ## 2. Request sequence
 
@@ -68,15 +68,16 @@ The account failure window is calculated when the failed credential outcome is r
 
 ## 6. Security boundaries and remaining work
 
-This implementation does not yet provide:
+The current implementation includes credential-authentication orchestration, dummy-hash verification for unknown users, WMS credential and tenant-selection HTTP routes, and explicit WMS configuration wiring. Remaining production work includes:
 
-- public credential-login or tenant-selection endpoints;
-- dummy-hash password verification for unknown users;
-- account lookup/password verification orchestration;
-- deployment binding for the HMAC secret, key version, trusted proxy CIDRs, or policy values;
-- numeric limits approved by representative load testing;
-- transaction/statement timeout values, cleanup schedule, or retention policy;
-- HTTP response mapping, audit events, or operational metrics.
+- verify existing password-hash provenance and supported formats;
+- approve numeric limits/windows/cooldown after representative load testing;
+- benchmark Argon2id and end-to-end login throughput on deployment hardware;
+- provision and rehearse HMAC key rotation and trusted-proxy CIDRs;
+- finalize JDBC/transaction timeouts, cleanup scheduling, and retention policy;
+- configure operational metrics/alerts and the fail-closed throttle-store outage runbook;
+- retain generic HTTP errors and verify secrets/identifiers are not logged;
+- do not introduce refresh tokens or session revocation without durable session persistence and rotation/replay controls.
 
 These are separate decisions and must be completed before enabling public login. In particular, never log raw email, source IP, HMAC digest, password, or token values.
 

@@ -1,18 +1,15 @@
 services:
   mysql:
     image: mysql:8.4
-    container_name: zirologistics-mysql
     environment:
-      MYSQL_DATABASE: zirologistics
-      MYSQL_USER: zirologistics
-      MYSQL_PASSWORD: ${DB_PASSWORD:-local_dev_password_change_me}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local_root_password_change_me}
-    ports:
-      - "3308:3306"
+      MYSQL_DATABASE: zirologistics_wms
+      MYSQL_USER: ${WMS_DB_USERNAME:?Set WMS_DB_USERNAME in .env}
+      MYSQL_PASSWORD: ${WMS_DB_PASSWORD:?Set WMS_DB_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
     volumes:
-      - zirologistics_mysql_data:/var/lib/mysql
+      - zirologistics_wms_mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "--password=${MYSQL_ROOT_PASSWORD:-local_root_password_change_me}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -23,21 +20,23 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: zirologistics-backend
     depends_on:
       mysql:
         condition: service_healthy
     environment:
-      DB_URL: jdbc:mysql://mysql:3306/zirologistics
-      DB_USERNAME: zirologistics
-      DB_PASSWORD: ${DB_PASSWORD:-local_dev_password_change_me}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in your shell before starting Compose}
-      FLYWAY_ENABLED: "true"
-      JPA_DDL_AUTO: validate
-      JPA_SHOW_SQL: "false"
+      WMS_DB_URL: jdbc:mysql://mysql:3306/zirologistics_wms
+      WMS_DB_USERNAME: ${WMS_DB_USERNAME:?Set WMS_DB_USERNAME in .env}
+      WMS_DB_PASSWORD: ${WMS_DB_PASSWORD:?Set WMS_DB_PASSWORD in .env}
+      WMS_FLYWAY_ENABLED: ${WMS_FLYWAY_ENABLED:?Set WMS_FLYWAY_ENABLED in .env}
+      WMS_JWT_ENABLED: ${WMS_JWT_ENABLED:-false}
+      WMS_SECURITY_HTTP_AUTH_ENDPOINTS_ENABLED: ${WMS_SECURITY_HTTP_AUTH_ENDPOINTS_ENABLED:-false}
+      WMS_JWT_ISSUER: ${WMS_JWT_ISSUER:-https://zirologistics.local}
+      WMS_JWT_SELECTION_AUDIENCE: ${WMS_JWT_SELECTION_AUDIENCE:-zirologistics-wms-selection}
+      WMS_JWT_ACCESS_AUDIENCE: ${WMS_JWT_ACCESS_AUDIENCE:-zirologistics-wms-access}
+      WMS_JWT_KEY_ID: ${WMS_JWT_KEY_ID:-local-disabled}
     ports:
       - "8081:8080"
     restart: unless-stopped
 
 volumes:
-  zirologistics_mysql_data:
+  zirologistics_wms_mysql_data:

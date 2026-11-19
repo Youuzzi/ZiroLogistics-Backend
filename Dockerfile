@@ -1,21 +1,20 @@
-# Build the application with the Maven Wrapper.
-FROM maven:3.9.9-eclipse-temurin-21 AS build
+# Build the WMS runtime artifact, not the transitional legacy entry point.
+FROM maven:3.9.14-eclipse-temurin-21 AS build
 WORKDIR /workspace
 
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
 RUN chmod +x mvnw
 
-COPY src/ src/
-RUN ./mvnw --batch-mode --no-transfer-progress -DskipTests package
+COPY src/main/ src/main/
+RUN ./mvnw --batch-mode --no-transfer-progress -Pwms-runtime -Dmaven.test.skip=true package
 
-# Run the packaged Spring Boot application on a minimal Java runtime.
+# Minimal non-root Java 21 runtime.
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-
 RUN groupadd --system spring && useradd --system --gid spring spring
-COPY --from=build /workspace/target/*.jar /app/app.jar
+COPY --from=build /workspace/target/zirologistics-0.0.1-SNAPSHOT.jar /app/app.jar
 
 USER spring
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-jar", "/app/app.jar"]

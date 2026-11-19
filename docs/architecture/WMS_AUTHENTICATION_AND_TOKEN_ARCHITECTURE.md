@@ -1,6 +1,6 @@
 # WMS Authentication and Token Architecture
 
-**Status:** Proposed design; no authentication endpoint is enabled by this document.  
+**Status:** Historical architecture baseline. Current implemented route and security behavior is authoritative in the [Stage 13 WMS v1 API Reference](../api/WMS_V1_API_REFERENCE_STAGE_13.md) and [Authentication HTTP API Contract](WMS_AUTHENTICATION_HTTP_API_CONTRACT.md).  
 **Runtime:** WMS-only runtime (`wms` profile)  
 **Schema:** Frozen V1 remains unchanged. Any persistence extension requires a separately reviewed additive Flyway migration.  
 **Decision scope:** Authentication flow, tenant selection, access-token validation, password verification, throttling, revocation boundaries.
@@ -11,7 +11,7 @@ The WMS runtime now has:
 - global user, tenant, membership, tenant role, and permission persistence;
 - a database-backed `WmsMembershipAccessService` that binds the selected membership to the already authenticated global user;
 - effective permissions resolved from current active database assignments;
-- no WMS login/register/tenant-selection/refresh/logout endpoints and no WMS HTTP security filter chain.
+- WMS credential authentication and tenant-selection HTTP endpoints are implemented. JWT enables the protected WMS route surface; a separate switch controls only the exact anonymous POST allowlist. Refresh-token issuance and durable session revocation are not implemented.
 
 The repository has Spring Security, JJWT 0.11.5 (retained for the legacy runtime), and the Spring OAuth2 Resource Server JWT support used by WMS. The WMS implementation must not reuse the legacy application's authentication principal, JWT subject semantics, filter chain, or role model without a separate compatibility review.
 
@@ -32,7 +32,7 @@ The repository has Spring Security, JJWT 0.11.5 (retained for the legacy runtime
 
 ### Stage A — credential authentication
 
-Proposed endpoint: `POST /api/wms/v1/auth/login`.
+Implemented endpoint: `POST /api/wms/v1/auth/credentials`.
 
 - Accept normalized email and password only.
 - Find the global user by normalized email.
@@ -83,7 +83,7 @@ Use separate token profiles for tenant selection and tenant-bound access. The ex
 | `mid` | Must be absent | Selected membership public ID |
 | Roles / permissions | Must be absent | Must be absent |
 
-Proposed initial lifetimes for evaluation, not standards requirements:
+Implemented initial lifetimes (configurable deployment policy, not standards requirements):
 - tenant-selection token: 5 minutes;
 - tenant-bound access token: 10 minutes.
 
@@ -106,7 +106,7 @@ If Argon2id support requires an additional provider dependency, add it explicitl
 
 ## 6. Throttling, sessions, refresh, and revocation
 
-The frozen WMS V1 schema does not provide dedicated durable login-attempt, refresh-token, or session-revocation persistence.
+Frozen WMS V1 has no durable login-attempt, refresh-token, or session-revocation persistence. Additive WMS V2 provides MySQL-backed login-throttle storage; later additive migrations provide identity action-token and encrypted email-outbox storage. Durable refresh-token/session revocation remains unimplemented.
 
 Therefore:
 - do not use an in-memory map or local Caffeine cache as the sole production login throttle;
@@ -116,9 +116,7 @@ Therefore:
 - short access-token expiry bounds the remaining validity of a stolen token;
 - user, tenant, and membership status changes are checked through database resolution on each protected request.
 
-Before production rollout, choose one of:
-1. a shared external rate-limit store (for example Redis) with atomic counters and a documented outage policy; or
-2. an additive, concurrency-safe database-backed throttle design.
+The current implementation uses the additive MySQL-backed WMS throttle adapter and application service. Do not replace it with a process-local limiter. Production rollout still requires an operational threshold review, deployment load/abuse testing, monitoring, retention policy, and a documented database-outage response. A managed shared store is an alternative only if deployment operations explicitly adopts and supports it.
 
 If refresh tokens or immediate per-device logout/revocation are required, add a separate additive schema slice for durable auth sessions. Store only a cryptographic hash of opaque refresh-token secrets; support rotation, replay detection, expiry, revocation, and family-level revocation. Never edit the frozen V1 migration.
 
@@ -144,11 +142,11 @@ Password changes and account-wide logout also need explicit semantics. Without a
 3. Add token properties validation and signing/verification services with key rotation support and tests for invalid signature, wrong issuer/audience/type, expiry, not-before, and algorithm confusion.
 4. Add WMS-only authentication principal and tenant context integration around `WmsMembershipAccessService`.
 5. Add the WMS-only `SecurityFilterChain` and request authorization tests.
-6. Add credential login and tenant selection endpoints only after shared/durable throttling and audit decisions are implemented.
+6. Credential authentication and tenant selection HTTP adapters are implemented; retain the production release gates for hash provenance, Argon2id benchmarking, throttle policy, and end-to-end abuse-resistance evidence.
 7. Decide whether a V2 additive migration is required for sessions, refresh rotation, login throttling, or revocation before production rollout.
 8. Run integration tests only against disposable MySQL 8.4 Testcontainers databases.
 
-No production login endpoint should be enabled until the full HTTP security and abuse-resistance test suite passes.
+Do not enable credential authentication for production until the full HTTP security and abuse-resistance release gates pass.
 
 ## 9. Implemented security foundation (code status)
 
@@ -158,7 +156,7 @@ The following foundation slices have been merged:
 - WMS JWT key configuration uses Spring OAuth2 Resource Server/Nimbus, RS256, an RSA key pair supplied by deployment environment, separate tenant-selection and access decoders, and validation for issuer, timestamp, audience, token-use, key ID, and membership-claim profile.
 - WMS token issuance is implemented as an internal service only. Tenant-selection tokens use a 5-minute lifetime; tenant-bound access tokens use a 10-minute lifetime. Both include issuer, subject, audience, issued-at, not-before, expiry, JWT ID, token-use, and configured key ID. Only access tokens include the database-resolved membership public ID (`mid`). Permission and role claims are deliberately omitted; authorization remains database-backed.
 - The WMS access-JWT authentication converter builds a typed WMS principal only after resolving the token subject and membership against current database state. It maps the freshly resolved permission codes to Spring authorities for the request and rejects missing, mismatched, suspended, or otherwise inactive memberships with a generic invalid-token authentication failure.
-- The WMS HTTP resource-server boundary uses only the access-token decoder for protected API requests, disables browser form login, HTTP Basic, logout, request caching, and server sessions, and requires authentication for every request. When `WMS_JWT_ENABLED` is false or missing, a separate WMS filter chain denies every request. No public route is introduced. The tenant-selection decoder remains reserved for the future tenant-selection endpoint.
+- The WMS HTTP resource-server boundary uses only the access-token decoder for protected API requests, disables browser form login, HTTP Basic, logout, request caching, and server sessions, and requires authentication for every protected request. When `WMS_JWT_ENABLED` is false or missing, the WMS filter chain denies every request. The exact anonymous authentication POST allowlist is permitted only when the separate public-auth endpoint switch is enabled. The tenant-selection decoder validates the dedicated selection-token profile.
 - CORS is intentionally not opened to wildcard or guessed origins. Configure an explicit deployment allow-list before browser clients are enabled.
 
 The WMS JWT configuration is disabled by default, including when the WMS profile starts. A deployment must explicitly set `WMS_JWT_ENABLED=true` before the JWT beans are created. Only then are these deployment variables required:
@@ -169,7 +167,7 @@ The WMS JWT configuration is disabled by default, including when the WMS profile
 - `WMS_JWT_PUBLIC_KEY_PEM`
 - `WMS_JWT_PRIVATE_KEY_PEM`
 
-The private key must be provisioned through secret management and must never be committed to source control. RSA keys below 2048 bits or mismatched public/private key pairs are rejected. This initial configuration supports one active key ID; multi-key rotation and overlap are not implemented yet. No JWT signing endpoint, authentication endpoint, or `SecurityFilterChain` is enabled by this foundation.
+The private key must be provisioned through secret management and must never be committed to source control. RSA keys below 2048 bits or mismatched public/private key pairs are rejected. This initial configuration supports one active key ID; multi-key rotation and overlap are not implemented yet. JWT configuration and the WMS `SecurityFilterChain` are implemented. Credential authentication and tenant-selection HTTP adapters are present behind the JWT registration gate; anonymous routes additionally require the explicit public-auth endpoint switch. Refresh-token issuance and durable session revocation remain out of scope.
 
 ## 10. References
 

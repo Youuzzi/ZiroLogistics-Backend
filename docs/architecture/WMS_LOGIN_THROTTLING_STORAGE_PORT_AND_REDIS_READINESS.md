@@ -1,6 +1,6 @@
 # WMS Login Throttling Storage Port and Redis Readiness
 
-**Status:** Architecture direction approved; semantic storage port implemented; MySQL adapter and numeric security policy pending.  
+**Status:** MySQL V2 schema and adapter implemented; credential flow integrated. Numeric production policy and operational evidence remain pending.  
 **Date:** 2026-11-15  
 **Scope:** Storage boundary for WMS credential-login throttling.  
 **Related design:** [WMS Login Throttling Design](WMS_LOGIN_THROTTLING_DESIGN.md)  
@@ -13,7 +13,7 @@ ZiroLogistics currently has no production server and no confirmed managed Redis 
 
 The approved initial direction is:
 
-1. Implement login throttling with MySQL as the first shared persistence adapter.
+1. Use the implemented MySQL adapter as the first shared persistence adapter.
 2. Define a narrow storage port around the security operations required by the login-throttling use case.
 3. Keep the application/use-case layer independent of MySQL, Redis, Spring Data, and vendor-specific commands.
 4. Do not add a Redis dependency, Redis container, Redis deployment, or Redis adapter to the current runtime.
@@ -45,15 +45,14 @@ The contract requires SOURCE and ACCOUNT key types in their corresponding positi
 
 The port does not choose source thresholds, account thresholds, fixed-window lengths, cooldown durations, retention periods, or retry policy. No numeric values are approved. The future use case must calculate UTC window boundaries and supply policy values explicitly.
 
-### Remaining contract decisions before login integration
+### Implemented contract decisions
 
-- Successful-login account-state clearing/decay semantics, including races with in-flight failed attempts.
-- Idempotency/retry semantics for ambiguous database commit outcomes.
-- Transaction timeout and lock-wait budget.
-- Whether source thresholds require an additional persisted decision field or can be evaluated safely from the committed count.
-- Cleanup schedule and retention duration.
+- Successful active-user authentication resets ACCOUNT history for the active HMAC key version before token issuance; SOURCE history is preserved.
+- Ambiguous commit outcomes fail closed; the application does not blindly retry throttle mutations.
+- Source requests are counted before user lookup/password verification; the inclusive maximum and next-request denial boundary are covered by tests.
+- MySQL adapter transactions perform source increment/cooldown lookup, failed-account increment/cooldown transition, successful-account reset, and bounded cleanup.
 
-These must be resolved and tested before the port is integrated into credential verification.
+Remaining release work is to approve deployment timeout budgets, numeric limits/windows/cooldown, retention and cleanup scheduling, HMAC key rotation, metrics/alerts, and production load evidence.
 
 ### 3.1 Atomicity requirement
 
@@ -127,23 +126,16 @@ Before adoption, evaluate:
 
 A local Docker Redis instance or an unowned self-managed service is not enough to approve production adoption. If Redis is introduced, it must be an explicit deployment capability, not an implicit application default. Configuration must fail safely when the selected adapter is unavailable; do not silently switch stores and split counters.
 
-## 8. Delivery sequence
+## 8. Remaining production release sequence
 
-1. Finalize the remaining semantic contract decisions above.
-2. Implement the MySQL adapter against the additive V2 table.
-3. Prove atomicity, concurrency, retention, and fail-closed behavior with MySQL 8.4 Testcontainers.
-4. Benchmark and approve thresholds, windows, cooldown, and outage behavior using representative performance evidence.
-5. Integrate the port into the WMS login use case only after the preceding controls pass.
-6. Reassess Redis only when production evidence or an existing managed service justifies it.
+1. Approve numeric thresholds, windows, cooldown, and retention after workload/abuse review.
+2. Complete representative Argon2id and end-to-end login load testing.
+3. Configure production HMAC secrets/key rotation, trusted proxies, timeouts, metrics, alerts, cleanup schedule, and fail-closed outage runbook.
+4. Reassess Redis only if production evidence and a managed operational owner justify it.
 
 ## 9. Verification status
 
-The semantic application port and result-contract unit tests are implemented. It does not claim that:
-- a MySQL persistence adapter exists;
-- login throttling is active or integrated with credential verification;
-- any numeric threshold is approved;
-- a login endpoint is available;
-- Redis is installed or required.
+The semantic application port, additive MySQL V2 migration, MySQL adapter, application service, and credential-authentication integration are implemented and covered by disposable MySQL 8.4 Testcontainers tests. Numeric production thresholds, deployment operations, and representative load evidence are not approved by CI. Redis is neither installed nor required by the current implementation.
 
 ## 10. References
 

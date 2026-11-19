@@ -1,15 +1,13 @@
 # WMS Credential Authentication Orchestration
 
-**Status:** Internal application use case only; not registered as a Spring bean and not exposed over HTTP.  
+**Status:** Implemented application use case; explicitly wired by `WmsCredentialAuthenticationConfiguration` and exposed through the WMS authentication HTTP adapter when the required security gates are enabled.  
 **Runtime target:** WMS profile only.  
 **Schema:** No migration; frozen V1 and additive V2 throttle schema are unchanged.  
 **Database safety:** Tests use mocks/unit fixtures or disposable Testcontainers only. No user database is accessed.
 
 ## 1. Purpose
 
-This slice composes the previously implemented identity, Argon2id, dummy-password verification, throttle, and tenant-selection token services into one explicit credential-authentication use case.
-
-It does not create a login controller, public route, request DTO, response DTO for HTTP, tenant-selection endpoint, or production bean wiring. Deployment policy and secrets remain explicit prerequisites.
+This slice composes the identity, Argon2id, dummy-password verification, throttle, and tenant-selection token services into one explicit credential-authentication use case. It is wired through the WMS credential-authentication configuration and HTTP adapter; deployment policy and secrets remain explicit prerequisites.
 
 ## 2. Credential flow
 
@@ -44,23 +42,20 @@ The query intentionally omits internal numeric identifiers and role/permission a
 
 ## 5. Deliberate non-goals
 
-- No controller, URL, HTTP status mapping, validation DTO, or CORS change.
-- No Spring auto-wiring of WmsCredentialAuthenticationService.
-- No production throttle policy, HMAC secret, key-version rotation policy, or trusted-proxy CIDRs selected.
-- No Argon2id parameter changes.
-- No existing password hash inspection, conversion, or migration.
-- No refresh token, logout/revocation, session persistence, or audit-event persistence.
-- No V1 schema changes and no new Flyway migration.
-- No change to legacy authentication.
+- No public self-registration or anonymous tenant creation.
+- No refresh token, logout/session revocation, or durable session lifecycle.
+- No change to the legacy authentication runtime.
+- No V1 schema changes; the WMS throttle persistence is the existing additive V2 migration.
+- No claim that existing password hashes have verified provenance or that production Argon2id cost is approved.
 
-## 6. Required gates before HTTP integration
+## 6. Remaining gates before production enablement
 
-1. Verify the provenance and supported formats of existing WMS users.password_hash values through an approved, non-production data fixture or controlled migration plan. Never dump hashes into logs or commit them.
-2. Approve deployment values for source/account windows, limits, cooldown, JDBC/transaction timeouts, HMAC key material/version, and trusted proxy CIDRs.
-3. Add a WMS-only composition configuration that is fail-closed when any required property or throttle storage is absent.
-4. Add HTTP request validation and a generic authentication error contract; distinguish infrastructure unavailability without disclosing account existence.
-5. Add integration tests using disposable MySQL 8.4 Testcontainers for repository projection, throttle ordering, and full authentication orchestration.
-6. Complete security review and load testing before exposing a public login endpoint.
+1. Verify the provenance and supported formats of existing WMS `users.password_hash` values through an approved, non-production data fixture or controlled migration plan. Never dump hashes into logs or commit them.
+2. Approve source/account windows, limits, cooldown, JDBC/transaction timeouts, HMAC key material/version, and trusted proxy CIDRs for the actual deployment.
+3. Benchmark Argon2id and the complete login path on representative deployment hardware; complete concurrent load and abuse-case testing.
+4. Confirm generic HTTP errors, DTO validation, request-size limits, CORS allowlist, and absence of credential/identifier logging.
+5. Configure operational metrics, alerts, cleanup scheduling, and the fail-closed throttle-store outage runbook.
+6. Do not expose refresh tokens or claim logout revocation until durable session persistence, rotation, replay detection, and revocation exist.
 
 ## 7. Test coverage in this slice
 

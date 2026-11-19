@@ -1,3 +1,5 @@
+> **Historical schema baseline:** This document records the initial V1 schema import. Backend implementation Stages 1–12 have since been completed; current runtime and API instructions are maintained in the README, WMS Runtime Boundary, and Stage 13 API reference.
+
 # WMS V1 — Actual Schema Implementation Baseline
 
 - **Status:** Schema source frozen; migration passed the main-branch CI gate after PR #11 merge
@@ -58,7 +60,7 @@ No sample tenant, user, password, role assignment, or operational data is seeded
 
 The test does not connect to a developer database. The migration PR was merged after its CI run passed. The main-branch CI run after merge also passed. This gate validates migration execution and schema structure only; it does not validate WMS application runtime behavior.
 
-## 5. Backend implementation order after migration approval
+## 5. Historical backend implementation sequence (completed through Stage 12)
 
 1. Tenant identity, membership, and authorization context.
 2. Warehouse and location access boundaries.
