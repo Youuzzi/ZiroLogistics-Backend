@@ -229,7 +229,7 @@ public class WmsPutawayManagementService {
         BigDecimal qty = quantity(command.confirmedQty());
         Map<String, Object> priorConfirmation = jdbc.query("""
                 SELECT c.public_id, c.putaway_task_id, c.putaway_task_line_id,
-                       c.confirmed_qty, c.confirmed_by_membership_id,
+                       c.confirmed_qty, c.confirmed_by_membership_id, c.notes,
                        l.public_id AS line_public_id
                 FROM putaway_confirmations c
                 JOIN putaway_task_lines l
@@ -241,6 +241,7 @@ public class WmsPutawayManagementService {
                         "putaway_task_line_id", rs.getLong("putaway_task_line_id"),
                         "confirmed_qty", rs.getBigDecimal("confirmed_qty"),
                         "confirmed_by_membership_id", rs.getLong("confirmed_by_membership_id"),
+                        "notes", rs.getString("notes") == null ? "" : rs.getString("notes"),
                         "line_public_id", rs.getString("line_public_id")) : null,
                 access.tenantId(), command.requestId().toString());
         if (priorConfirmation != null) {
@@ -258,6 +259,7 @@ public class WmsPutawayManagementService {
                     || !string(priorConfirmation, "line_public_id").equals(linePublicId)
                     || number(priorConfirmation, "confirmed_by_membership_id") != access.membershipId()
                     || decimal(priorConfirmation, "confirmed_qty").compareTo(qty) != 0
+                    || !string(priorConfirmation, "notes").equals(optional(command.notes(), 1000))
                     || !new HashSet<>(priorSerialIds).equals(requestedSerialIds)) {
                 throw new IllegalArgumentException("Request ID was already used for a different putaway confirmation");
             }
