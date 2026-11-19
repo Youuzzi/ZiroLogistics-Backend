@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.wms.security.authentication.http;
 
 import com.zirocraft.zirologistics.exception.GlobalExceptionHandler;
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -35,6 +36,13 @@ class WmsApiErrorContractTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.message").value("The request is invalid"));
+    }
+
+    @Test
+    void missingTenantScopedResourceUsesStableNotFoundContract() throws Exception {
+        mockMvc.perform(get("/wms-probe/not-found"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
     }
 
     @Test
@@ -77,6 +85,9 @@ class WmsApiErrorContractTest {
     static class WorkflowProbeController {
         @GetMapping("/wms-probe/invalid")
         void invalid() { throw new IllegalArgumentException("private validation detail"); }
+
+        @GetMapping("/wms-probe/not-found")
+        void notFound() { throw new WmsResourceNotFoundException("private resource identifier"); }
 
         @GetMapping("/wms-probe/conflict")
         void conflict() { throw new IllegalStateException("private workflow state"); }
