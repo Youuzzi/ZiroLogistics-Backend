@@ -90,7 +90,7 @@ class WmsApiErrorContractTest {
         void integrity() { throw new DataIntegrityViolationException("duplicate key in private_db"); }
 
         @GetMapping("/wms-probe/unexpected")
-        void unexpected() { throw new IllegalStateException("jdbc:mysql://internal/private_db"); }
+        void unexpected() { throw new RuntimeException("jdbc:mysql://internal/private_db"); }
     }
 
     record ProbeRequest(String value) {}
