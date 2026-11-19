@@ -515,11 +515,10 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         packingService.complete(fixture.principal(), sessionId);
 
         int ledgerBeforeShipping = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?", fixture.tenantId());
-        jdbc.execute("""
-                ALTER TABLE tenant_audit_events
-                ADD CONSTRAINT chk_test_block_outbound_ship_audit
-                CHECK (event_type <> 'OUTBOUND_SHIPMENT_SHIPPED')
-                """);
+        jdbc.execute("ALTER TABLE tenant_audit_events "
+                + "ADD CONSTRAINT chk_test_block_outbound_ship_audit "
+                + "CHECK (event_type <> 'OUTBOUND_SHIPMENT_SHIPPED' OR subject_public_id <> '"
+                + shipmentId + "')");
         try {
             assertThrows(org.springframework.dao.DataIntegrityViolationException.class, () -> shippingService.ship(fixture.principal(), shipmentId,
                     new WmsShippingManagementService.ShipCommand(UUID.randomUUID(), null, "ROLLBACK-TRACK", null)));
