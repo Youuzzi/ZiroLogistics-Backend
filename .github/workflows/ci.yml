@@ -90,6 +90,15 @@ jobs:
         if: steps.scope.outputs.run_backend_tests == 'true'
         run: ./mvnw --batch-mode --no-transfer-progress -Pwms-runtime clean verify
 
+      - name: Upload JaCoCo coverage report
+        if: always() && steps.scope.outputs.run_backend_tests == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wms-jacoco-coverage
+          path: target/site/jacoco/
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Verify packaged WMS entry point
         if: steps.scope.outputs.run_backend_tests == 'true'
         shell: bash
