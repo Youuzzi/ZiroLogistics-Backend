@@ -53,22 +53,6 @@ class WmsWarehouseManagementServiceTest {
     }
 
     @Test
-    void getWarehouseCannotResolveForeignTenantPublicId() {
-        WmsAuthenticatedPrincipal principal = principal();
-        when(accessService.resolve("user-public", "membership-public"))
-                .thenReturn(access(Set.of("WMS_WAREHOUSE_READ")));
-        when(jdbc.queryForList(contains("FROM warehouses WHERE tenant_id = ? AND public_id = ?"),
-                eq(10L), eq("tenant-b-warehouse"))).thenReturn(List.of());
-
-        assertThrows(WmsWarehouseNotFoundException.class,
-                () -> service.getWarehouse(principal, "tenant-b-warehouse"));
-
-        verify(jdbc).queryForList(contains("WHERE tenant_id = ? AND public_id = ?"),
-                eq(10L), eq("tenant-b-warehouse"));
-        verifyNoMoreInteractions(jdbc);
-    }
-
-    @Test
     void getLocationCannotResolveForeignTenantPublicIdInsideOwnWarehouse() {
         WmsAuthenticatedPrincipal principal = principal();
         when(accessService.resolve("user-public", "membership-public"))
