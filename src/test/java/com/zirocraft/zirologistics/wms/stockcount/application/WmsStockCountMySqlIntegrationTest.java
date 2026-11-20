@@ -1454,8 +1454,10 @@ class WmsStockCountMySqlIntegrationTest {
                         new WmsStockCountManagementService.RecordCountResultCommand(
                                 BigDecimal.ONE, List.of(), "Cross-tenant line substitution")));
         assertEquals(0, count("""
-                SELECT COUNT(*) FROM stock_count_results
-                WHERE tenant_id = ? AND stock_count_id = (
+                SELECT COUNT(*) FROM stock_count_results r
+                JOIN stock_count_lines l ON l.id = r.stock_count_line_id AND l.tenant_id = r.tenant_id
+                JOIN stock_count_scopes s ON s.id = l.stock_count_scope_id AND s.tenant_id = l.tenant_id
+                WHERE r.tenant_id = ? AND s.stock_count_id = (
                   SELECT id FROM stock_counts WHERE tenant_id = ? AND public_id = ?
                 )
                 """, fixture.tenantId(), fixture.tenantId(), ownCountId));
