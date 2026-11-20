@@ -160,7 +160,7 @@ MySQL integration tests use disposable Testcontainers databases and require Dock
 ## Engineering roadmap
 
 After backend/API Stages 1–13:
-1. Backend Structural Audit & Refactoring — cleanup merged; documentation reconciliation is in progress.
+1. Backend Structural Audit & Refactoring — complete; legacy cleanup and runtime documentation are reconciled.
 2. Quality Assurance & Security Audit.
 3. Deployment & Infrastructure.
 4. Production Readiness.
