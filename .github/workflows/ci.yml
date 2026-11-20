@@ -78,6 +78,15 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Restore OWASP Dependency-Check database cache
+        if: steps.scope.outputs.run_backend_tests == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.dependency-check/data
+          key: dependency-check-${{ runner.os }}-12.2.2-${{ hashFiles('pom.xml') }}
+          restore-keys: |
+            dependency-check-${{ runner.os }}-12.2.2-
+
       - name: Make Maven Wrapper executable
         if: steps.scope.outputs.run_backend_tests == 'true'
         run: chmod +x mvnw
