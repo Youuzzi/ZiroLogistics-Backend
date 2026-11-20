@@ -99,7 +99,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Verify packaged WMS entry point/
+      - name: Verify packaged WMS entry point
         if: steps.scope.outputs.run_backend_tests == 'true'
         shell: bash
         run: |
