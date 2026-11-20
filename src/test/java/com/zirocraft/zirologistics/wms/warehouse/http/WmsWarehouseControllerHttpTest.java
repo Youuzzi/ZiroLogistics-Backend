@@ -69,6 +69,15 @@ class WmsWarehouseControllerHttpTest {
     }
 
     @Test
+    void locationMutationRequiresAuthentication() throws Exception {
+        mockMvc.perform(post(ROUTE + "/warehouse-public-id/locations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(service);
+    }
+
+    @Test
     void listsOnlyTheAuthenticatedTenantWarehouseServiceResult() throws Exception {
         WmsAuthenticatedPrincipal principal = principal();
         when(service.listWarehouses(principal)).thenReturn(List.of(Map.of(
