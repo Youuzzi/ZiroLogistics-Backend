@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.wms.inventory.application;
 
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import com.zirocraft.zirologistics.wms.reporting.application.WmsOperationalReportingService;
 import com.zirocraft.zirologistics.wms.transfer.application.WmsInterWarehouseTransferService;
@@ -81,11 +82,11 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 fixture.warehousePublicId(), tenantB.locationPublicId(), fixture.itemPublicId(),
                 null, null, null, "AVAILABLE", new BigDecimal("1.0000"));
 
-        assertThrows(RuntimeException.class, () -> post(fixture, UUID.randomUUID(), "RECEIPT", foreignAll),
+        assertThrows(WmsResourceNotFoundException.class, () -> post(fixture, UUID.randomUUID(), "RECEIPT", foreignAll),
                 "Tenant A principal must not post using Tenant B warehouse, location, and item");
-        assertThrows(RuntimeException.class, () -> post(fixture, UUID.randomUUID(), "RECEIPT", mixedForeignItem),
+        assertThrows(WmsResourceNotFoundException.class, () -> post(fixture, UUID.randomUUID(), "RECEIPT", mixedForeignItem),
                 "Tenant A principal must not post using Tenant B item");
-        assertThrows(RuntimeException.class, () -> post(fixture, UUID.randomUUID(), "RECEIPT", mixedForeignLocation),
+        assertThrows(WmsResourceNotFoundException.class, () -> post(fixture, UUID.randomUUID(), "RECEIPT", mixedForeignLocation),
                 "Tenant A principal must not post using Tenant B location");
 
         assertEquals(BigDecimal.ZERO.setScale(4), balance(fixture), "Tenant A stock must remain unchanged after cross-tenant rejection");
