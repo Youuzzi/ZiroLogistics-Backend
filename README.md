@@ -2,7 +2,7 @@
 
 Tenant-aware Warehouse Management System backend built with Java 21, Spring Boot 3.5.13, MySQL 8.4, and Flyway.
 
-> **Status:** Active development. This repository is not yet declared production-ready. Structural refactoring, QA/security, deployment hardening, and production-readiness gates follow Stage 13.
+> **Status:** Active development. This repository is not yet declared production-ready. Backend structural cleanup is merged; QA/security, deployment hardening, and production-readiness gates remain.
 
 ## Repositories
 
@@ -39,9 +39,13 @@ See [WMS v1 API Reference](docs/api/WMS_V1_API_REFERENCE_STAGE_13.md). Route exi
 
 ## Runtime boundary
 
-The supported WMS entry point is `com.zirocraft.zirologistics.wms.WmsRuntimeApplication`. It scans only `com.zirocraft.zirologistics.wms` for WMS components, entities, and repositories.
+**WMS is the sole supported application runtime.**
 
-The legacy entry point and technical-layer packages remain isolated transitional source/test material. They are not the WMS domain model and must not be wired to the WMS database. The default executable JAR is WMS; the legacy entry point is available only through the temporary explicit `legacy-runtime` Maven profile. Its final disposition belongs to the dedicated Backend Structural Audit & Refactoring after Stage 13.
+- Entry point: `com.zirocraft.zirologistics.wms.WmsRuntimeApplication`.
+- Component, entity, and repository scans are scoped to `com.zirocraft.zirologistics.wms`.
+- The default executable JAR, Dockerfile, Compose stack, and CI package the WMS runtime.
+- The old single-tenant Logistics application entry point, source tree, legacy-only tests, profiles, and migration path have been retired.
+- Historical source-schema material under `docs/database/source` is reference-only; it is not an executable migration.
 
 WMS migrations are under `classpath:db/wms-migration`. Frozen migrations V1–V26 remain immutable; future schema evolution is additive (V27+). Read [WMS Runtime Boundary](docs/runtime/WMS_RUNTIME_BOUNDARY.md) before configuring a database.
 
@@ -54,7 +58,7 @@ WMS migrations are under `classpath:db/wms-migration`. Frozen migrations V1–V2
 
 ## Run WMS with Docker Compose
 
-The Compose stack creates a dedicated local MySQL 8.4 database named `zirologistics_wms` and a named volume. It does not use the legacy `zirologistics_db` database or frozen source/reference database `zirowms_v1`.
+The Compose stack creates a dedicated local MySQL 8.4 database named `zirologistics_wms` and a named volume. It does not use the historical `zirologistics_db` database or frozen source/reference database `zirowms_v1`.
 
 ### 1. Prepare environment
 
@@ -106,7 +110,7 @@ See [Authentication HTTP Contract](docs/architecture/WMS_AUTHENTICATION_HTTP_API
 
 ## Run WMS directly with Maven
 
-Use a dedicated, empty WMS development database. Do not use a legacy database or the frozen source/reference database.
+Use a dedicated, empty WMS development database. Do not use a historical or frozen reference database.
 
 ```powershell
 $env:WMS_DB_URL = "jdbc:mysql://localhost:3306/zirologistics_wms"
@@ -132,9 +136,8 @@ Hibernate uses schema validation. Do not enable Hibernate schema auto-update. Fl
 - WMS connection variables: `WMS_DB_URL`, `WMS_DB_USERNAME`, `WMS_DB_PASSWORD`.
 - Flyway is controlled independently by `WMS_FLYWAY_ENABLED` and defaults to false.
 - WMS migration location: `src/main/resources/db/wms-migration`.
-- The legacy migration path `classpath:db/migration` is not the WMS migration path.
-- Never point the legacy runtime at the WMS schema.
-- Never run WMS migrations against `zirologistics_db` or `zirowms_v1`.
+- Historical source/reference DDL under `docs/database/source` is not a migration and must never be executed blindly.
+- Never point WMS Flyway at `zirologistics_db` or `zirowms_v1`.
 - Migration/runtime integration tests use disposable MySQL 8.4 Testcontainers databases, not developer-owned databases.
 
 ## Tests and CI
@@ -149,17 +152,15 @@ MySQL integration tests use disposable Testcontainers databases and require Dock
 
 ### Latest verified CI evidence
 
-- Backend CI run [#645](https://github.com/Youuzzi/ZiroLogistics-Backend/actions/runs/44615501968)
-- Main commit: `a160b3ed0a52a9b9d98a8ac49b5e452af9e980ce`
-- **352 tests, 0 failures, 0 errors, 2 skipped; BUILD SUCCESS**
-- MySQL integration target: MySQL 8.4.13 Testcontainers
-
-This evidence applies to the recorded commit and does not establish production readiness.
+- Post-cleanup Main CI run [#?](https://github.com/Youuzzi/ZiroLogistics-Backend/actions/runs/44653864200) — **SUCCESS**
+- Main commit: `9c03a2ff93593027d3d8ff6ca8e2ffec492e011a`
+- Full regression and WMS packaging, Compose validation, WMS entry-point verification, and Docker image build all passed.
+- This CI result does not establish production readiness.
 
 ## Engineering roadmap
 
 After backend/API Stages 1–13:
-1. Backend Structural Audit & Refactoring.
+1. Backend Structural Audit & Refactoring — cleanup merged; documentation reconciliation is in progress.
 2. Quality Assurance & Security Audit.
 3. Deployment & Infrastructure.
 4. Production Readiness.
