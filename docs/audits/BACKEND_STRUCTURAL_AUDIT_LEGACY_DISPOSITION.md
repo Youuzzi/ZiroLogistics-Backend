@@ -1,6 +1,6 @@
 # Backend Structural Audit — Legacy Disposition
 
-**Baseline:** `9c03a2ff93593027d3d8ff6ca8e2ffec492e011a` (PR #162 merged; post-merge Main CI run `44653864200` successful)  
+**Baseline:** `9c03a2ff93593027d3d8ff6ca8e2ffec492e011a` (PR #162 merged; post-merge Main CI run `44653864200` successful)
 **Status:** **COMPLETE — cleanup merged and post-merge CI verified.** This document is the disposition record for the retired single-tenant Logistics runtime. PR #159 was closed as superseded by PR #162.
 
 ## 1. Audit method and evidence labels
