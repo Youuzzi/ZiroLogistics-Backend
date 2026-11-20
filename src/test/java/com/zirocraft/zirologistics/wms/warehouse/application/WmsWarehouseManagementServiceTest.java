@@ -103,6 +103,25 @@ class WmsWarehouseManagementServiceTest {
     }
 
     @Test
+    void listsOnlyLocationsWithinTheResolvedTenantAndWarehouse() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_LOCATION_READ")));
+        when(jdbc.queryForList(contains("FROM warehouses WHERE tenant_id = ? AND public_id = ?"),
+                eq(10L), eq("tenant-a-warehouse")))
+                .thenReturn(List.of(Map.of("id", 501L, "public_id", "tenant-a-warehouse",
+                        "tenant_id", 10L, "warehouse_code", "A-01", "warehouse_name", "Tenant A",
+                        "status", "ACTIVE", "version", 0L)));
+        when(jdbc.queryForList(contains("WHERE l.tenant_id = ? AND l.warehouse_id = ?"),
+                eq(10L), eq(501L))).thenReturn(List.of());
+
+        assertTrue(service.listLocations(principal, "tenant-a-warehouse").isEmpty());
+
+        verify(jdbc).queryForList(contains("WHERE l.tenant_id = ? AND l.warehouse_id = ?"),
+                eq(10L), eq(501L));
+    }
+
+    @Test
     void listsOnlyWarehousesInsideResolvedTenant() {
         WmsAuthenticatedPrincipal principal = principal();
         when(accessService.resolve("user-public", "membership-public"))
