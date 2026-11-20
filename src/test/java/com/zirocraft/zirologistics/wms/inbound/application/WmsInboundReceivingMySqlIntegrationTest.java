@@ -236,7 +236,7 @@ class WmsInboundReceivingMySqlIntegrationTest {
         assertEquals(auditCountBefore,
                 count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ?", fixture.tenantId()));
         assertEquals("DRAFT", receiptStatus(fixture, receiptId));
-        assertNotNull(ownLineId);
+        assertEquals(1, count(\n                "SELECT COUNT(*) FROM inbound_receipt_lines WHERE tenant_id = ? AND public_id = ?",\n                fixture.tenantId(), ownLineId));
     }
 
     private String createReceipt(Fixture f) {
