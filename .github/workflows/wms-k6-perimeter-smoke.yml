@@ -56,11 +56,14 @@ jobs:
           docker compose --project-name "$project" --env-file .env.k6 -f compose.yml logs --tail 200 mysql backend
           exit 1
       - name: Run low-load k6 smoke
+        shell: bash
         run: |
+          mkdir -p artifacts
           docker run --rm --network host \
             -e WMS_K6_TARGET=http://127.0.0.1:8081/api/wms/v1/tenants/current/warehouses \
             -v "$PWD/qa/performance/stage-16-7-perimeter-smoke.js:/scripts/perimeter-smoke.js:ro" \
-            grafana/k6:latest run /scripts/perimeter-smoke.js
+            -v "$PWD/artifacts:/results" \
+            grafana/k6:1.8.2 run --summary-export=/results/k6-summary.json /scripts/perimeter-smoke.js
       - name: Collect disposable environment logs
         if: always()
         shell: bash
