@@ -175,6 +175,7 @@
 				<version>12.2.2</version>
 				<configuration>
 					<outputDirectory>${project.build.directory}/dependency-check-reports</outputDirectory>
+					<nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
 					<formats><format>HTML</format><format>JSON</format></formats>
 					<failBuildOnCVSS>11</failBuildOnCVSS>
 					<failOnError>false</failOnError>
