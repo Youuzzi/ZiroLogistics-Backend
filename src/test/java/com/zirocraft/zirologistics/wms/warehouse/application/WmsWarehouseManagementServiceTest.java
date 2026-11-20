@@ -46,7 +46,7 @@ class WmsWarehouseManagementServiceTest {
         when(accessService.resolve("user-public", "membership-public"))
                 .thenReturn(access(Set.of("WMS_WAREHOUSE_READ")));
 
-        assertThrows(RuntimeException.class, () -> service.listWarehouses(principal));
+        assertThrows(WmsMembershipAccessDeniedException.class, () -> service.listWarehouses(principal));
 
         verifyNoInteractions(jdbc);
     }
@@ -72,7 +72,7 @@ class WmsWarehouseManagementServiceTest {
         when(accessService.resolve("user-public", "membership-public"))
                 .thenReturn(access(Set.of("WMS_WAREHOUSE_READ")));
 
-        assertThrows(RuntimeException.class, () -> service.getWarehouse(forged, "warehouse-b-public"));
+        assertThrows(WmsMembershipAccessDeniedException.class, () -> service.getWarehouse(forged, "warehouse-b-public"));
 
         verifyNoInteractions(jdbc);
     }
@@ -85,7 +85,7 @@ class WmsWarehouseManagementServiceTest {
         when(jdbc.queryForList(anyString(), eq(10L), eq("warehouse-b-public")))
                 .thenReturn(List.of());
 
-        assertThrows(RuntimeException.class, () -> service.getWarehouse(principal, "warehouse-b-public"));
+        assertThrows(WmsWarehouseNotFoundException.class, () -> service.getWarehouse(principal, "warehouse-b-public"));
 
         verify(jdbc).queryForList(contains("FROM warehouses WHERE tenant_id = ? AND public_id = ?"),
                 eq(10L), eq("warehouse-b-public"));
