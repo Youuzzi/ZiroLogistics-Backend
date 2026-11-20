@@ -139,6 +139,43 @@ class WmsInventoryPostingMySqlIntegrationTest {
     }
 
     @Test
+    void crossTenantLotReferenceIsRejectedWithoutChangingEitherTenantInventory() {
+        Fixture tenantA = fixture("LOT");
+        Fixture tenantB = fixture("LOT");
+        String foreignLotPublicId = UUID.randomUUID().toString();
+        long tenantBItemId = jdbc.queryForObject(
+                "SELECT id FROM items WHERE tenant_id = ? AND public_id = ?",
+                Long.class, tenantB.tenantId(), tenantB.itemPublicId());
+        jdbc.update("""
+                INSERT INTO inventory_lots (public_id, tenant_id, item_id, lot_number, status)
+                VALUES (?, ?, ?, ?, 'ACTIVE')
+                """, foreignLotPublicId, tenantB.tenantId(), tenantBItemId,
+                "LOT-CROSS-TENANT-" + UUID.randomUUID());
+
+        long ledgerBeforeA = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantA.tenantId());
+        long ledgerBeforeB = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantB.tenantId());
+        long auditBeforeA = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantA.tenantId());
+        long auditBeforeB = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId());
+
+        WmsInventoryPostingService.PostingLeg foreignLot = new WmsInventoryPostingService.PostingLeg(
+                tenantA.warehousePublicId(), tenantA.locationPublicId(), tenantA.itemPublicId(),
+                foreignLotPublicId, null, null, "AVAILABLE", new BigDecimal("1.0000"));
+
+        assertThrows(WmsResourceNotFoundException.class,
+                () -> post(tenantA, UUID.randomUUID(), "RECEIPT", foreignLot),
+                "Tenant A must not reference Tenant B lot by public ID");
+
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(tenantA),
+                "Tenant A inventory must remain unchanged");
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(tenantB),
+                "Tenant B inventory must remain unchanged");
+        assertEquals(ledgerBeforeA, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantA.tenantId()));
+        assertEquals(ledgerBeforeB, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantB.tenantId()));
+        assertEquals(auditBeforeA, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantA.tenantId()));
+        assertEquals(auditBeforeB, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId()));
+    }
+
+    @Test
     void operationalSummaryIsReadOnlyAndStrictlyScopedToAuthenticatedTenant() {
         post(fixture, UUID.randomUUID(), "RECEIPT",
                 leg(fixture, null, null, "AVAILABLE", "5.0000"));
