@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -71,6 +72,34 @@ class WmsWarehouseManagementServiceTest {
 
         verify(jdbc).queryForList(contains("WHERE l.tenant_id = ? AND l.warehouse_id = ? AND l.public_id = ?"),
                 eq(10L), eq(501L), eq("tenant-b-location"));
+    }
+
+    @Test
+    void createLocationRejectsParentLocationOwnedByAnotherTenant() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_LOCATION_CREATE")));
+        when(jdbc.queryForList(contains("FROM tenants WHERE id = ?"), eq(Long.class), eq(10L)))
+                .thenReturn(List.of(10L));
+        when(jdbc.queryForList(contains("FROM warehouses WHERE tenant_id = ? AND public_id = ?"),
+                eq(10L), eq("tenant-a-warehouse")))
+                .thenReturn(List.of(Map.of("id", 501L, "public_id", "tenant-a-warehouse",
+                        "tenant_id", 10L, "warehouse_code", "A-01", "warehouse_name", "Tenant A",
+                        "status", "ACTIVE", "version", 0L)));
+        when(jdbc.queryForList(contains("FROM warehouse_locations"),
+                eq(10L), eq(501L), eq("tenant-b-parent"))).thenReturn(List.of());
+
+        WmsWarehouseManagementService.LocationCommand command =
+                new WmsWarehouseManagementService.LocationCommand(
+                        "BIN-NEW", "New Bin", "BIN", null, "tenant-b-parent",
+                        null, null, null, null, true, false, false, false, 10, 10);
+
+        assertThrows(WmsWarehouseNotFoundException.class,
+                () -> service.createLocation(principal, "tenant-a-warehouse", command));
+
+        verify(jdbc).queryForList(contains("WHERE tenant_id = ? AND warehouse_id = ? AND public_id = ?"),
+                eq(10L), eq(501L), eq("tenant-b-parent"));
+        verify(jdbc, never()).update(anyString(), any(Object[].class));
     }
 
     @Test
