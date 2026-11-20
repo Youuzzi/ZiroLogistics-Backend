@@ -9,6 +9,7 @@ import com.zirocraft.zirologistics.wms.transfer.application.WmsInterWarehouseTra
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.util.Set;
 
@@ -67,6 +68,41 @@ class WmsInterWarehouseTransferServiceTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> service.list(principal(), Integer.MAX_VALUE, 200));
+
+        verifyNoInteractions(jdbc);
+    }
+
+
+    @Test
+    void rejectsTransferListWhenMembershipDoesNotGrantReadPermission() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of()));
+
+        assertThrows(AccessDeniedException.class, () -> service.list(principal()));
+
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void rejectsTransferListWhenResolvedTenantDoesNotMatchPrincipalTenant() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(new WmsMembershipAccess(
+                        2L, "user-public", 10L, "foreign-tenant-public", 30L, "membership-public",
+                        Set.of("WMS_TRANSFER_READ")));
+
+        assertThrows(AccessDeniedException.class, () -> service.list(principal()));
+
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void rejectsTransferListWhenResolvedMembershipIdentityDoesNotMatchPrincipal() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(new WmsMembershipAccess(
+                        1L, "user-public", 10L, "tenant-public", 31L, "foreign-membership-public",
+                        Set.of("WMS_TRANSFER_READ")));
+
+        assertThrows(AccessDeniedException.class, () -> service.list(principal()));
 
         verifyNoInteractions(jdbc);
     }
