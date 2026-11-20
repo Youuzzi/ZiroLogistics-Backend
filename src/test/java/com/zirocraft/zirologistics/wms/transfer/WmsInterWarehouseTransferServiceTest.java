@@ -38,7 +38,7 @@ class WmsInterWarehouseTransferServiceTest {
 
         service.list(principal(), 2, 50);
 
-        verify(jdbc).queryForList(contains("LIMIT ? OFFSET ?"), eq(30L), eq(50), eq(100L));
+        verify(jdbc).queryForList(contains("LIMIT ? OFFSET ?"), eq(10L), eq(50), eq(100L));
     }
 
     @Test
