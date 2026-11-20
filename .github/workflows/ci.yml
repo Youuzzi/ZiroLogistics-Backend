@@ -82,7 +82,7 @@ jobs:
         if: steps.scope.outputs.run_backend_tests == 'true'
         uses: actions/cache@v4
         with:
-          path: ~/.dependency-check/data
+          path: ~/.m2/repository/org/owasp/dependency-check-data
           key: dependency-check-${{ runner.os }}-12.2.2-${{ hashFiles('pom.xml') }}
           restore-keys: |
             dependency-check-${{ runner.os }}-12.2.2-
@@ -97,6 +97,8 @@ jobs:
 
       - name: Run full regression and package WMS runtime
         if: steps.scope.outputs.run_backend_tests == 'true'
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: ./mvnw --batch-mode --no-transfer-progress -Pwms-runtime clean verify
 
       - name: Upload JaCoCo coverage report
