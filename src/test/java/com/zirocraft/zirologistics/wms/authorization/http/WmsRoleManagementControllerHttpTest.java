@@ -59,6 +59,17 @@ class WmsRoleManagementControllerHttpTest {
     }
 
     @Test
+    void rolePermissionMutationRequiresAuthentication() throws Exception {
+        mockMvc.perform(put(ROUTE + "/role-public-id/permissions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"permissionCodes":["WMS_INVENTORY_POST"],"expectedVersion":0}
+                                """))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(service);
+    }
+
+    @Test
     void appliesDefaultPaginationToRoleCollection() throws Exception {
         WmsAuthenticatedPrincipal principal = principal();
         when(service.listRoles(principal, 0, 200)).thenReturn(List.of(
