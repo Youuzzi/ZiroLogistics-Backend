@@ -1,0 +1,76 @@
+name: WMS k6 Perimeter Performance Smoke
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  k6-smoke:
+    name: Disposable low-load perimeter latency smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Create isolated disposable Compose credentials
+        shell: bash
+        run: |
+          cat > .env.k6 <<EOF
+          WMS_DB_USERNAME=wms_k6
+          WMS_DB_PASSWORD=$(openssl rand -hex 24)
+          MYSQL_ROOT_PASSWORD=$(openssl rand -hex 32)
+          WMS_FLYWAY_ENABLED=true
+          WMS_CORS_ALLOWED_ORIGINS=
+          WMS_JWT_ENABLED=false
+          WMS_SECURITY_HTTP_AUTH_ENDPOINTS_ENABLED=false
+          WMS_JWT_ISSUER=https://wms-k6.invalid
+          WMS_JWT_SELECTION_AUDIENCE=wms-k6-selection
+          WMS_JWT_ACCESS_AUDIENCE=wms-k6-access
+          WMS_JWT_KEY_ID=k6-disabled
+          EOF
+          chmod 600 .env.k6
+      - name: Validate disposable Compose configuration
+        run: docker compose --project-name "wms-k6-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --env-file .env.k6 -f compose.yml config --quiet
+      - name: Start disposable WMS runtime and MySQL
+        shell: bash
+        run: |
+          project="wms-k6-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file .env.k6 -f compose.yml up --build -d
+      - name: Wait for deny-by-default route
+        shell: bash
+        run: |
+          url="http://127.0.0.1:8081/api/wms/v1/tenants/current/warehouses"
+          for attempt in $(seq 1 150); do
+            status="$(curl --silent --show-error --max-time 2 --output /tmp/wms-k6-response --write-out '%{http_code}' "$url" 2>/dev/null || true)"
+            if [[ "$status" == "403" ]]; then
+              echo "Protected endpoint is ready and returns 403 without authentication."
+              exit 0
+            fi
+            if [[ "$status" != "000" && "$status" != "502" && "$status" != "503" ]]; then
+              echo "Unexpected status while waiting for runtime: $status"
+              cat /tmp/wms-k6-response || true
+              exit 1
+            fi
+            sleep 2
+          done
+          project="wms-k6-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file .env.k6 -f compose.yml logs --tail 200 mysql backend
+          exit 1
+      - name: Run low-load k6 smoke
+        run: |
+          docker run --rm --network host \
+            -e WMS_K6_TARGET=http://127.0.0.1:8081/api/wms/v1/tenants/current/warehouses \
+            -v "$PWD/qa/performance/stage-16-7-perimeter-smoke.js:/scripts/perimeter-smoke.js:ro" \
+            grafana/k6:latest run /scripts/perimeter-smoke.js
+      - name: Collect disposable environment logs
+        if: always()
+        shell: bash
+        run: |
+          project="wms-k6-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file .env.k6 -f compose.yml logs --tail 200 mysql backend || true
+      - name: Tear down disposable environment
+        if: always()
+        shell: bash
+        run: |
+          project="wms-k6-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file .env.k6 -f compose.yml down --volumes --remove-orphans || true
+          rm -f .env.k6
