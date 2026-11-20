@@ -68,8 +68,17 @@ jobs:
         if: always()
         shell: bash
         run: |
+          mkdir -p artifacts
           project="wms-k6-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          docker compose --project-name "$project" --env-file .env.k6 -f compose.yml logs --tail 200 mysql backend || true
+          docker compose --project-name "$project" --env-file .env.k6 -f compose.yml logs --tail 200 mysql backend > artifacts/compose-logs.txt 2>&1 || true
+      - name: Upload k6 summary and bounded runtime logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wms-k6-perimeter-smoke
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Tear down disposable environment
         if: always()
         shell: bash
