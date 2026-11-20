@@ -362,6 +362,8 @@ class WmsPutawayManagementMySqlIntegrationTest {
         String foreignTaskId = createTask(foreign, foreignReceipt, "2.0000", List.of());
 
         assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> createTask(fixture, foreignReceipt, "2.0000", List.of()));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
                 () -> putawayService.get(fixture.principal(), foreignTaskId));
         assertEquals(1, count("SELECT COUNT(*) FROM putaway_tasks WHERE tenant_id = ? AND public_id = ?",
                 foreign.tenantId(), foreignTaskId));
