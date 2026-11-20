@@ -10,6 +10,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -49,6 +50,42 @@ class WmsWarehouseManagementServiceTest {
         assertThrows(WmsMembershipAccessDeniedException.class, () -> service.listWarehouses(principal));
 
         verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void getWarehouseCannotResolveForeignTenantPublicId() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_WAREHOUSE_READ")));
+        when(jdbc.queryForList(contains("FROM warehouses WHERE tenant_id = ? AND public_id = ?"),
+                eq(10L), eq("tenant-b-warehouse"))).thenReturn(List.of());
+
+        assertThrows(WmsWarehouseNotFoundException.class,
+                () -> service.getWarehouse(principal, "tenant-b-warehouse"));
+
+        verify(jdbc).queryForList(contains("WHERE tenant_id = ? AND public_id = ?"),
+                eq(10L), eq("tenant-b-warehouse"));
+        verifyNoMoreInteractions(jdbc);
+    }
+
+    @Test
+    void getLocationCannotResolveForeignTenantPublicIdInsideOwnWarehouse() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_LOCATION_READ")));
+        when(jdbc.queryForList(contains("FROM warehouses WHERE tenant_id = ? AND public_id = ?"),
+                eq(10L), eq("tenant-a-warehouse")))
+                .thenReturn(List.of(Map.of("id", 501L, "public_id", "tenant-a-warehouse",
+                        "tenant_id", 10L, "warehouse_code", "A-01", "warehouse_name", "Tenant A",
+                        "status", "ACTIVE", "version", 0L)));
+        when(jdbc.queryForList(contains("FROM warehouse_locations l"),
+                eq(10L), eq(501L), eq("tenant-b-location"))).thenReturn(List.of());
+
+        assertThrows(WmsWarehouseNotFoundException.class,
+                () -> service.getLocation(principal, "tenant-a-warehouse", "tenant-b-location"));
+
+        verify(jdbc).queryForList(contains("WHERE l.tenant_id = ? AND l.warehouse_id = ? AND l.public_id = ?"),
+                eq(10L), eq(501L), eq("tenant-b-location"));
     }
 
     @Test
