@@ -26,6 +26,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -992,4 +997,51 @@ class WmsOutboundShipmentMySqlIntegrationTest {
     private record Fixture(long tenantId, String warehousePublicId, String receivingLocationPublicId,
                            String supplierPublicId, String customerPublicId, String itemPublicId,
                            String membershipPublicId, WmsAuthenticatedPrincipal principal) {}
+
+    @Test
+    void concurrentReleaseRequestsAllowOnlyOneShipmentStateTransition() throws Exception {
+        String shipmentId = createShipment(fixture);
+        String lineId = addLine(fixture, shipmentId, "5.0000");
+        shipmentService.allocate(fixture.principal(), shipmentId, lineId,
+                new WmsOutboundShipmentService.AllocationCommand(List.of(
+                        new WmsOutboundShipmentService.AllocationLine(
+                                fixture.receivingLocationPublicId(), null, new BigDecimal("5.0000"), List.of()))));
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Callable<Boolean> attempt = () -> {
+                ready.countDown();
+                if (!start.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Concurrent release barrier timed out");
+                }
+                try {
+                    shipmentService.release(fixture.principal(), shipmentId);
+                    return true;
+                } catch (IllegalStateException rejected) {
+                    return false;
+                }
+            };
+            Future<Boolean> first = executor.submit(attempt);
+            Future<Boolean> second = executor.submit(attempt);
+            assertTrue(ready.await(10, TimeUnit.SECONDS),
+                    "Both independent requests must reach the release barrier");
+            start.countDown();
+
+            int successfulTransitions = (first.get(30, TimeUnit.SECONDS) ? 1 : 0)
+                    + (second.get(30, TimeUnit.SECONDS) ? 1 : 0);
+            assertEquals(1, successfulTransitions);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+
+        assertEquals("RELEASED", shipmentStatus(fixture, shipmentId));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id = ? AND subject_public_id = ?
+                  AND event_type = 'OUTBOUND_SHIPMENT_RELEASED'
+                """, fixture.tenantId(), shipmentId));
+    }
 }
