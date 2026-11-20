@@ -99,6 +99,17 @@ class WmsInventoryPostingMySqlIntegrationTest {
                 "Tenant A audit must not record rejected cross-tenant attempts");
         assertEquals(auditBeforeB, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId()),
                 "Tenant B audit must not record rejected cross-tenant attempts");
+
+        // Positive control: security rejection must not poison the legitimate same-tenant workflow.
+        post(fixture, UUID.randomUUID(), "RECEIPT", leg(fixture, null, null, "AVAILABLE", "2.0000"));
+        assertEquals(new BigDecimal("2.0000"), balance(fixture),
+                "Tenant A must still be able to post its own inventory after rejected foreign references");
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(tenantB),
+                "Tenant B inventory must remain isolated after Tenant A's valid posting");
+        assertEquals(ledgerBeforeA + 1, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(ledgerBeforeB, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantB.tenantId()));
+        assertEquals(auditBeforeA + 1, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", fixture.tenantId()));
+        assertEquals(auditBeforeB, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId()));
     }
 
     @Test
