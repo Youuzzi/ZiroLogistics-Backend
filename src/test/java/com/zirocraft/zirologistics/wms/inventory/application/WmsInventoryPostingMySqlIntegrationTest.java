@@ -66,6 +66,41 @@ class WmsInventoryPostingMySqlIntegrationTest {
     }
 
     @Test
+    void crossTenantInventoryPostingRejectsForeignAndMixedOwnershipReferencesWithoutSideEffects() {
+        Fixture tenantB = fixture("NONE");
+        long ledgerBeforeA = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId());
+        long ledgerBeforeB = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantB.tenantId());
+        long auditBeforeA = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", fixture.tenantId());
+        long auditBeforeB = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId());
+
+        WmsInventoryPostingService.PostingLeg foreignAll = leg(tenantB, null, null, "AVAILABLE", "1.0000");
+        WmsInventoryPostingService.PostingLeg mixedForeignItem = new WmsInventoryPostingService.PostingLeg(
+                fixture.warehousePublicId(), fixture.locationPublicId(), tenantB.itemPublicId(),
+                null, null, null, "AVAILABLE", new BigDecimal("1.0000"));
+        WmsInventoryPostingService.PostingLeg mixedForeignLocation = new WmsInventoryPostingService.PostingLeg(
+                fixture.warehousePublicId(), tenantB.locationPublicId(), fixture.itemPublicId(),
+                null, null, null, "AVAILABLE", new BigDecimal("1.0000"));
+
+        assertThrows(RuntimeException.class, () -> post(fixture, UUID.randomUUID(), "RECEIPT", foreignAll),
+                "Tenant A principal must not post using Tenant B warehouse, location, and item");
+        assertThrows(RuntimeException.class, () -> post(fixture, UUID.randomUUID(), "RECEIPT", mixedForeignItem),
+                "Tenant A principal must not post using Tenant B item");
+        assertThrows(RuntimeException.class, () -> post(fixture, UUID.randomUUID(), "RECEIPT", mixedForeignLocation),
+                "Tenant A principal must not post using Tenant B location");
+
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(fixture), "Tenant A stock must remain unchanged after cross-tenant rejection");
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(tenantB), "Tenant B stock must remain unchanged after cross-tenant rejection");
+        assertEquals(ledgerBeforeA, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()),
+                "Tenant A ledger must not record rejected cross-tenant attempts");
+        assertEquals(ledgerBeforeB, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantB.tenantId()),
+                "Tenant B ledger must not record rejected cross-tenant attempts");
+        assertEquals(auditBeforeA, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", fixture.tenantId()),
+                "Tenant A audit must not record rejected cross-tenant attempts");
+        assertEquals(auditBeforeB, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId()),
+                "Tenant B audit must not record rejected cross-tenant attempts");
+    }
+
+    @Test
     void operationalSummaryIsReadOnlyAndStrictlyScopedToAuthenticatedTenant() {
         post(fixture, UUID.randomUUID(), "RECEIPT",
                 leg(fixture, null, null, "AVAILABLE", "5.0000"));
