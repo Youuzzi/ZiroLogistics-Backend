@@ -152,7 +152,7 @@ MySQL integration tests use disposable Testcontainers databases and require Dock
 
 ### Latest verified CI evidence
 
-- Post-cleanup Main CI run [#?](https://github.com/Youuzzi/ZiroLogistics-Backend/actions/runs/44653864200) — **SUCCESS**
+- Post-cleanup Main CI run [#671](https://github.com/Youuzzi/ZiroLogistics-Backend/actions/runs/44653864200) — **SUCCESS**
 - Main commit: `9c03a2ff93593027d3d8ff6ca8e2ffec492e011a`
 - Full regression and WMS packaging, Compose validation, WMS entry-point verification, and Docker image build all passed.
 - This CI result does not establish production readiness.
