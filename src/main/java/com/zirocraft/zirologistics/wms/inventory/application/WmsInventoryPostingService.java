@@ -231,6 +231,7 @@ public class WmsInventoryPostingService {
         List<ResolvedLeg> legs = resolveAndLockReferences(access.tenantId(), normalized);
         validateMovement(normalized, legs);
         assertNoFrozenStockCount(access.tenantId(), legs, adjustmentContext);
+        validateLocationWeightCapacity(access.tenantId(), normalized, legs);
         // New serial rows are created before balance buckets to preserve the global lock order.
         List<ResolvedLeg> registeredLegs = new ArrayList<>(legs.size());
         for (ResolvedLeg leg : legs) {
@@ -314,6 +315,103 @@ public class WmsInventoryPostingService {
         result.put("entries", entries);
         return result;
     }
+
+    /**
+     * Enforces physical weight capacity for every location receiving a net
+     * positive inventory movement. The tenant row is already locked by the
+     * posting boundary, so competing inventory postings cannot race this
+     * occupancy calculation.
+     */
+    private void validateLocationWeightCapacity(long tenantId, NormalizedCommand command, List<ResolvedLeg> legs) {
+        Map<Long, List<ResolvedLeg>> byLocation = new HashMap<>();
+        for (ResolvedLeg leg : legs) {
+            byLocation.computeIfAbsent(leg.locationId(), ignored -> new ArrayList<>()).add(leg);
+        }
+        Map<Long, ItemWeight> itemWeights = new HashMap<>();
+        for (Map.Entry<Long, List<ResolvedLeg>> entry : byLocation.entrySet()) {
+            long locationId = entry.getKey();
+            Map<String, Object> location = requiredRow("""
+                    SELECT max_weight_capacity, weight_uom
+                    FROM warehouse_locations
+                    WHERE tenant_id = ? AND id = ?
+                    """, tenantId, locationId);
+            Object capacityValue = location.get("max_weight_capacity");
+            if (capacityValue == null) continue;
+
+            String capacityUom = string(location, "weight_uom");
+            BigDecimal capacityKg = decimal(capacityValue).multiply(weightFactorToKg(capacityUom));
+            BigDecimal movementDeltaKg = BigDecimal.ZERO;
+            for (ResolvedLeg leg : entry.getValue()) {
+                BigDecimal delta = signedDelta(command.movementType(), leg.index(), leg.quantity());
+                if (delta.signum() == 0) continue;
+                ItemWeight weight = itemWeights.computeIfAbsent(
+                        leg.itemId(), itemId -> loadItemWeight(tenantId, itemId));
+                if (weight.weightPerBaseUom() == null || weight.uomCode() == null) {
+                    if (delta.signum() > 0) {
+                        throw new IllegalStateException(
+                                "Item weight must be configured before stock can enter a capacity-controlled location");
+                    }
+                    // Unknown weight on a removal is conservatively treated as zero.
+                    continue;
+                }
+                movementDeltaKg = movementDeltaKg.add(
+                        delta.multiply(weight.weightPerBaseUom()).multiply(weightFactorToKg(weight.uomCode())));
+            }
+            if (movementDeltaKg.signum() <= 0) continue;
+
+            BigDecimal currentWeightKg = currentLocationWeightKg(tenantId, locationId);
+            BigDecimal projectedWeightKg = currentWeightKg.add(movementDeltaKg);
+            if (projectedWeightKg.compareTo(capacityKg) > 0) {
+                throw new IllegalStateException("Location weight capacity would be exceeded");
+            }
+        }
+    }
+
+    private ItemWeight loadItemWeight(long tenantId, long itemId) {
+        Map<String, Object> row = requiredRow("""
+                SELECT i.weight_per_base_uom, u.uom_code AS weight_uom_code
+                FROM items i
+                LEFT JOIN units_of_measure u ON u.id = i.weight_uom_id
+                WHERE i.tenant_id = ? AND i.id = ?
+                """, tenantId, itemId);
+        Object weight = row.get("weight_per_base_uom");
+        return new ItemWeight(weight == null ? null : decimal(weight), string(row, "weight_uom_code"));
+    }
+
+    private BigDecimal currentLocationWeightKg(long tenantId, long locationId) {
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+                SELECT b.on_hand_qty, i.weight_per_base_uom, u.uom_code AS weight_uom_code
+                FROM inventory_balances b
+                JOIN items i ON i.id = b.item_id AND i.tenant_id = b.tenant_id
+                LEFT JOIN units_of_measure u ON u.id = i.weight_uom_id
+                WHERE b.tenant_id = ? AND b.location_id = ? AND b.on_hand_qty > 0
+                """, tenantId, locationId);
+        BigDecimal totalKg = BigDecimal.ZERO;
+        for (Map<String, Object> row : rows) {
+            Object weight = row.get("weight_per_base_uom");
+            String uom = string(row, "weight_uom_code");
+            if (weight == null || uom == null) {
+                throw new IllegalStateException(
+                        "All existing stock must have item weight configured before location capacity can be checked");
+            }
+            totalKg = totalKg.add(decimal(row.get("on_hand_qty"))
+                    .multiply(decimal(weight)).multiply(weightFactorToKg(uom)));
+        }
+        return totalKg;
+    }
+
+    private static BigDecimal weightFactorToKg(String uomCode) {
+        if (uomCode == null) throw new IllegalStateException("A mass UOM is required for location capacity checks");
+        return switch (uomCode.toUpperCase(Locale.ROOT)) {
+            case "KG" -> BigDecimal.ONE;
+            case "G" -> new BigDecimal("0.001");
+            case "MG" -> new BigDecimal("0.000001");
+            case "TONNE" -> new BigDecimal("1000");
+            default -> throw new IllegalStateException("Unsupported mass UOM for location capacity checks");
+        };
+    }
+
+    private record ItemWeight(BigDecimal weightPerBaseUom, String uomCode) {}
 
     private List<ResolvedLeg> resolveAndLockReferences(long tenantId, NormalizedCommand command) {
         List<ResolvedLeg> resolved = new ArrayList<>();

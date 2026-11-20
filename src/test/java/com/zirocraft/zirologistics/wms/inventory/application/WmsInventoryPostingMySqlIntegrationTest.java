@@ -1006,6 +1006,144 @@ class WmsInventoryPostingMySqlIntegrationTest {
         }
     }
 
+    @Test
+    void receiptCannotExceedConfiguredLocationWeightCapacity() {
+        setItemWeight(fixture, "2.000000", "KG");
+        setLocationWeightCapacity(fixture, "10.0000", "KG");
+
+        assertThrows(IllegalStateException.class, () -> post(
+                fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "6.0000")));
+
+        assertEquals(new BigDecimal("0.0000"), balance(fixture));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+    }
+
+    @Test
+    void locationWeightCapacityConvertsMassUnitsAndAllowsExactCapacityOnly() {
+        setItemWeight(fixture, "500.000000", "G");
+        setLocationWeightCapacity(fixture, "1.0000", "KG");
+
+        post(fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "2.0000"));
+        assertEquals(new BigDecimal("2.0000"), balance(fixture));
+
+        assertThrows(IllegalStateException.class, () -> post(
+                fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "1.0000")));
+
+        assertEquals(new BigDecimal("2.0000"), balance(fixture));
+        assertEquals(1, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+    }
+
+    @Test
+    void capacityControlledLocationRejectsInboundStockWhenItemWeightIsMissing() {
+        setLocationWeightCapacity(fixture, "10.0000", "KG");
+
+        assertThrows(IllegalStateException.class, () -> post(
+                fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "1.0000")));
+
+        assertEquals(new BigDecimal("0.0000"), balance(fixture));
+        assertEquals(0, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+    }
+
+    @Test
+    void capacityControlledLocationRejectsAdditionalStockWhenExistingStockHasNoWeight() {
+        post(fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "1.0000"));
+
+        String secondItemPublicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO items
+                  (public_id, tenant_id, sku, item_name, base_uom_id, weight_per_base_uom,
+                   weight_uom_id, tracking_method, status)
+                VALUES (?, ?, ?, 'Weighted Capacity Test Item',
+                        (SELECT id FROM units_of_measure WHERE uom_code = 'EA'),
+                        1.000000, (SELECT id FROM units_of_measure WHERE uom_code = 'KG'),
+                        'NONE', 'ACTIVE')
+                """, secondItemPublicId, fixture.tenantId(),
+                "SKU_" + UUID.randomUUID().toString().substring(0, 8));
+        setLocationWeightCapacity(fixture, "10.0000", "KG");
+
+        WmsInventoryPostingService.PostingLeg secondItemLeg = new WmsInventoryPostingService.PostingLeg(
+                fixture.warehousePublicId(), fixture.locationPublicId(), secondItemPublicId,
+                null, null, null, "AVAILABLE", new BigDecimal("1.0000"));
+
+        assertThrows(IllegalStateException.class, () -> postingService.post(
+                fixture.principal(), new WmsInventoryPostingService.PostingCommand(
+                        UUID.randomUUID(), "RECEIPT", List.of(secondItemLeg), "capacity integration test")));
+
+        assertEquals(new BigDecimal("1.0000"), balance(fixture));
+        assertEquals(1, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(new BigDecimal("0.0000"), jdbc.queryForObject("""
+                SELECT COALESCE(SUM(b.on_hand_qty), 0.0000)
+                FROM inventory_balances b JOIN items i ON i.id = b.item_id AND i.tenant_id = b.tenant_id
+                WHERE b.tenant_id = ? AND i.public_id = ?
+                """, BigDecimal.class, fixture.tenantId(), secondItemPublicId));
+    }
+
+    @Test
+    void concurrentReceiptsCannotExceedLocationWeightCapacity() throws Exception {
+        setItemWeight(fixture, "2.000000", "KG");
+        setLocationWeightCapacity(fixture, "10.0000", "KG");
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        CompletableFuture<Boolean> first = CompletableFuture.supplyAsync(() -> attemptCapacityReceipt(
+                ready, start, UUID.randomUUID()));
+        CompletableFuture<Boolean> second = CompletableFuture.supplyAsync(() -> attemptCapacityReceipt(
+                ready, start, UUID.randomUUID()));
+
+        assertTrue(ready.await(10, TimeUnit.SECONDS), "Both inventory requests must reach the start barrier");
+        start.countDown();
+        int accepted = (first.get(20, TimeUnit.SECONDS) ? 1 : 0)
+                + (second.get(20, TimeUnit.SECONDS) ? 1 : 0);
+
+        assertEquals(1, accepted);
+        assertEquals(new BigDecimal("3.0000"), balance(fixture));
+        assertEquals(1, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+    }
+
+    private boolean attemptCapacityReceipt(CountDownLatch ready, CountDownLatch start, UUID requestId) {
+        ready.countDown();
+        try {
+            if (!start.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Capacity concurrency test start barrier timed out");
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Capacity concurrency test was interrupted", interrupted);
+        }
+        try {
+            post(fixture, requestId, "RECEIPT",
+                    leg(fixture, null, null, "AVAILABLE", "3.0000"));
+            return true;
+        } catch (IllegalStateException rejected) {
+            if (rejected.getMessage() == null || !rejected.getMessage().contains("capacity")) {
+                throw rejected;
+            }
+            return false;
+        }
+    }
+
+    private void setItemWeight(Fixture f, String weight, String uomCode) {
+        jdbc.update("""
+                UPDATE items
+                SET weight_per_base_uom = ?,
+                    weight_uom_id = (SELECT id FROM units_of_measure WHERE uom_code = ?)
+                WHERE tenant_id = ? AND public_id = ?
+                """, new BigDecimal(weight), uomCode, f.tenantId(), f.itemPublicId());
+    }
+
+    private void setLocationWeightCapacity(Fixture f, String capacity, String uomCode) {
+        jdbc.update("""
+                UPDATE warehouse_locations
+                SET max_weight_capacity = ?, weight_uom = ?
+                WHERE tenant_id = ? AND public_id = ?
+                """, new BigDecimal(capacity), uomCode, f.tenantId(), f.locationPublicId());
+    }
+
     private Fixture fixture(String trackingMethod) {
         String tenantPublicId = UUID.randomUUID().toString();
         jdbc.update("""
