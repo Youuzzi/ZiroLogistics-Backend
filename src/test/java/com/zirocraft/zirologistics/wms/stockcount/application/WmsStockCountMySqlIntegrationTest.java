@@ -1423,4 +1423,17 @@ class WmsStockCountMySqlIntegrationTest {
 
     private record Fixture(long tenantId, String warehousePublicId, String locationPublicId,
                            String itemPublicId, WmsAuthenticatedPrincipal principal) {}
+
+    @Test
+    void tenantCannotReadForeignStockCountOrItsCountLines() {
+        Fixture foreign = fixture("NONE");
+        String foreignCountId = createAndPlan(foreign);
+
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> stockCountService.get(fixture.principal(), foreignCountId));
+        assertEquals(1, count("SELECT COUNT(*) FROM stock_counts WHERE tenant_id = ? AND public_id = ?",
+                foreign.tenantId(), foreignCountId));
+        assertEquals(0, count("SELECT COUNT(*) FROM stock_counts WHERE tenant_id = ? AND public_id = ?",
+                fixture.tenantId(), foreignCountId));
+    }
 }
