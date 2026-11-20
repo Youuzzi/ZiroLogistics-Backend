@@ -1,0 +1,88 @@
+name: WMS DAST Baseline
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zap-baseline:
+    name: Disposable WMS perimeter scan (ZAP Baseline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Create isolated disposable Compose credentials
+        shell: bash
+        run: |
+          cat > .env.dast <<EOF
+          WMS_DB_USERNAME=wms_dast
+          WMS_DB_PASSWORD=$(openssl rand -hex 24)
+          MYSQL_ROOT_PASSWORD=$(openssl rand -hex 32)
+          WMS_FLYWAY_ENABLED=true
+          WMS_CORS_ALLOWED_ORIGINS=
+          WMS_JWT_ENABLED=false
+          WMS_SECURITY_HTTP_AUTH_ENDPOINTS_ENABLED=false
+          WMS_JWT_ISSUER=https://wms-dast.invalid
+          WMS_JWT_SELECTION_AUDIENCE=wms-dast-selection
+          WMS_JWT_ACCESS_AUDIENCE=wms-dast-access
+          WMS_JWT_KEY_ID=dast-disabled
+          EOF
+          chmod 600 .env.dast
+
+      - name: Validate isolated Compose configuration
+        run: docker compose --project-name "wms-dast-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --env-file .env.dast -f compose.yml config --quiet
+
+      - name: Start disposable WMS runtime and MySQL
+        shell: bash
+        run: |
+          project="wms-dast-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file .env.dast -f compose.yml up --build -d
+
+      - name: Wait for WMS deny-by-default boundary
+        shell: bash
+        run: |
+          url="http://127.0.0.1:8081/api/wms/v1/tenants/current/warehouses"
+          for attempt in $(seq 1 150); do
+            status="$(curl --silent --show-error --max-time 2 --output /tmp/wms-dast-response --write-out '%{http_code}' "$url" 2>/dev/null || true)"
+            if [[ "$status" == "403" ]]; then
+              echo "WMS is responding with HTTP 403 while JWT is disabled: deny-by-default boundary confirmed."
+              exit 0
+            fi
+            if [[ "$status" != "000" && "$status" != "502" && "$status" != "503" ]]; then
+              echo "Unexpected HTTP status while waiting for WMS: $status"
+              cat /tmp/wms-dast-response || true
+              exit 1
+            fi
+            sleep 2
+          done
+          project="wms-dast-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file .env.dast -f compose.yml logs --tail 200 mysql backend
+          exit 1
+
+      - name: Run passive ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: http://127.0.0.1:8081/api/wms/v1/tenants/current/warehouses
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: wms-zap-baseline
+
+      - name: Collect disposable environment logs
+        if: always()
+        shell: bash
+        run: |
+          project="wms-dast-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file .env.dast -f compose.yml logs --tail 200 mysql backend || true
+
+      - name: Tear down disposable WMS environment
+        if: always()
+        shell: bash
+        run: |
+          project="wms-dast-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file .env.dast -f compose.yml down --volumes --remove-orphans || true
+          rm -f .env.dast
