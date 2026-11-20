@@ -1436,4 +1436,28 @@ class WmsStockCountMySqlIntegrationTest {
         assertEquals(0, count("SELECT COUNT(*) FROM stock_counts WHERE tenant_id = ? AND public_id = ?",
                 fixture.tenantId(), foreignCountId));
     }
+
+    @Test
+    void tenantCannotRecordAResultAgainstAnotherTenantsCountLine() {
+        String ownCountId = createAndPlan(fixture);
+        stockCountService.start(fixture.principal(), ownCountId);
+
+        Fixture foreign = fixture("NONE");
+        String foreignCountId = createAndPlan(foreign);
+        Map<String, Object> foreignStarted = stockCountService.start(foreign.principal(), foreignCountId);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> foreignLines = (List<Map<String, Object>>) foreignStarted.get("lines");
+        String foreignLineId = (String) foreignLines.getFirst().get("publicId");
+
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> stockCountService.recordResult(fixture.principal(), ownCountId, foreignLineId,
+                        new WmsStockCountManagementService.RecordCountResultCommand(
+                                BigDecimal.ONE, List.of(), "Cross-tenant line substitution")));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM stock_count_results
+                WHERE tenant_id = ? AND stock_count_id = (
+                  SELECT id FROM stock_counts WHERE tenant_id = ? AND public_id = ?
+                )
+                """, fixture.tenantId(), fixture.tenantId(), ownCountId));
+    }
 }
