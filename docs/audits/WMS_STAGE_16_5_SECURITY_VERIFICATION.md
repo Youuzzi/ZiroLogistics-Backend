@@ -1,10 +1,10 @@
 # Stage 16.5 — Focused Security Verification
 
-**Evidence commit:** `1c14922614db04c4e3a78ceb5eafa0845ba988ca`  
-**Verification run:** Backend CI #690, attempt 2  
-**Run URL:** https://github.com/Youuzzi/ZiroLogistics-Backend/actions/runs/44742151637  
-**Run result:** SUCCESS  
-**Scope:** Existing WMS security and tenant-boundary tests inspected at assertion level and executed as part of the full Maven regression run.  
+**Evidence commit:** `1c14922614db04c4e3a78ceb5eafa0845ba988ca`
+**Verification run:** Backend CI #690, attempt 2
+**Run URL:** https://github.com/Youuzzi/ZiroLogistics-Backend/actions/runs/44742151637
+**Run result:** SUCCESS
+**Scope:** Existing WMS security and tenant-boundary tests inspected at assertion level and executed as part of the full Maven regression run.
 **Overall assessment:** PARTIALLY VERIFIED. The controls listed below have executable evidence; route-wide cross-tenant authorization coverage and several deployment-dependent controls remain open.
 
 ## 1. Reproducible execution evidence
