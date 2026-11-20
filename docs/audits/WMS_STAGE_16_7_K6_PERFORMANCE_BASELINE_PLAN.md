@@ -56,13 +56,13 @@ Only after Tier B and workflow fixtures are stable. Avoid high-rate inventory mu
 
 ## 5. Proposed k6 output and artifact
 
-Store the k6 script under a dedicated QA directory, separate from application code. Publish the JSON/summary output as a workflow artifact with short retention. A baseline report must state commit SHA, test tier, endpoint/scenario, environment, duration/VUs, observed metrics, failures, and caveats.
+Store the k6 script under a dedicated QA directory, separate from application code. The workflow exports `k6-summary.json` and publishes the summary plus bounded Compose logs as a GitHub Actions artifact with short retention. A baseline report must state commit SHA, test tier, endpoint/scenario, environment, duration/VUs, observed metrics, failures, and caveats.
 
 ## 6. Completion criteria for WP16.7
 
 - [ ] Script and workflow reviewed for safe endpoint selection and load limits.
 - [ ] Environment is disposable and isolated.
-- [ ] Test executes successfully and captures reproducible metrics.
+- [ ] Test executes successfully and captures reproducible metrics (`k6-summary.json` artifact).
 - [ ] Results are reviewed; limitations and bottlenecks are documented.
 - [ ] No production-readiness or capacity claim is made from a single baseline.
 
