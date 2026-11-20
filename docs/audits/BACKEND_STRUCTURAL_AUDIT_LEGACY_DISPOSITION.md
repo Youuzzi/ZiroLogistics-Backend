@@ -1,7 +1,7 @@
 # Backend Structural Audit — Legacy Disposition
 
-**Baseline:** `59728ad97cb1a2091a45f76df8b39962a622f188` (PR #160 and #161 merged; Main CI run `44643783141` successful)  
-**Status:** Legacy cleanup is applied on `refactor/retire-legacy-logistics-runtime-v2`; final combined CI and diff review are pending. The original PR #159 remains Draft and is superseded by this rebased cleanup branch.
+**Baseline:** `9c03a2ff93593027d3d8ff6ca8e2ffec492e011a` (PR #162 merged; post-merge Main CI run `44653864200` successful)  
+**Status:** **COMPLETE — cleanup merged and post-merge CI verified.** This document is the disposition record for the retired single-tenant Logistics runtime. PR #159 was closed as superseded by PR #162.
 
 ## 1. Audit method and evidence labels
 
@@ -28,7 +28,7 @@ Package exclusion alone is not proof that a class is useless. Each disposition b
 
 ## 3. Production source disposition — 63 legacy classes
 
-These classes belong to the old single-tenant Logistics application. Their implementations are not copied wholesale into WMS. The WMS modules below are the intended replacements.
+These classes belonged to the old single-tenant Logistics application and were retired in PR #162. Their implementations were not copied wholesale into WMS. The WMS modules below are the replacements that remain in the supported runtime.
 
 | Legacy group / classes | Count | WMS disposition |
 |---|---:|---|
@@ -68,7 +68,7 @@ The old bin/inbound/outbound/transfer flow calculates item weight, prevents inbo
 
 WMS already has `items.weight_per_base_uom`, `items.weight_uom_id`, `warehouse_locations.max_weight_capacity` and `warehouse_locations.weight_uom`. However, before PR #161, WMS item master did not expose item weight and inventory posting did not enforce location weight capacity. Therefore the old behavior was not proven to be replaced merely because WMS has capacity columns.
 
-PR #161 reimplements this behavior with WMS tenant-scoped item/location data, mass-UOM validation, tenant-serialized posting checks and MySQL regression tests. PR #161 is merged; its branch CI and subsequent Main CI run `44643783141` are successful.
+PR #161 reimplemented this behavior with WMS tenant-scoped item/location data, mass-UOM validation, tenant-serialized posting checks and MySQL regression tests. PR #161 is merged; its branch CI and subsequent Main CI run `44643783141` were successful.
 
 ## 4. Remaining 15 legacy-package tests
 
@@ -102,14 +102,14 @@ The WMS runtime-boundary test was rewritten to assert absence of legacy bean nam
 | H2 test dependency | **KEEP.** WMS runtime-boundary test uses H2 to boot an isolated context. |
 | WMS `application-wms.properties`, WMS migrations V1–V26 | **KEEP unchanged.** |
 
-## 6. Final cleanup gates
+## 6. Cleanup completion evidence
 
-1. PR #160 WMS CORS migration is merged and Main CI passed.
-2. PR #161 WMS item-weight/location-capacity migration is merged and Main CI passed.
-3. Cleanup branch is based directly on the latest `main` containing both migrations.
-4. Final tree must contain no legacy-only production source, legacy-only tests, legacy properties, or old Logistics migration.
-5. No WMS test may import a deleted legacy class; the runtime-boundary and API error-contract tests must compile against WMS-only components.
-6. Full Testcontainers MySQL 8.4 regression, WMS executable Start-Class, Docker image build and Compose validation must pass on the combined cleanup branch.
-7. Review exact diff and dependency tree before removing Draft status and merging.
+1. PR #160 WMS CORS migration merged; Main CI run `44641522421` passed.
+2. PR #161 WMS item-weight/location-capacity migration merged; Main CI run `44643783141` passed.
+3. PR #162 `refactor(wms): retire legacy Logistics runtime and tests` merged at `9c03a2ff93593027d3d8ff6ca8e2ffec492e011a`.
+4. Final tree review confirmed no legacy-only production Java source, legacy-only tests/resources, root legacy application properties, old executable Logistics migration, or `legacy-runtime` Maven profile. The 26 WMS migrations remain present.
+5. PR #162 branch CI run `44650690335` passed; the full regression reported 334 tests, 0 failures, 0 errors, and 2 skipped.
+6. Post-merge Main CI run `44653864200` completed **SUCCESS**, including Compose validation, full regression and WMS packaging, packaged WMS entry-point verification, and Docker image build.
+7. PR #159 was closed as superseded by PR #162.
 
-No developer-owned database is accessed or modified. Frozen WMS migrations V1–V26 are not changed.
+No developer-owned database was accessed or modified. Frozen WMS migrations V1–V26 were not changed.
