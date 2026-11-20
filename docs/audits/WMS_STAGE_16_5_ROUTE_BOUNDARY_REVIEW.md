@@ -1,8 +1,8 @@
 # Stage 16.5 — WMS HTTP Route and Tenant Boundary Review
 
-**Review status:** PARTIALLY VERIFIED  
-**Reviewed source branch:** `main`  
-**Review snapshot:** main commit `d359b9db7131ec3a2b0f60783bb015248afbfc25` plus post-merge CI run #693  
+**Review status:** PARTIALLY VERIFIED
+**Reviewed source branch:** `main`
+**Review snapshot:** main commit `d359b9db7131ec3a2b0f60783bb015248afbfc25` plus post-merge CI run #693
 **Related report:** [WMS_STAGE_16_5_SECURITY_VERIFICATION.md](WMS_STAGE_16_5_SECURITY_VERIFICATION.md)
 
 ## 1. Scope and method
