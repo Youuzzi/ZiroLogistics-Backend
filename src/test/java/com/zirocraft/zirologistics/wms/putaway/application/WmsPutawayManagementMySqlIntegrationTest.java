@@ -354,4 +354,18 @@ class WmsPutawayManagementMySqlIntegrationTest {
     private record Fixture(long tenantId, String warehousePublicId, String receivingLocationPublicId,
                            String storageLocationPublicId, String supplierPublicId, String itemPublicId,
                            String membershipPublicId, WmsAuthenticatedPrincipal principal) {}
+
+    @Test
+    void tenantCannotReadForeignPutawayTaskOrItsNestedLines() {
+        Fixture foreign = fixture("NONE");
+        Receipt foreignReceipt = receive(foreign, "NONE", "2.0000", List.of());
+        String foreignTaskId = createTask(foreign, foreignReceipt, "2.0000", List.of());
+
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> putawayService.get(fixture.principal(), foreignTaskId));
+        assertEquals(1, count("SELECT COUNT(*) FROM putaway_tasks WHERE tenant_id = ? AND public_id = ?",
+                foreign.tenantId(), foreignTaskId));
+        assertEquals(0, count("SELECT COUNT(*) FROM putaway_tasks WHERE tenant_id = ? AND public_id = ?",
+                fixture.tenantId(), foreignTaskId));
+    }
 }
