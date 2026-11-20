@@ -16,7 +16,7 @@ jobs:
   test:
     name: Build and test (Java 21)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 25
 
     steps:
       - name: Check out source
@@ -78,15 +78,6 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Restore OWASP Dependency-Check database cache
-        if: steps.scope.outputs.run_backend_tests == 'true'
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository/org/owasp/dependency-check-data
-          key: dependency-check-${{ runner.os }}-12.2.2-${{ hashFiles('pom.xml') }}
-          restore-keys: |
-            dependency-check-${{ runner.os }}-12.2.2-
-
       - name: Make Maven Wrapper executable
         if: steps.scope.outputs.run_backend_tests == 'true'
         run: chmod +x mvnw
@@ -97,8 +88,6 @@ jobs:
 
       - name: Run full regression and package WMS runtime
         if: steps.scope.outputs.run_backend_tests == 'true'
-        env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: ./mvnw --batch-mode --no-transfer-progress -Pwms-runtime clean verify
 
       - name: Upload JaCoCo coverage report
@@ -110,16 +99,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Upload dependency vulnerability report
-        if: always() && steps.scope.outputs.run_backend_tests == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: wms-dependency-vulnerability-report
-          path: target/dependency-check-reports/
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Verify packaged WMS entry point
+      - name: Verify packaged WMS entry point/
         if: steps.scope.outputs.run_backend_tests == 'true'
         shell: bash
         run: |
@@ -129,3 +109,16 @@ jobs:
       - name: Build WMS Docker image
         if: steps.scope.outputs.run_backend_tests == 'true'
         run: docker build --pull --tag zirologistics-wms:ci --file Dockerfile .
+
+  dependency-vulnerability-scan:
+    name: Dependency vulnerability scan (OSV)
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.7.1
+    with:
+      scan-args: |-
+        --recursive
+        ./
+      fail-on-vuln: false
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
