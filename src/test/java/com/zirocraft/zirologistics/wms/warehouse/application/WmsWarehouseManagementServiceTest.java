@@ -63,6 +63,34 @@ class WmsWarehouseManagementServiceTest {
         verify(jdbc).queryForList(contains("WHERE tenant_id = ?"), eq(10L));
     }
 
+
+    @Test
+    void rejectsForgedTenantContextBeforeAttemptingWarehouseRead() {
+        WmsAuthenticatedPrincipal forged = new WmsAuthenticatedPrincipal(
+                "user-public", 99L, "other-tenant", 30L, "membership-public",
+                Set.of("WMS_WAREHOUSE_READ"));
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_WAREHOUSE_READ")));
+
+        assertThrows(RuntimeException.class, () -> service.getWarehouse(forged, "warehouse-b-public"));
+
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void warehouseLookupUsesTenantScopedPublicIdQuery() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_WAREHOUSE_READ")));
+        when(jdbc.queryForList(anyString(), eq(10L), eq("warehouse-b-public")))
+                .thenReturn(List.of());
+
+        assertThrows(RuntimeException.class, () -> service.getWarehouse(principal, "warehouse-b-public"));
+
+        verify(jdbc).queryForList(contains("FROM warehouses WHERE tenant_id = ? AND public_id = ?"),
+                eq(10L), eq("warehouse-b-public"));
+    }
+
     private static WmsAuthenticatedPrincipal principal() {
         return new WmsAuthenticatedPrincipal(
                 "user-public", 10L, "tenant-public", 30L, "membership-public",
