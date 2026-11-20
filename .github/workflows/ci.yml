@@ -16,7 +16,7 @@ jobs:
   test:
     name: Build and test (Java 21)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
 
     steps:
       - name: Check out source
@@ -96,6 +96,15 @@ jobs:
         with:
           name: wms-jacoco-coverage
           path: target/site/jacoco/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload dependency vulnerability report
+        if: always() && steps.scope.outputs.run_backend_tests == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wms-dependency-vulnerability-report
+          path: target/dependency-check-reports/
           if-no-files-found: warn
           retention-days: 14
 

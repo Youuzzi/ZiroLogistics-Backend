@@ -169,6 +169,24 @@
 					</execution>
 				</executions>
 				</plugin>
+			<plugin>
+				<groupId>org.owasp</groupId>
+				<artifactId>dependency-check-maven</artifactId>
+				<version>12.1.0</version>
+				<configuration>
+					<outputDirectory>${project.build.directory}/dependency-check-reports</outputDirectory>
+					<formats><format>HTML</format><format>JSON</format></formats>
+					<failBuildOnCVSS>11</failBuildOnCVSS>
+					<failOnError>false</failOnError>
+				</configuration>
+				<executions>
+					<execution>
+						<id>dependency-vulnerability-baseline</id>
+						<phase>verify</phase>
+						<goals><goal>check</goal></goals>
+					</execution>
+				</executions>
+			</plugin>
 		</plugins>
 	</build>
 
