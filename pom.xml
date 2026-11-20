@@ -178,7 +178,7 @@
 					<nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
 					<formats><format>HTML</format><format>JSON</format></formats>
 					<failBuildOnCVSS>11</failBuildOnCVSS>
-					<failOnError>false</failOnError>
+					<failOnError>true</failOnError>
 				</configuration>
 				<executions>
 					<execution>
