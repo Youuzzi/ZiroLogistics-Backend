@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The repository contains a tenant-based WMS runtime and transitional legacy application source. They are separate application generations and must not share an application context or database mapping.
+This repository runs one supported application: the tenant-aware WMS. The former single-tenant Logistics runtime has been retired. Historical schema exports and audit records may remain as documentation/reference material, but they are not executable runtime components.
 
 ## Supported WMS entry point
 
@@ -13,22 +13,20 @@ The repository contains a tenant-based WMS runtime and transitional legacy appli
 - Spring profile: `wms`
 - Maven packaging profile: `wms-runtime`
 
-The default executable JAR, root Dockerfile, and Compose stack package and run this WMS entry point. The explicit `wms-runtime` Maven profile keeps deployment packaging unambiguous. The legacy entry point is available only through the temporary `legacy-runtime` profile for compatibility investigation; it must never be pointed at the WMS database. The legacy profile and source are scheduled for removal after the structural audit migrates/replaces legacy-only tests.
-
-Only WMS modules placed under this namespace are discovered by the WMS runtime. Legacy controllers, services, configuration, repositories, and entities remain outside the WMS scan and are not imported.
-
-The legacy `ZirologisticsApplication` remains temporarily because legacy tests and source-level dependencies have not yet been fully retired. It is not the Docker/Compose runtime entry point and must never be pointed at the WMS database.
+The default executable JAR, root Dockerfile, Compose stack, and CI package and run this WMS entry point. There is no supported legacy application entry point or legacy-runtime Maven profile.
 
 ## Database safety
 
-The WMS migration remains isolated at `classpath:db/wms-migration`. It is disabled by default in `application-wms.properties`. Use a dedicated empty WMS development database such as `zirologistics_wms`.
+The WMS migration location is `classpath:db/wms-migration`. Flyway is disabled by default in `application-wms.properties`. Use a dedicated, newly provisioned WMS database such as `zirologistics_wms`.
 
-Do not use these databases as a WMS migration target:
+Do not use these historical databases as a WMS migration target:
 - `zirologistics_db`: legacy application database;
 - `zirowms_v1`: frozen source/reference database;
 - any user-owned or production database not explicitly provisioned for WMS.
 
-The Compose example creates its own isolated MySQL 8.4 service and named volume. It does not publish MySQL to the host. Flyway is enabled there only because the Compose volume is a dedicated WMS runtime target and the committed `.env.example` requires explicit `WMS_FLYWAY_ENABLED=true`.
+The Compose example creates its own isolated MySQL 8.4 service and named volume. It does not publish MySQL to the host. Flyway is enabled there only for that dedicated Compose WMS database.
+
+The SQL export under `docs/database/source` is historical reference material. It contains destructive/schema-selection statements and must not be executed blindly or treated as a WMS migration.
 
 ## Local WMS configuration
 
@@ -52,7 +50,7 @@ Run with the WMS Maven profile:
 .\mvnw.cmd -Pwms-runtime spring-boot:run
 ```
 
-Hibernate uses `validate`; do not enable `ddl-auto=update`. Keep Flyway disabled until the target is verified. The WMS runtime must not use legacy `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `FLYWAY_ENABLED`, or the legacy migration path.
+Hibernate uses `validate`; do not enable `ddl-auto=update`. Keep Flyway disabled until the target is verified. The WMS runtime uses WMS-prefixed environment variables and the WMS migration path only.
 
 ## Authentication safety
 
@@ -64,12 +62,12 @@ Hibernate uses `validate`; do not enable `ddl-auto=update`. Keep Flyway disabled
 
 ## Verification
 
-`WmsRuntimeBoundaryIntegrationTest` starts the WMS application context without opening a database connection and asserts representative legacy controllers, services, and repositories are absent. WMS V1 schema migration tests validate against disposable MySQL 8.4 Testcontainers.
+`WmsRuntimeBoundaryIntegrationTest` starts the WMS application context without opening a database connection and asserts representative retired Logistics controllers, services, and repositories are absent. WMS migration and persistence integration tests use disposable MySQL 8.4 Testcontainers databases.
 
-## Legacy disposition
+The structural cleanup is merged in PR #162. The post-merge Main CI run `44653864200` completed successfully, including full regression, WMS packaged entry-point verification, Docker image build, and Compose validation.
 
-Legacy technical-layer packages and the legacy application entry point are not dependencies of the WMS runtime. They remain temporarily because legacy tests/source still compile and are exercised by the current regression suite. The dedicated Backend Structural Audit & Refactoring after Stage 13 must map dependencies and test ownership, migrate only genuinely reusable behavior into WMS-owned modules, replace or retire legacy-only tests, and remove legacy-only code that has no WMS value. Do not move legacy entities or repositories into WMS merely to preserve them.
+## Historical disposition
 
-## Migration rule
+The dedicated structural audit records the disposition of the former 63 production classes and 15 legacy-package tests in [Backend Structural Audit — Legacy Disposition](../audits/BACKEND_STRUCTURAL_AUDIT_LEGACY_DISPOSITION.md). Legacy-only code, configuration, tests, and executable migration resources were retired rather than moved wholesale into WMS. Relevant behavior was reimplemented using WMS tenant boundaries and domain models where required.
 
-Do not modify frozen migrations V1–V26 or the reference DDL. Future schema changes are additive V27+. Do not rename legacy tables or map legacy entities onto WMS tables.
+Frozen WMS migrations V1–V26 remain unchanged. Future schema changes are additive V27+; do not rename historical tables or map retired entities onto WMS tables.
