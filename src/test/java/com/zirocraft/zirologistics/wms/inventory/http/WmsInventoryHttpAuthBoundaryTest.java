@@ -17,11 +17,12 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.MediaType;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.mockito.Mockito.verifyNoInteractions;
-import org.springframework.http.MediaType;
 
 @WebMvcTest(controllers = {WmsInventoryController.class, WmsInventoryMasterDataController.class})
 @ContextConfiguration(classes = WmsHttpSecurityTestApplication.class)
@@ -68,6 +69,27 @@ class WmsInventoryHttpAuthBoundaryTest {
     }
     @Test void uomListingRequiresAuthentication() throws Exception {
         mockMvc.perform(get("/api/wms/v1/tenants/current/uoms"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(masterDataService);
+    }
+    @Test void itemDetailRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/wms/v1/tenants/current/items/item-public-id"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(masterDataService);
+    }
+    @Test void itemUpdateRequiresAuthentication() throws Exception {
+        mockMvc.perform(put("/api/wms/v1/tenants/current/items/item-public-id")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(masterDataService);
+    }
+    @Test void itemLookupRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/wms/v1/tenants/current/items/lookup?identifierType=SKU&value=SKU-01"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(masterDataService);
+    }
+    @Test void categoryListRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/wms/v1/tenants/current/item-categories"))
                 .andExpect(status().isUnauthorized());
         verifyNoInteractions(masterDataService);
     }
