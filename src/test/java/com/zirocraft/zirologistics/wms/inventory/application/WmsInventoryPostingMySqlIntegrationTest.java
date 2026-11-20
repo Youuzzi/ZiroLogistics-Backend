@@ -102,6 +102,43 @@ class WmsInventoryPostingMySqlIntegrationTest {
     }
 
     @Test
+    void crossTenantSerialReferenceIsRejectedWithoutChangingForeignSerialOrInventory() {
+        Fixture tenantA = fixture("SERIAL");
+        Fixture tenantB = fixture("SERIAL");
+        String serialNumber = "SN-CROSS-TENANT-" + UUID.randomUUID();
+
+        post(tenantB, UUID.randomUUID(), "RECEIPT",
+                leg(tenantB, null, serialNumber, "AVAILABLE", "1.0000"));
+        String foreignSerialPublicId = jdbc.queryForObject(
+                "SELECT public_id FROM inventory_serials WHERE tenant_id = ? AND serial_number = ?",
+                String.class, tenantB.tenantId(), serialNumber);
+
+        long ledgerBeforeA = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantA.tenantId());
+        long ledgerBeforeB = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantB.tenantId());
+        long auditBeforeA = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantA.tenantId());
+        long auditBeforeB = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId());
+
+        WmsInventoryPostingService.PostingLeg foreignSerial = new WmsInventoryPostingService.PostingLeg(
+                tenantA.warehousePublicId(), tenantA.locationPublicId(), tenantA.itemPublicId(),
+                null, foreignSerialPublicId, null, "AVAILABLE", new BigDecimal("1.0000"));
+
+        assertThrows(WmsResourceNotFoundException.class,
+                () -> post(tenantA, UUID.randomUUID(), "ISSUE", foreignSerial),
+                "Tenant A must not reference Tenant B serial by public ID");
+
+        assertEquals("AVAILABLE", serialStatus(tenantB, foreignSerialPublicId),
+                "Rejected Tenant A request must not transition Tenant B serial");
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(tenantA),
+                "Tenant A inventory must remain unchanged");
+        assertEquals(BigDecimal.ONE.setScale(4), balance(tenantB),
+                "Tenant B inventory must remain unchanged");
+        assertEquals(ledgerBeforeA, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantA.tenantId()));
+        assertEquals(ledgerBeforeB, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantB.tenantId()));
+        assertEquals(auditBeforeA, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantA.tenantId()));
+        assertEquals(auditBeforeB, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId()));
+    }
+
+    @Test
     void operationalSummaryIsReadOnlyAndStrictlyScopedToAuthenticatedTenant() {
         post(fixture, UUID.randomUUID(), "RECEIPT",
                 leg(fixture, null, null, "AVAILABLE", "5.0000"));
