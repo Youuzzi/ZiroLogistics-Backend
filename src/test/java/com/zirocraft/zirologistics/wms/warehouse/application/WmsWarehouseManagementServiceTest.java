@@ -71,6 +71,6 @@ class WmsWarehouseManagementServiceTest {
 
     private static WmsMembershipAccess access(Set<String> permissions) {
         return new WmsMembershipAccess(
-                1L, "user-public", 10L, "tenant-public", 30L, "membership-public", permissions);
+                1L, "user-public", 10L, "tenant-public", 30L, "membership-public", 0L, permissions);
     }
 }
