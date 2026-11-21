@@ -1,0 +1,53 @@
+openapi: 3.0.3
+info:
+  title: ZiroLogistics WMS authenticated DAST surface
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:8081
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+paths:
+  /api/wms/v1/tenants/current/profile:
+    get:
+      operationId: getCurrentTenantProfile
+      responses:
+        '200':
+          description: Authenticated tenant profile
+        '401':
+          description: Authentication required
+        '403':
+          description: Permission denied
+  /api/wms/v1/tenants/current/warehouses:
+    get:
+      operationId: listCurrentTenantWarehouses
+      responses:
+        '200':
+          description: Tenant warehouse collection
+        '401':
+          description: Authentication required
+        '403':
+          description: Permission denied
+  /api/wms/v1/tenants/current/warehouses/{warehousePublicId}:
+    get:
+      operationId: getCurrentTenantWarehouse
+      parameters:
+        - name: warehousePublicId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Warehouse detail
+        '404':
+          description: Warehouse not found
+        '401':
+          description: Authentication required
+        '403':
+          description: Permission denied

@@ -1,0 +1,193 @@
+name: Authenticated WMS API DAST
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "qa/stage-16-a5-zap-authenticated-*"
+
+permissions:
+  contents: read
+
+jobs:
+  authenticated-dast:
+    name: Authenticated WMS API scan (ZAP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Generate disposable RSA JWT key pair
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/wms-dast-private.pem
+          openssl pkey -in /tmp/wms-dast-private.pem -pubout -out /tmp/wms-dast-public.pem
+
+      - name: Write disposable Compose environment and JWT override
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/wms-dast-compose.yml <<'YAML'
+          services:
+            backend:
+              environment:
+                WMS_JWT_PUBLIC_KEY_PEM: ${WMS_JWT_PUBLIC_KEY_PEM}
+                WMS_JWT_PRIVATE_KEY_PEM: ${WMS_JWT_PRIVATE_KEY_PEM}
+          YAML
+          {
+            printf '%s\n' "WMS_DB_USERNAME=wmsdast" \
+              "WMS_DB_PASSWORD=wmsdast-password" \
+              "MYSQL_ROOT_PASSWORD=wmsdast-root-password" \
+              "WMS_FLYWAY_ENABLED=true" \
+              "WMS_JWT_ENABLED=true" \
+              "WMS_SECURITY_HTTP_AUTH_ENDPOINTS_ENABLED=false" \
+              "WMS_JWT_ISSUER=https://zirologistics.local" \
+              "WMS_JWT_SELECTION_AUDIENCE=zirologistics-wms-selection" \
+              "WMS_JWT_ACCESS_AUDIENCE=zirologistics-wms-access" \
+              "WMS_JWT_KEY_ID=wms-dast-key"
+            printf "WMS_JWT_PUBLIC_KEY_PEM='%s'\n" "$(cat /tmp/wms-dast-public.pem)"
+            printf "WMS_JWT_PRIVATE_KEY_PEM='%s'\n" "$(cat /tmp/wms-dast-private.pem)"
+          } > /tmp/wms-dast.env
+
+      - name: Start disposable WMS runtime
+        run: |
+          docker compose --env-file /tmp/wms-dast.env -f compose.yml -f /tmp/wms-dast-compose.yml up --build -d
+          for attempt in $(seq 1 90); do
+            code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8081/api/wms/v1/tenants/current/profile || true)"
+            if [[ "$code" == "401" ]]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --env-file /tmp/wms-dast.env -f compose.yml -f /tmp/wms-dast-compose.yml logs backend
+          exit 1
+
+      - name: Seed disposable tenant and least-privilege DAST identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose --env-file /tmp/wms-dast.env -f compose.yml -f /tmp/wms-dast-compose.yml exec -T mysql \
+            mysql --user=root --password=wmsdast-root-password zirologistics_wms <<'SQL'
+          INSERT INTO users (public_id, email, username, password_hash, full_name, status)
+          VALUES ('dast-user-0000-0000-0000-000000000001', 'wms-dast@example.invalid',
+                  'wms-dast', 'not-used-for-bearer-auth', 'Disposable WMS DAST User', 'ACTIVE');
+
+          INSERT INTO tenants (public_id, tenant_code, legal_name, display_name, status, timezone, default_currency)
+          VALUES ('dast-tenant-0000-0000-000000000001', 'DAST-TENANT',
+                  'Disposable WMS DAST Tenant', 'WMS DAST Tenant', 'ACTIVE', 'Asia/Jakarta', 'IDR');
+
+          INSERT INTO tenant_memberships (public_id, tenant_id, user_id, status, joined_at)
+          SELECT 'dast-membership-0000-000000000001', t.id, u.id, 'ACTIVE', UTC_TIMESTAMP(6)
+          FROM tenants t CROSS JOIN users u
+          WHERE t.tenant_code = 'DAST-TENANT' AND u.email = 'wms-dast@example.invalid';
+
+          INSERT IGNORE INTO permissions (permission_code, module, description)
+          VALUES ('WMS_TENANT_PROFILE_READ', 'TENANCY', 'Read current tenant profile for DAST'),
+                 ('WMS_WAREHOUSE_READ', 'WAREHOUSE', 'Read tenant warehouses for DAST');
+
+          INSERT INTO roles (public_id, tenant_id, role_code, role_name, is_system_role, status)
+          SELECT 'dast-role-0000-0000-0000-000000000001', id, 'DAST_READ_ONLY',
+                 'Disposable DAST Read Only', 0, 'ACTIVE'
+          FROM tenants WHERE tenant_code = 'DAST-TENANT';
+
+          INSERT INTO membership_roles (tenant_id, membership_id, role_id)
+          SELECT t.id, m.id, r.id
+          FROM tenants t
+          JOIN tenant_memberships m ON m.tenant_id = t.id
+          JOIN roles r ON r.tenant_id = t.id AND r.role_code = 'DAST_READ_ONLY'
+          WHERE t.tenant_code = 'DAST-TENANT';
+
+          INSERT INTO role_permissions (role_id, permission_id)
+          SELECT r.id, p.id
+          FROM roles r
+          JOIN tenants t ON t.id = r.tenant_id
+          JOIN permissions p ON p.permission_code IN ('WMS_TENANT_PROFILE_READ', 'WMS_WAREHOUSE_READ')
+          WHERE t.tenant_code = 'DAST-TENANT' AND r.role_code = 'DAST_READ_ONLY';
+
+          INSERT INTO warehouses (public_id, tenant_id, warehouse_code, warehouse_name, country_code, timezone, status)
+          SELECT 'dast-warehouse-0000-0000-000000000001', id, 'DAST-WH-01',
+                 'Disposable DAST Warehouse', 'ID', 'Asia/Jakarta', 'ACTIVE'
+          FROM tenants WHERE tenant_code = 'DAST-TENANT';
+          SQL
+
+      - name: Create short-lived signed access token and verify protected routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          now="$(date +%s)"
+          header="$(printf '%s' '{"alg":"RS256","kid":"wms-dast-key","typ":"JWT"}' | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          payload="$(printf '{"iss":"https://zirologistics.local","aud":["zirologistics-wms-access"],"sub":"dast-user-0000-0000-0000-000000000001","mid":"dast-membership-0000-0000-000000000001","token_use":"access","cv":0,"iat":%s,"exp":%s,"jti":"wms-dast-%s"}' "$now" "$((now + 600))" "$now" | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          signing_input="$header.$payload"
+          signature="$(printf '%s' "$signing_input" | openssl dgst -sha256 -sign /tmp/wms-dast-private.pem | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          token="$signing_input.$signature"
+          echo "ZAP_AUTH_HEADER=Authorization" >> "$GITHUB_ENV"
+          echo "ZAP_AUTH_HEADER_VALUE=Bearer $token" >> "$GITHUB_ENV"
+          echo "ZAP_AUTH_HEADER_SITE=http://127.0.0.1:8081" >> "$GITHUB_ENV"
+
+          unauthenticated="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8081/api/wms/v1/tenants/current/warehouses)"
+          test "$unauthenticated" = "401"
+          curl --fail --silent --show-error -H "Authorization: Bearer $token" \
+            http://127.0.0.1:8081/api/wms/v1/tenants/current/profile > /tmp/wms-dast-profile.json
+          curl --fail --silent --show-error -H "Authorization: Bearer $token" \
+            http://127.0.0.1:8081/api/wms/v1/tenants/current/warehouses > /tmp/wms-dast-warehouses.json
+          grep -q "DAST-TENANT" /tmp/wms-dast-profile.json
+          grep -q "DAST-WH-01" /tmp/wms-dast-warehouses.json
+
+      - name: Run authenticated ZAP API scan
+        shell: bash
+        env:
+          ZAP_AUTH_HEADER: ${{ env.ZAP_AUTH_HEADER }}
+          ZAP_AUTH_HEADER_VALUE: ${{ env.ZAP_AUTH_HEADER_VALUE }}
+          ZAP_AUTH_HEADER_SITE: ${{ env.ZAP_AUTH_HEADER_SITE }}
+        run: |
+          mkdir -p target/wms-dast-authenticated
+          docker run --rm --network host \
+            -e ZAP_AUTH_HEADER -e ZAP_AUTH_HEADER_VALUE -e ZAP_AUTH_HEADER_SITE \
+            -v "$PWD:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
+            zap-api-scan.py \
+            -t /zap/wrk/docs/security/wms-dast-authenticated-openapi.yaml \
+            -f openapi \
+            -r /zap/wrk/target/wms-dast-authenticated/report.html \
+            -w /zap/wrk/target/wms-dast-authenticated/report.md \
+            -J /zap/wrk/target/wms-dast-authenticated/report.json \
+            -I
+
+      - name: Fail on high-risk ZAP findings
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          report = pathlib.Path("target/wms-dast-authenticated/report.json")
+          if not report.exists():
+              print("Authenticated ZAP report is missing")
+              sys.exit(1)
+          data = json.loads(report.read_text())
+          high = []
+          for site in data.get("site", []):
+              for alert in site.get("alerts", []):
+                  if int(alert.get("riskcode", 0)) >= 3:
+                      high.append((alert.get("riskdesc"), alert.get("name"), alert.get("url")))
+          if high:
+              for finding in high:
+                  print("HIGH-RISK:", *finding)
+              sys.exit(1)
+          print("No High-risk ZAP alerts were reported in the authenticated API scan.")
+          PY
+
+      - name: Upload authenticated ZAP reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wms-zap-authenticated
+          path: target/wms-dast-authenticated/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Dispose disposable WMS runtime
+        if: always()
+        run: |
+          docker compose --env-file /tmp/wms-dast.env -f compose.yml -f /tmp/wms-dast-compose.yml down --volumes --remove-orphans || true
+          rm -f /tmp/wms-dast.env /tmp/wms-dast-compose.yml /tmp/wms-dast-private.pem /tmp/wms-dast-public.pem
