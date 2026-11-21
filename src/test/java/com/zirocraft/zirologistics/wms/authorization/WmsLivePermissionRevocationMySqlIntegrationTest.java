@@ -97,11 +97,20 @@ class WmsLivePermissionRevocationMySqlIntegrationTest {
                 """, permissionCode);
         Long permissionId = jdbc.queryForObject(
                 "SELECT id FROM permissions WHERE permission_code = ?", Long.class, permissionCode);
+        String retainedPermissionCode = permissionCode + "_RETAINED";
+        jdbc.update("""
+                INSERT INTO permissions (permission_code, module, description)
+                VALUES (?, 'A3_TEST', 'Permission retained after partial revocation')
+                """, retainedPermissionCode);
+        Long retainedPermissionId = jdbc.queryForObject(
+                "SELECT id FROM permissions WHERE permission_code = ?", Long.class, retainedPermissionCode);
 
         jdbc.update("INSERT INTO membership_roles (tenant_id, membership_id, role_id) VALUES (?, ?, ?)",
                 tenant.getId(), membership.getId(), roleId);
         jdbc.update("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
                 roleId, permissionId);
+        jdbc.update("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
+                roleId, retainedPermissionId);
 
         String userPublicId = user.getPublicId();
         String membershipPublicId = membership.getPublicId();
@@ -116,6 +125,8 @@ class WmsLivePermissionRevocationMySqlIntegrationTest {
                 accessService.resolve(userPublicId, membershipPublicId);
         assertFalse(afterPermissionRevocation.permissionCodes().contains(permissionCode),
                 "revoked role permission must not survive in a previously authenticated identity");
+        assertTrue(afterPermissionRevocation.permissionCodes().contains(retainedPermissionCode),
+                "unrevoked permission must remain effective");
 
         jdbc.update("DELETE FROM membership_roles WHERE tenant_id = ? AND membership_id = ? AND role_id = ?",
                 tenant.getId(), membership.getId(), roleId);
