@@ -48,7 +48,8 @@ public class WmsJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
             throw invalidToken();
         }
 
-        if (!userPublicId.equals(access.userPublicId())
+        if (access == null
+                || !userPublicId.equals(access.userPublicId())
                 || !membershipPublicId.equals(access.membershipPublicId())) {
             throw invalidToken();
         }
