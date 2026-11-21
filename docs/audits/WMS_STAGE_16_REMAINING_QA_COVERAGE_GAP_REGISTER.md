@@ -1,7 +1,7 @@
 # Stage 16 Remaining QA Coverage Gap Register
 
-**Status:** working register; not a readiness verdict  
-**Baseline:** main at `4141e74bf95ac575d83e5f151806d01f24fc47a5`  
+**Status:** working register; not a readiness verdict
+**Baseline:** main at `4141e74bf95ac575d83e5f151806d01f24fc47a5`
 **Purpose:** direct subsequent QA waves toward evidence gaps without duplicating tests already present or currently proposed in open PRs.
 
 ## Evidence interpretation
