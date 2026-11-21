@@ -61,6 +61,32 @@ class WmsJwtAuthenticationConverterTest {
     }
 
     @Test
+    void reflectsPermissionRevocationOnNextAuthenticationConversion() {
+        Jwt token = accessToken("user-public-id", "membership-public-id");
+        WmsMembershipAccess beforeRevocation = new WmsMembershipAccess(
+                11L, "user-public-id", 22L, "tenant-public-id",
+                33L, "membership-public-id", Set.of("inventory.balance.read"));
+        WmsMembershipAccess afterRevocation = new WmsMembershipAccess(
+                11L, "user-public-id", 22L, "tenant-public-id",
+                33L, "membership-public-id", Set.of());
+
+        when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
+                .thenReturn(beforeRevocation)
+                .thenReturn(afterRevocation);
+
+        Authentication before = converter.convert(token);
+        Authentication after = converter.convert(token);
+
+        assertThat(before.getAuthorities())
+                .extracting("authority")
+                .containsExactly("PERM_inventory.balance.read");
+        assertThat(after.getAuthorities()).isEmpty();
+        assertThat(((WmsAuthenticatedPrincipal) after.getPrincipal()).permissionCodes()).isEmpty();
+        verify(membershipAccessService, org.mockito.Mockito.times(2))
+                .resolve("user-public-id", "membership-public-id");
+    }
+
+    @Test
     void rejectsAccessTokenWithoutSubjectOrMembershipClaim() {
         Jwt missingSubject = accessToken(null, "membership-public-id");
         Jwt missingMembership = accessToken("user-public-id", null);
