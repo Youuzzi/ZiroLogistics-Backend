@@ -19,6 +19,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -56,6 +57,12 @@ public class WmsAuthenticationExceptionHandler {
                 .body(new ApiError("INVALID_ACTION_TOKEN", "The action token is invalid or expired"));
     }
 
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiError> unsupportedMediaType(HttpMediaTypeNotSupportedException ignored) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(new ApiError("UNSUPPORTED_MEDIA_TYPE", "The request content type is not supported"));
+    }
+
     @ExceptionHandler({IllegalArgumentException.class, MethodArgumentNotValidException.class,
             ConstraintViolationException.class, HttpMessageNotReadableException.class,
             MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class})
@@ -70,7 +77,6 @@ public class WmsAuthenticationExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError("REQUEST_CONFLICT", "The requested operation cannot be completed"));
     }
-
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> internalError(Exception ignored) {
