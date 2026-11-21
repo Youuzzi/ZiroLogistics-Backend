@@ -88,6 +88,7 @@ class WmsPasswordManagementMySqlIntegrationTest {
 
         UserEntity updated = userRepository.findById(user.getId()).orElseThrow();
         assertTrue(passwordEncoder.matches("ResetPassword456", updated.getPasswordHash()));
+        assertEquals(1L, updated.getCredentialVersion());
         assertFalse(passwordEncoder.matches("OriginalPassword123", updated.getPasswordHash()));
 
         WmsIdentityActionTokenRecord token = findToken(tokenGenerator.digestPresentedToken(rawToken));
@@ -112,6 +113,7 @@ class WmsPasswordManagementMySqlIntegrationTest {
 
         UserEntity updated = userRepository.findById(user.getId()).orElseThrow();
         assertTrue(passwordEncoder.matches("ChangedPassword456", updated.getPasswordHash()));
+        assertEquals(1L, updated.getCredentialVersion());
 
         WmsIdentityActionTokenRecord token = findToken(tokenGenerator.digestPresentedToken(rawToken));
         assertNull(token.consumedAt());
