@@ -43,7 +43,9 @@ public class WmsSecurityConfiguration {
         http
                 .securityMatcher("/**")
                 .cors(cors -> cors.configurationSource(wmsCorsConfigurationSource))
-                .csrf(AbstractHttpConfigurer::disable)
+                .csrf(csrf -> csrf.ignoringRequestMatchers(
+                        // WMS APIs authenticate exclusively with bearer tokens and never use browser sessions/cookies.
+                        "/api/wms/**", "/wms/security-probe"))
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
@@ -86,7 +88,6 @@ public class WmsSecurityConfiguration {
         http
                 .securityMatcher("/**")
                 .cors(cors -> cors.configurationSource(wmsCorsConfigurationSource))
-                .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
