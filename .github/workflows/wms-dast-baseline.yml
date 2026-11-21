@@ -2,6 +2,9 @@ name: WMS DAST Baseline
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/wms-dast-baseline.yml
   push:
     branches:
       - qa/stage-16-a5-dast-execution
