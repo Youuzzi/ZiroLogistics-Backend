@@ -28,6 +28,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.UUID;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.*;
 
