@@ -88,7 +88,7 @@ jobs:
 
       - name: Capture resolved Maven dependency tree
         if: steps.scope.outputs.run_backend_tests == 'true'
-        run: ./mvnw --batch-mode --no-transfer-progress dependency:tree -Dverbose -DoutputFile=target/dependency-tree.txt
+        run: ./mvnw --batch-mode --no-transfer-progress dependency:tree -Dverbose -DoutputFile=dependency-tree.txt
 
       - name: Run full regression and package WMS runtime
         if: steps.scope.outputs.run_backend_tests == 'true'
@@ -99,7 +99,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wms-maven-dependency-tree
-          path: target/dependency-tree.txt
+          path: dependency-tree.txt
           if-no-files-found: warn
           retention-days: 30
 
