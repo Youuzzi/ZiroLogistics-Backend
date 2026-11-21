@@ -82,6 +82,66 @@ class WmsHttpSecurityEnabledTest {
     }
 
     @Test
+    void permitsOnlyTheExplicitPublicPostRouteAllowlist() throws Exception {
+        String[] publicPostRoutes = {
+                "/api/wms/v1/auth/credentials",
+                "/api/wms/v1/auth/tenant-selection",
+                "/api/wms/v1/auth/password-reset-requests",
+                "/api/wms/v1/auth/password-resets",
+                "/api/wms/v1/auth/email-verification-requests",
+                "/api/wms/v1/auth/email-verifications",
+                "/api/wms/v1/invitations/acceptances"
+        };
+
+        for (String route : publicPostRoutes) {
+            var result = mockMvc.perform(post(route)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andReturn();
+            org.assertj.core.api.Assertions.assertThat(result.getResponse().getStatus())
+                    .as("explicit public POST route %s must pass the authentication boundary", route)
+                    .isNotEqualTo(401);
+            mockMvc.perform(get(route))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        mockMvc.perform(post("/api/wms/v1/invitations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/wms/v1/auth/credentials/extra")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void unsupportedMethodOnProtectedRouteDoesNotInvokeTheController() throws Exception {
+        Instant now = Instant.now();
+        Jwt jwt = Jwt.withTokenValue("valid-test-token")
+                .header("alg", "RS256")
+                .subject("user-public-id")
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(600))
+                .claim("token_use", "access")
+                .claim("mid", "membership-public-id")
+                .build();
+        WmsAuthenticatedPrincipal principal = new WmsAuthenticatedPrincipal(
+                "user-public-id", 10L, "tenant-public-id",
+                20L, "membership-public-id", Set.of());
+        WmsJwtAuthenticationToken authentication = new WmsJwtAuthenticationToken(principal, Set.of());
+
+        when(accessJwtDecoder.decode("valid-test-token")).thenReturn(jwt);
+        when(authenticationConverter.convert(jwt)).thenReturn(authentication);
+
+        mockMvc.perform(post("/wms/security-probe")
+                        .header("Authorization", "Bearer valid-test-token"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("Exception"))));
+    }
+
+    @Test
     void acceptsOnlyBearerTokensResolvedByWmsAuthenticationConverter() throws Exception {
         Instant now = Instant.now();
         Jwt jwt = Jwt.withTokenValue("valid-test-token")
