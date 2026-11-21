@@ -149,6 +149,7 @@ jobs:
           ZAP_AUTH_HEADER_SITE: ${{ env.ZAP_AUTH_HEADER_SITE }}
         run: |
           mkdir -p target/wms-dast-authenticated
+          chmod 777 target/wms-dast-authenticated
           docker run --rm --network host \
             -e ZAP_AUTH_HEADER -e ZAP_AUTH_HEADER_VALUE -e ZAP_AUTH_HEADER_SITE \
             -v "$PWD:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
