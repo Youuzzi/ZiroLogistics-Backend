@@ -50,6 +50,7 @@ class WmsJwtClaimsHttpSecurityTest {
                 .header("alg", "RS256")
                 .issuedAt(now).expiresAt(now.plusSeconds(600))
                 .claim("token_use", "access")
+                .claim("cv", 0L)
                 .claim("mid", "membership-public-id")
                 .build();
         when(accessJwtDecoder.decode("missing-subject")).thenReturn(jwt);
@@ -68,6 +69,7 @@ class WmsJwtClaimsHttpSecurityTest {
                 .subject("user-public-id")
                 .issuedAt(now).expiresAt(now.plusSeconds(600))
                 .claim("token_use", "access")
+                .claim("cv", 0L)
                 .build();
         when(accessJwtDecoder.decode("missing-membership")).thenReturn(jwt);
 
@@ -85,6 +87,7 @@ class WmsJwtClaimsHttpSecurityTest {
                 .subject("user-public-id")
                 .issuedAt(now).expiresAt(now.plusSeconds(600))
                 .claim("token_use", "password_reset")
+                .claim("cv", 0L)
                 .claim("mid", "membership-public-id")
                 .build();
         when(accessJwtDecoder.decode("password-reset-purpose")).thenReturn(jwt);
@@ -103,6 +106,7 @@ class WmsJwtClaimsHttpSecurityTest {
                 .subject("user-public-id")
                 .issuedAt(now).expiresAt(now.plusSeconds(600))
                 .claim("token_use", "access")
+                .claim("cv", 0L)
                 .claim("mid", "foreign-membership-public-id")
                 .build();
         when(accessJwtDecoder.decode("foreign-membership")).thenReturn(jwt);
@@ -124,6 +128,7 @@ class WmsJwtClaimsHttpSecurityTest {
                 .subject("user-public-id")
                 .issuedAt(now).expiresAt(now.plusSeconds(600))
                 .claim("token_use", "access")
+                .claim("cv", 0L)
                 .claim("mid", 42L)
                 .build();
         when(accessJwtDecoder.decode("malformed-membership-claim")).thenReturn(jwt);
