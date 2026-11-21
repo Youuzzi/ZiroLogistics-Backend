@@ -2,6 +2,9 @@ name: WMS DAST Baseline
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - "qa/stage-16-a5-zap-baseline-*"
 
 permissions:
   contents: read
