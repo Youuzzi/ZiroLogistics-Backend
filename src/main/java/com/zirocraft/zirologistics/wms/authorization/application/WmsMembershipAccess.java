@@ -12,6 +12,7 @@ public record WmsMembershipAccess(
         String tenantPublicId,
         Long membershipId,
         String membershipPublicId,
+        Long credentialVersion,
         Set<String> permissionCodes) {
 
     public WmsMembershipAccess {
