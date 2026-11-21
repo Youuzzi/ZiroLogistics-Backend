@@ -36,7 +36,10 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -58,12 +61,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 class WmsActiveBearerTokenLifecycleMySqlHttpTest {
     private static final String ROUTE = "/api/wms/v1/security-probe";
+    private static final KeyPair JWT_KEY_PAIR = generateJwtKeyPair();
 
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
-            .withDatabaseName("zirowms_active_token_lifecycle_http_test")
-            .withUsername("wms_active_token_lifecycle_http_test")
-            .withPassword("wms_active_token_lifecycle_http_test");
+            .withDatabaseName("zirowms_active_token_http_test")
+            .withUsername("wms_active_token_http_test")
+            .withPassword("wms_active_token_http_test");
 
     @DynamicPropertySource
     static void configureDatabase(DynamicPropertyRegistry registry) {
@@ -73,6 +77,14 @@ class WmsActiveBearerTokenLifecycleMySqlHttpTest {
         registry.add("spring.flyway.enabled", () -> true);
         registry.add("spring.flyway.locations", () -> "classpath:db/wms-migration");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        registry.add("wms.security.jwt.issuer", () -> "https://auth.zirologistics.test");
+        registry.add("wms.security.jwt.tenant-selection-audience", () -> "zirologistics-wms-selection");
+        registry.add("wms.security.jwt.access-audience", () -> "zirologistics-wms-api");
+        registry.add("wms.security.jwt.key-id", () -> "wms-active-token-test-key");
+        registry.add("wms.security.jwt.public-key-pem",
+                () -> pem("PUBLIC KEY", JWT_KEY_PAIR.getPublic().getEncoded()));
+        registry.add("wms.security.jwt.private-key-pem",
+                () -> pem("PRIVATE KEY", JWT_KEY_PAIR.getPrivate().getEncoded()));
     }
 
     @Autowired private MockMvc mockMvc;
@@ -147,6 +159,22 @@ class WmsActiveBearerTokenLifecycleMySqlHttpTest {
 
         assertNotEquals(membershipA.getPublicId(), membershipB.getPublicId());
         performProtectedRequest(token).andExpect(status().isUnauthorized());
+    }
+
+    private static KeyPair generateJwtKeyPair() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            return generator.generateKeyPair();
+        } catch (java.security.GeneralSecurityException exception) {
+            throw new ExceptionInInitializerError(exception);
+        }
+    }
+
+    private static String pem(String label, byte[] encoded) {
+        return "-----BEGIN " + label + "-----\n"
+                + Base64.getMimeEncoder(64, new byte[]{'\n'}).encodeToString(encoded)
+                + "\n-----END " + label + "-----";
     }
 
     private org.springframework.test.web.servlet.ResultActions performProtectedRequest(String token)
