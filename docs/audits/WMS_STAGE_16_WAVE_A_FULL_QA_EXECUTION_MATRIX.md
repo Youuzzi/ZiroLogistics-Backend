@@ -1,7 +1,7 @@
 # Stage 16 Wave A — Full Security QA Execution Matrix
 
-**Status:** Execution plan / evidence map; not a closure declaration  
-**Scope:** A1 Authentication Abuse & Token Security; A2 Identity, Membership & Tenant Lifecycle; A3 Authorization & Permission Revocation; A4 HTTP Runtime Security; A5 Automated Security Scanning  
+**Status:** Execution plan / evidence map; not a closure declaration
+**Scope:** A1 Authentication Abuse & Token Security; A2 Identity, Membership & Tenant Lifecycle; A3 Authorization & Permission Revocation; A4 HTTP Runtime Security; A5 Automated Security Scanning
 **Baseline:** main at 4141e74bf95ac575d83e5f151806d01f24fc47a5
 
 ## Execution model
