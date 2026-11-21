@@ -98,6 +98,22 @@ class WmsPasswordManagementServiceTest {
     }
 
     @Test
+    void rejectsPasswordChangeWhenNewPasswordMatchesCurrentPasswordBeforeTransaction() {
+        UserEntity snapshot = activeUser(42L, "account-public-42", "old-argon2-hash", 7L);
+        when(userRepository.findByPublicId("account-public-42")).thenReturn(Optional.of(snapshot));
+        when(passwordEncoder.matches("CurrentPassword123", "old-argon2-hash")).thenReturn(true);
+        when(passwordEncoder.matches("CurrentPassword123", "old-argon2-hash")).thenReturn(true);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.changePassword(
+                        "account-public-42", "CurrentPassword123", "CurrentPassword123"));
+
+        verify(passwordEncoder, never()).encode(anyString());
+        verify(transactionManager, never()).getTransaction(any());
+        verify(userRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void rejectsIncorrectCurrentPasswordBeforeOpeningWriteTransaction() {
         UserEntity snapshot = activeUser(42L, "account-public-42", "old-argon2-hash", 7L);
         when(userRepository.findByPublicId("account-public-42")).thenReturn(Optional.of(snapshot));
