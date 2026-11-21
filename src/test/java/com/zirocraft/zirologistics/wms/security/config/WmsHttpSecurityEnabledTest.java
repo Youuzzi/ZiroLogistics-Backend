@@ -23,6 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 import java.util.Set;
 
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -106,6 +108,20 @@ class WmsHttpSecurityEnabledTest {
                         .accept(MediaType.TEXT_PLAIN))
                 .andExpect(status().isOk())
                 .andExpect(content().string("wms-protected"));
+    }
+
+    @Test
+    void rejectsBearerTokenWhenJwtDecoderCannotValidateIt() throws Exception {
+        when(accessJwtDecoder.decode("invalid-test-token"))
+                .thenThrow(new org.springframework.security.oauth2.jwt.BadJwtException("invalid token"));
+
+        mockMvc.perform(get("/wms/security-probe")
+                        .header("Authorization", "Bearer invalid-test-token")
+                        .accept(MediaType.TEXT_PLAIN))
+                .andExpect(status().isUnauthorized());
+
+        verify(accessJwtDecoder).decode("invalid-test-token");
+        verifyNoInteractions(authenticationConverter);
     }
 
     @RestController
