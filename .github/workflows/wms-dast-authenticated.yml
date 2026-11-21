@@ -118,7 +118,7 @@ jobs:
             -d '{"email":"zap-test@example.test","password":"password"}' \
             http://127.0.0.1:8081/api/wms/v1/auth/credentials)"
           selection_token="$(jq -er '.tenantSelectionToken' <<< "$login_response")"
-          membership_public_id="$(docker compose --project-name "wms-dast-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --env-file .env.dast -f compose.yml exec -T mysql sh -c 'mysql --protocol=tcp --host=127.0.0.1 --user=root --password="$MYSQL_ROOT_PASSWORD" --batch --skip-column-names zirologistics_wms -e "SELECT public_id FROM tenant_memberships WHERE user_id=(SELECT id FROM users WHERE email=\\"zap-test@example.test\\")"' | tr -d '\r')"
+          membership_public_id="$(jq -er '.memberships[0].membershipPublicId' <<< "$login_response")"
           selection_payload="$(jq -nc --arg token "$selection_token" --arg membership "$membership_public_id" '{tenantSelectionToken:$token,membershipPublicId:$membership}')"
           access_response="$(curl --fail-with-body --silent --show-error \
             -H 'Content-Type: application/json' \
