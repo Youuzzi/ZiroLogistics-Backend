@@ -2,7 +2,7 @@
 
 **Status:** Working audit; Stage 16 remains OPEN.  
 **Audit baseline:** `main` at `6f34e215c871c994a6ef2034cdd9b0cf824afe0c` (2026-11-21 audit).  
-**Scope:** 64 open PRs observed in the repository. PR checks are evidence for their exact head commits only; they are not evidence that changes are integrated into `main`.
+**Scope:** 62 currently open Stage 16 PRs in the #173–#253 range (PR #228 is now closed as an exact duplicate of #244). PR checks are evidence for their exact head commits only; they are not evidence that changes are integrated into `main`.
 
 ## Evidence rules
 
@@ -14,11 +14,11 @@
 
 ## Current repository and CI snapshot
 
-- Open PR count: **64**.
+- Open Stage 16 PR count: **62** (plus older open PR #18 outside this Stage 16 range).
 - Main SHA at audit: `6f34e215c871c994a6ef2034cdd9b0cf824afe0c`; no PR in this audit has been merged.
-- The ten PR branches affected by the Testcontainers fixture defect (#230, #234, #235, #236, #237, #238, #243, #244, #247, #248) were updated with the complete corrected lifecycle test fixture. Their new Backend CI and CodeQL runs completed successfully; #235's WMS DAST Baseline also completed successfully.
-- #245 Authenticated WMS API DAST passed on its current recorded head. #249 Backend CI and CodeQL passed.
-- PR heads #173–#253 reviewed in this matrix have successful configured build/test, CodeQL, and OSV checks where those checks are configured. PR #18 is an older documentation PR with Build and test passing. #253 was subsequently reconciled to combine strict claim-type validation with a null-membership guard; **its new head `a021e97d1ff41c9bf4fac1722f7514773d3e12c4` has a fresh CI run in progress**, so do not treat that new head as green yet.
+- Ten initial PR branches affected by the Testcontainers fixture defect (#230, #234, #235, #236, #237, #238, #243, #244, #247, #248) were updated with the corrected lifecycle fixture and passed their then-current Backend CI and CodeQL checks; #235's WMS DAST Baseline also passed. A later log audit found the same stale fixture in #173, #214, and #220. Those three branches have now received the same correction; their fresh CI runs must finish before they can be marked green.
+- #245 Authenticated WMS API DAST passed on its current recorded head. #249 Backend CI and CodeQL passed. #234 passed Backend CI, CodeQL, and OSV after restoring existing role-management tests. #253 passed Backend CI, CodeQL, and OSV after removing a duplicate unit test while retaining the null-resolution test.
+- Most reviewed PR heads have successful configured Backend CI, CodeQL, and OSV checks. Known current exceptions before the latest fixture correction were #173, #214, and #220; their old heads failed because MySQL rejected the 37-character Testcontainers username. The corrected heads are `c626a6fa0b42f5e223167a609ed25055d1f1bf04` (#173), `fbd9187d77485e97e3f5e5a30e45444cb6cc4ff7` (#214), and `5ad2333451c21a9fb2dd9ca6a8c059f4341fb349` (#220); fresh CI is pending. PR #18 is an older documentation PR with Build and test passing. #253's latest head is `1e957e2ab9425329ea295f6ace21d30b33eb6b54` and its configured Backend CI, CodeQL, and OSV checks passed.
 - The k6 workflow in #173 is manual-dispatch only and has not been executed. Its document explicitly labels performance results PROPOSED / NOT EXECUTED.
 - Successful static scans do not imply that findings have been triaged or that authenticated performance/DAST gates are complete.
 
@@ -32,7 +32,7 @@
 | #238 | Malformed JWT claims at HTTP boundary | HTTP runtime test; tests safe 401 and prevents protected controller invocation |
 | #247 | Malformed/foreign JWT claims at protected HTTP runtime | HTTP runtime + real converter/service boundary; overlaps claim validation changes with #238/#252 |
 | #252 | Reject malformed JWT claim types before membership lookup | Converter production fix + unit test; non-string `mid` must be rejected without service lookup |
-| #253 | Reject unresolved membership during JWT conversion | Converter null-result guard + unit test; reconciled to strict claim-type semantics; fresh CI pending after latest update |
+| #253 | Reject unresolved membership during JWT conversion | Converter null-result guard + unit test; reconciled to strict claim-type semantics; latest Backend CI, CodeQL, and OSV passed |
 | #217 | JWT issuer and expiry validators | Decoder/configuration tests; verify actual configured issuer, audience, expiry, and clock-skew contract |
 | #211 | Expired password-reset token rejected transactionally | MySQL integration test; verify token remains unconsumed and password unchanged |
 | #212 | Reject password change when new password equals current password | Service test; verify rejection occurs before transaction/write |
@@ -49,7 +49,7 @@
 | #243 | MySQL membership revocation and foreign tenant switch denial | MySQL integration; existing membership state and tenant switching |
 | #244 | Tenant context cannot be spoofed by HTTP inputs | Controller HTTP test; overlaps #228/#236 |
 | #236 | Reject tenant context overrides from HTTP input | Controller/service boundary test; overlaps #228/#244 |
-| #228 | Reject tenant ID spoofing through headers, query and body | Controller HTTP test; same tenant-selector family as #236/#244 |
+| #228 | Reject tenant ID spoofing through headers, query and body | Closed as exact duplicate of #244 after complete patch comparison; the two identical test methods remain in #244 |
 | #219 | Tenant and membership suspension deny access | Repository/service integration evidence for active token lifecycle |
 | #218 | Membership rejection at protected HTTP runtime | HTTP runtime boundary |
 | #206 | Foreign warehouse public-ID read boundary | Application/service test |
@@ -70,7 +70,7 @@
 | #177 | Inventory tenant-boundary source predicate audit | Source-code audit only; not runtime proof |
 | #178 | Inventory cross-tenant negative-test specification | Specification only; not executed evidence |
 
-**A2 integration notes:** #228/#236/#244 overlap on tenant selectors. Compare their exact assertions and covered input vectors before deciding whether all are independently valuable. #174/#177 are audits and #178 is a specification; do not count them as runtime tests.
+**A2 integration notes:** #228 was closed because its two added test methods were byte-for-byte identical to #244. #236 remains separate: it exercises the HTTP security tenant-context path, while #244 tests tenant-profile controller input handling. Confirm both layers remain complementary during integration. #174/#177 are audits and #178 is a specification; do not count them as runtime tests.
 
 ### A3 — Authorization and permission revocation
 
@@ -147,8 +147,8 @@
 
 1. **Shared Testcontainers fixture:** #251 corrects the MySQL username limit. Several later branches carry the same fixture change. Prefer integrating #251 before dependent branches, then confirm duplicate fixture hunks become no-ops rather than conflicts.
 2. **JWT converter overlap:** #252 introduces strict claim-type checks; #253 now includes those checks plus a null-result guard. #238/#247 also carry the same strict-claim converter hunk. Integrate #252 before #253, then inspect #238/#247 for test-only residual changes.
-3. **Duplicate HTTP test path:** #247 and #253 originally added different versions of `WmsJwtClaimsHttpSecurityTest`. The duplicate file was removed from the latest #253 head; verify that remains true after integration.
-4. **Tenant-selector overlap:** #228/#236/#244 cover similar header/query/body spoofing vectors. Compare exact test methods and controller routes; retain complementary cases, avoid redundant classes.
+3. **JWT HTTP test overlap:** #247 owns the real-converter HTTP claim tests. #253's duplicate `WmsJwtClaimsHttpSecurityTest` was removed; its unique null-membership unit test remains. #238 provides a separate filter-boundary probe using a mocked converter, so retain only if its filter behavior is still not covered by #247.
+4. **Tenant-selector overlap:** #228 is closed as duplicate of #244. #236 and #244 test distinct security/controller layers; compare their exact vectors and preserve complementary assertions.
 5. **Security scan distinction:** #235 is unauthenticated ZAP baseline; #245 is authenticated DAST. Both have different purposes and neither substitutes for manual finding triage.
 6. **Performance gap:** #173 currently defines a low-load perimeter/denial-path smoke only. It does not prove authenticated endpoint throughput, business workflow performance, or production capacity.
 7. **Documentation baselines:** #213 and earlier audit documents refer to older main SHA `4141e74bf95ac575d83e5f151806d01f24fc47a5`; refresh baselines and status after integration.
