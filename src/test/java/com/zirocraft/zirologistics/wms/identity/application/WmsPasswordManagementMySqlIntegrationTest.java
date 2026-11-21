@@ -159,7 +159,8 @@ class WmsPasswordManagementMySqlIntegrationTest {
 
         jdbcTemplate.update("""
                 UPDATE wms_identity_action_tokens
-                SET expires_at = UTC_TIMESTAMP() - INTERVAL 1 SECOND
+                SET created_at = UTC_TIMESTAMP() - INTERVAL 2 SECOND,
+                    expires_at = UTC_TIMESTAMP() - INTERVAL 1 SECOND
                 WHERE token_digest = ?
                 """, digest);
 
