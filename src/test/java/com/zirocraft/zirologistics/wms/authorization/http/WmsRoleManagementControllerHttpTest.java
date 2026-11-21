@@ -13,6 +13,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
@@ -112,6 +113,20 @@ class WmsRoleManagementControllerHttpTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
         verifyNoInteractions(service);
+    }
+
+    @Test
+    void mapsPermissionRevocationToForbiddenWithoutLeakingDetails() throws Exception {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(service.listRoles(principal, 0, 200))
+                .thenThrow(new AccessDeniedException("sensitive authorization diagnostic"));
+
+        mockMvc.perform(get(ROUTE).with(authentication(authenticated(principal))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+                .andExpect(jsonPath("$.message").value("Access denied"))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("sensitive authorization diagnostic"))));
     }
 
     private static UsernamePasswordAuthenticationToken authenticated(WmsAuthenticatedPrincipal principal) {
