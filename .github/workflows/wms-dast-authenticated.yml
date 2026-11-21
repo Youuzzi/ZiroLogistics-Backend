@@ -130,6 +130,27 @@ jobs:
           echo "WMS_ACCESS_TOKEN=$access_token" >> "$GITHUB_ENV"
           echo "Disposable access token obtained for authenticated ZAP route scans."
 
+      - name: Verify bearer access on protected route inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="http://127.0.0.1:8081"
+          for route in \
+            /api/wms/v1/tenants/current/profile \
+            /api/wms/v1/tenants/current/warehouses \
+            /api/wms/v1/tenants/current/items \
+            /api/wms/v1/tenants/current/inbound-receipts \
+            /api/wms/v1/tenants/current/outbound-shipments; do
+            status="$(curl --silent --show-error --max-time 15 --output /tmp/wms-auth-route-response --write-out '%{http_code}' \
+              -H "Authorization: Bearer ${WMS_ACCESS_TOKEN}" "$base$route")"
+            if [[ "$status" != "200" ]]; then
+              echo "Authenticated route $route returned HTTP $status"
+              cat /tmp/wms-auth-route-response || true
+              exit 1
+            fi
+            echo "Authenticated route verified: $route (HTTP 200)"
+          done
+
       - name: ZAP authenticated scan - tenant profile
         uses: zaproxy/action-baseline@v0.15.0
         with:
