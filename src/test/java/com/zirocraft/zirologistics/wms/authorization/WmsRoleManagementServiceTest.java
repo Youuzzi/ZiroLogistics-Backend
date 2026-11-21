@@ -125,6 +125,32 @@ class WmsRoleManagementServiceTest {
                 () -> service.membershipRoles(principal(), "missing-membership"));
     }
 
+    @Test
+    void re_resolvesEffectivePermissionsForEveryRequestSoRevocationAppliesToAnExistingPrincipal() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_READ")))
+                .thenReturn(access(Set.of("WMS_TENANT_PROFILE_UPDATE")));
+
+        service.listRoles(principal);
+        assertThrows(AccessDeniedException.class, () -> service.listRoles(principal));
+
+        verify(accessService, times(2)).resolve("user-public", "membership-public");
+        verify(jdbc, times(1)).queryForList(
+                contains("FROM roles WHERE tenant_id = ?"), eq(10L), eq(200), eq(0L));
+    }
+
+    @Test
+    void deniesRolePermissionManagementWithoutDedicatedManagementPermissionBeforeDatabaseMutation() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_READ", "WMS_ROLE_UPDATE")));
+
+        assertThrows(AccessDeniedException.class, () ->
+                service.replaceRolePermissions(principal(), "custom-role", List.of("WMS_ITEM_READ"), 0));
+
+        verifyNoInteractions(jdbc);
+    }
+
     private static WmsAuthenticatedPrincipal principal() {
         return new WmsAuthenticatedPrincipal(
                 "user-public", 10L, "tenant-public", 30L, "membership-public",
