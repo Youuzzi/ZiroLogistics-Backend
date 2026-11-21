@@ -126,6 +126,33 @@ class WmsRoleManagementServiceTest {
     }
 
     @Test
+    void deniesEachRoleAdministrationOperationWithoutItsDedicatedPermissionBeforeDatabaseMutation() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_READ")));
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.createRole(principal, "CUSTOM_ROLE", "Custom Role", null));
+        assertThrows(AccessDeniedException.class,
+                () -> service.updateRole(principal, "role-public", "Updated", null, 0));
+        assertThrows(AccessDeniedException.class,
+                () -> service.deactivateRole(principal, "role-public", 0));
+        assertThrows(AccessDeniedException.class,
+                () -> service.permissionCatalogue(principal));
+        assertThrows(AccessDeniedException.class,
+                () -> service.replaceRolePermissions(principal, "role-public", List.of("WMS_ITEM_READ"), 0));
+        assertThrows(AccessDeniedException.class,
+                () -> service.membershipRoles(principal, "target-membership"));
+        assertThrows(AccessDeniedException.class,
+                () -> service.assignRole(principal, "target-membership", "role-public"));
+        assertThrows(AccessDeniedException.class,
+                () -> service.removeRole(principal, "target-membership", "role-public"));
+
+        verify(accessService, times(8)).resolve("user-public", "membership-public");
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
     void re_resolvesEffectivePermissionsForEveryRequestSoRevocationAppliesToAnExistingPrincipal() {
         WmsAuthenticatedPrincipal principal = principal();
         when(accessService.resolve("user-public", "membership-public"))
