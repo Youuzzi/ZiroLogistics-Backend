@@ -34,6 +34,7 @@ public class WmsJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
         String userPublicId = jwt.getSubject();
         String membershipPublicId = jwt.getClaimAsString("mid");
         String tokenUse = jwt.getClaimAsString("token_use");
+        Number tokenCredentialVersion = jwt.getClaim("cv");
 
         if (!"access".equals(tokenUse)
                 || userPublicId == null || userPublicId.isBlank()
@@ -49,7 +50,9 @@ public class WmsJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
         }
 
         if (!userPublicId.equals(access.userPublicId())
-                || !membershipPublicId.equals(access.membershipPublicId())) {
+                || !membershipPublicId.equals(access.membershipPublicId())
+                || tokenCredentialVersion == null
+                || tokenCredentialVersion.longValue() != access.credentialVersion()) {
             throw invalidToken();
         }
 
