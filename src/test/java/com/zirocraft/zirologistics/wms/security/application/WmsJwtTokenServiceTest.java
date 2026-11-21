@@ -91,7 +91,7 @@ class WmsJwtTokenServiceTest {
         assertThat(claims.getAudience()).containsExactly("zirologistics-wms-api");
         assertThat(claims.getClaimAsString("token_use")).isEqualTo("access");
         assertThat(claims.getClaimAsString("mid")).isEqualTo("membership-public-id");
-        assertThat((Long) claims.getClaim("cv")).isEqualTo(4L);
+        assertThat(claims.getClaims()).containsEntry("cv", 4L);
         assertThat(claims.getId()).isNotBlank();
         assertThat(Duration.between(claims.getIssuedAt(), claims.getExpiresAt()))
                 .isEqualTo(Duration.ofMinutes(10));
