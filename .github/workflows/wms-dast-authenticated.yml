@@ -1,0 +1,215 @@
+name: WMS Authenticated DAST
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/wms-dast-authenticated.yml
+      - compose.yml
+
+permissions:
+  contents: read
+
+jobs:
+  zap-authenticated:
+    name: Authenticated disposable WMS route scan (ZAP Baseline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Create disposable database and JWT credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/wms-dast-private.pem
+          openssl pkey -in /tmp/wms-dast-private.pem -pubout -out /tmp/wms-dast-public.pem
+          db_password="$(openssl rand -hex 24)"
+          root_password="$(openssl rand -hex 32)"
+          cat > .env.dast <<EOF
+          WMS_DB_USERNAME=wms_dast
+          WMS_DB_PASSWORD=${db_password}
+          MYSQL_ROOT_PASSWORD=${root_password}
+          WMS_FLYWAY_ENABLED=true
+          WMS_CORS_ALLOWED_ORIGINS=
+          WMS_JWT_ENABLED=true
+          WMS_SECURITY_HTTP_AUTH_ENDPOINTS_ENABLED=true
+          WMS_JWT_ISSUER=https://wms-dast.invalid
+          WMS_JWT_SELECTION_AUDIENCE=wms-dast-selection
+          WMS_JWT_ACCESS_AUDIENCE=wms-dast-access
+          WMS_JWT_KEY_ID=dast-ephemeral-key
+          WMS_JWT_PUBLIC_KEY_PEM='$(cat /tmp/wms-dast-public.pem)'
+          WMS_JWT_PRIVATE_KEY_PEM='$(cat /tmp/wms-dast-private.pem)'
+          EOF
+          chmod 600 .env.dast
+          echo "MYSQL_ROOT_PASSWORD=${root_password}" >> "$GITHUB_ENV"
+
+      - name: Validate isolated Compose configuration
+        run: docker compose --project-name "wms-dast-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --env-file .env.dast -f compose.yml config --quiet
+
+      - name: Start disposable WMS runtime and MySQL
+        shell: bash
+        run: |
+          project="wms-dast-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file .env.dast -f compose.yml up --build -d
+
+      - name: Wait for authenticated WMS runtime
+        shell: bash
+        run: |
+          url="http://127.0.0.1:8081/api/wms/v1/tenants/current/profile"
+          for attempt in $(seq 1 150); do
+            status="$(curl --silent --show-error --max-time 2 --output /tmp/wms-auth-dast-response --write-out '%{http_code}' "$url" 2>/dev/null || true)"
+            if [[ "$status" == "401" ]]; then
+              echo "WMS is ready and protected routes require authentication."
+              exit 0
+            fi
+            if [[ "$status" != "000" && "$status" != "502" && "$status" != "503" ]]; then
+              echo "Unexpected HTTP status while waiting for WMS: $status"
+              cat /tmp/wms-auth-dast-response || true
+              exit 1
+            fi
+            sleep 2
+          done
+          project="wms-dast-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file .env.dast -f compose.yml logs --tail 200 mysql backend
+          exit 1
+
+      - name: Seed isolated ZAP tenant and privileged test user
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="wms-dast-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file .env.dast -f compose.yml exec -T mysql sh -c 'mysql --protocol=tcp --host=127.0.0.1 --user=root --password="$MYSQL_ROOT_PASSWORD" zirologistics_wms' <<'SQL'
+          INSERT INTO tenants (public_id, tenant_code, legal_name, display_name, status)
+          VALUES (UUID(), CONCAT('ZAP-', UPPER(SUBSTRING(REPLACE(UUID(), '-', ''), 1, 12))),
+                  'Disposable ZAP Security Tenant', 'Disposable ZAP Security Tenant', 'ACTIVE');
+          SET @zap_tenant_id = LAST_INSERT_ID();
+
+          INSERT INTO users (public_id, email, username, password_hash, full_name, status, email_verified_at)
+          VALUES (UUID(), 'zap-test@example.test', 'zap-test',
+                  '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+                  'Disposable ZAP Test User', 'ACTIVE', UTC_TIMESTAMP(6));
+          SET @zap_user_id = LAST_INSERT_ID();
+
+          INSERT INTO tenant_memberships (public_id, tenant_id, user_id, status, joined_at)
+          VALUES (UUID(), @zap_tenant_id, @zap_user_id, 'ACTIVE', UTC_TIMESTAMP(6));
+          SET @zap_membership_id = LAST_INSERT_ID();
+
+          INSERT INTO roles (public_id, tenant_id, role_code, role_name, is_system_role, status)
+          VALUES (UUID(), @zap_tenant_id, 'ZAP_TEST_OWNER', 'Disposable ZAP Test Owner', 0, 'ACTIVE');
+          SET @zap_role_id = LAST_INSERT_ID();
+
+          INSERT INTO role_permissions (role_id, permission_id)
+          SELECT @zap_role_id, id FROM permissions;
+
+          INSERT INTO membership_roles (tenant_id, membership_id, role_id)
+          VALUES (@zap_tenant_id, @zap_membership_id, @zap_role_id);
+          SQL
+
+      - name: Obtain disposable tenant-bound access token
+        id: auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          login_response="$(curl --fail-with-body --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"zap-test@example.test","password":"password"}' \
+            http://127.0.0.1:8081/api/wms/v1/auth/credentials)"
+          selection_token="$(jq -er '.tenantSelectionToken' <<< "$login_response")"
+          membership_public_id="$(docker compose --project-name "wms-dast-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --env-file .env.dast -f compose.yml exec -T mysql sh -c 'mysql --protocol=tcp --host=127.0.0.1 --user=root --password="$MYSQL_ROOT_PASSWORD" --batch --skip-column-names zirologistics_wms -e "SELECT public_id FROM tenant_memberships WHERE user_id=(SELECT id FROM users WHERE email=\\"zap-test@example.test\\")"' | tr -d '\r')"
+          selection_payload="$(jq -nc --arg token "$selection_token" --arg membership "$membership_public_id" '{tenantSelectionToken:$token,membershipPublicId:$membership}')"
+          access_response="$(curl --fail-with-body --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -d "$selection_payload" \
+            http://127.0.0.1:8081/api/wms/v1/auth/tenant-selection)"
+          access_token="$(jq -er '.accessToken' <<< "$access_response")"
+          test -n "$access_token"
+          echo "::add-mask::$access_token"
+          echo "WMS_ACCESS_TOKEN=$access_token" >> "$GITHUB_ENV"
+          echo "Disposable access token obtained for authenticated ZAP route scans."
+
+      - name: ZAP authenticated scan - tenant profile
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: http://127.0.0.1:8081/api/wms/v1/tenants/current/profile
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: wms-zap-auth-profile
+        env:
+          ZAP_AUTH_HEADER: Authorization
+          ZAP_AUTH_HEADER_VALUE: Bearer ${{ env.WMS_ACCESS_TOKEN }}
+          ZAP_AUTH_HEADER_SITE: http://127.0.0.1:8081
+
+      - name: ZAP authenticated scan - warehouses
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: http://127.0.0.1:8081/api/wms/v1/tenants/current/warehouses
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: wms-zap-auth-warehouses
+        env:
+          ZAP_AUTH_HEADER: Authorization
+          ZAP_AUTH_HEADER_VALUE: Bearer ${{ env.WMS_ACCESS_TOKEN }}
+          ZAP_AUTH_HEADER_SITE: http://127.0.0.1:8081
+
+      - name: ZAP authenticated scan - items
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: http://127.0.0.1:8081/api/wms/v1/tenants/current/items
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: wms-zap-auth-items
+        env:
+          ZAP_AUTH_HEADER: Authorization
+          ZAP_AUTH_HEADER_VALUE: Bearer ${{ env.WMS_ACCESS_TOKEN }}
+          ZAP_AUTH_HEADER_SITE: http://127.0.0.1:8081
+
+      - name: ZAP authenticated scan - inbound receipts
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: http://127.0.0.1:8081/api/wms/v1/tenants/current/inbound-receipts
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: wms-zap-auth-inbound
+        env:
+          ZAP_AUTH_HEADER: Authorization
+          ZAP_AUTH_HEADER_VALUE: Bearer ${{ env.WMS_ACCESS_TOKEN }}
+          ZAP_AUTH_HEADER_SITE: http://127.0.0.1:8081
+
+      - name: ZAP authenticated scan - outbound shipments
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: http://127.0.0.1:8081/api/wms/v1/tenants/current/outbound-shipments
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: wms-zap-auth-outbound
+        env:
+          ZAP_AUTH_HEADER: Authorization
+          ZAP_AUTH_HEADER_VALUE: Bearer ${{ env.WMS_ACCESS_TOKEN }}
+          ZAP_AUTH_HEADER_SITE: http://127.0.0.1:8081
+
+      - name: Collect disposable environment logs
+        if: always()
+        shell: bash
+        run: |
+          project="wms-dast-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file .env.dast -f compose.yml logs --tail 200 mysql backend > /tmp/wms-authenticated-dast-logs.txt || true
+
+      - name: Archive disposable environment logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wms-authenticated-dast-runtime-logs
+          path: /tmp/wms-authenticated-dast-logs.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Tear down disposable WMS environment
+        if: always()
+        shell: bash
+        run: |
+          project="wms-dast-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file .env.dast -f compose.yml down --volumes --remove-orphans || true
+          rm -f .env.dast /tmp/wms-dast-private.pem /tmp/wms-dast-public.pem
