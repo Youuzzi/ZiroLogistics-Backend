@@ -27,6 +27,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(controllers = WmsRoleManagementController.class)
@@ -56,6 +57,17 @@ class WmsRoleManagementControllerHttpTest {
     void rolesRouteRequiresAuthenticationWhenPublicAuthEndpointsAreDisabled() throws Exception {
         mockMvc.perform(get(ROUTE))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void rolePermissionMutationRequiresAuthentication() throws Exception {
+        mockMvc.perform(put(ROUTE + "/role-public-id/permissions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"permissionCodes":["WMS_INVENTORY_POST"],"expectedVersion":0}
+                                """))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(service);
     }
 
     @Test

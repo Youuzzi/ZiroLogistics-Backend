@@ -60,6 +60,13 @@ class WmsInterWarehouseTransferControllerHttpTest {
     }
 
     @Test
+    void transferCreationRequiresAuthentication() throws Exception {
+        mockMvc.perform(post(ROUTE).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(service);
+    }
+
+    @Test
     void forwardsBoundedTransferPaginationParameters() throws Exception {
         WmsAuthenticatedPrincipal principal = principal();
         when(service.list(principal, 3, 25)).thenReturn(List.of(
