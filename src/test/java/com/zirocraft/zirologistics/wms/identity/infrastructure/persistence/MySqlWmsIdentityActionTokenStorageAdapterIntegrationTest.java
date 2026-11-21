@@ -193,6 +193,69 @@ class MySqlWmsIdentityActionTokenStorageAdapterIntegrationTest {
     }
 
     @Test
+    void concurrentConsumptionAllowsExactlyOneWinnerForEveryOneTimeTokenPurpose() throws Exception {
+        for (WmsIdentityActionTokenPurpose purpose : WmsIdentityActionTokenPurpose.values()) {
+            assertConcurrentSingleConsumptionWinner(purpose);
+        }
+    }
+
+    private void assertConcurrentSingleConsumptionWinner(WmsIdentityActionTokenPurpose purpose)
+            throws Exception {
+        long userId = insertUser("consume-" + purpose.name().toLowerCase());
+        long tenantId = insertTenant();
+        String email = uniqueEmail("consume-" + purpose.name().toLowerCase());
+        byte[] digest = randomDigest();
+        Long tokenUserId = purpose == WmsIdentityActionTokenPurpose.INVITATION ? null : userId;
+        Long tokenTenantId = purpose == WmsIdentityActionTokenPurpose.INVITATION ? tenantId : null;
+        Long inviterId = purpose == WmsIdentityActionTokenPurpose.INVITATION ? userId : null;
+        long tokenId = transactionTemplate.execute(status -> adapter.insert(
+                digest, purpose, tokenUserId, tokenTenantId, inviterId,
+                email, NOW.plusSeconds(1_800), NOW));
+
+        int workers = 2;
+        CountDownLatch ready = new CountDownLatch(workers);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(workers);
+        List<Future<Boolean>> futures = new ArrayList<>();
+
+        try {
+            for (int worker = 0; worker < workers; worker++) {
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    if (!start.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Concurrent token purpose test start timed out");
+                    }
+                    return transactionTemplate.execute(status -> {
+                        Optional<WmsIdentityActionTokenRecord> token =
+                                adapter.findByDigestForUpdate(digest, purpose);
+                        if (token.isEmpty() || !token.get().isUsableAt(NOW)) {
+                            return false;
+                        }
+                        return adapter.markConsumed(token.get().id(), NOW.plusSeconds(1)) == 1;
+                    });
+                }));
+            }
+
+            assertTrue(ready.await(10, java.util.concurrent.TimeUnit.SECONDS));
+            start.countDown();
+            int winners = 0;
+            for (Future<Boolean> future : futures) {
+                if (future.get(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                    winners++;
+                }
+            }
+            assertEquals(1, winners, "exactly one consumer must win for " + purpose);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        WmsIdentityActionTokenRecord consumed = find(digest, purpose);
+        assertEquals(tokenId, consumed.id());
+        assertNotNull(consumed.consumedAt());
+        assertFalse(consumed.isUsableAt(NOW.plusSeconds(2)));
+    }
+
+    @Test
     void revocationAndConsumptionAreConditionalAndDigestArraysAreDefensive() {
         long userId = insertUser("defensive");
         String email = uniqueEmail("defensive");
