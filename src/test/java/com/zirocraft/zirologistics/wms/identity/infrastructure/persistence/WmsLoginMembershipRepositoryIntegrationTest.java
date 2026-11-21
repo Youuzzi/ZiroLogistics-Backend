@@ -30,6 +30,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(
@@ -67,6 +68,12 @@ class WmsLoginMembershipRepositoryIntegrationTest {
 
     @Autowired
     private WmsLoginMembershipRepository loginMembershipRepository;
+
+    @Autowired
+    private WmsMembershipAccessService membershipAccessService;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void returnsOnlyActiveMembershipsForActiveTenantsUsingSafePublicProjection() {
@@ -137,39 +144,7 @@ class WmsLoginMembershipRepositoryIntegrationTest {
                 tenant.getId(), user.getId(), MembershipStatus.ACTIVE);
         membership = tenantMembershipRepository.saveAndFlush(membership);
 
-        assertEquals(user.getPublicId(), membershipAccessService.resolve(
-                user.getPublicId(), membership.getPublicId()).userPublicId());
-
-        jdbc.update("UPDATE tenants SET status = 'SUSPENDED' WHERE id = ?", tenant.getId());
-        assertThrows(WmsMembershipAccessDeniedException.class, () ->
-                membershipAccessService.resolve(user.getPublicId(), membership.getPublicId()));
-
-        jdbc.update("UPDATE tenants SET status = 'ACTIVE' WHERE id = ?", tenant.getId());
-        jdbc.update("UPDATE tenant_memberships SET status = 'SUSPENDED' WHERE id = ?", membership.getId());
-        assertThrows(WmsMembershipAccessDeniedException.class, () ->
-                membershipAccessService.resolve(user.getPublicId(), membership.getPublicId()));
-    }
-
-    private static TenantEntity tenant(String code, String displayName, TenantStatus status) {
-        TenantEntity tenant = new TenantEntity();
-        tenant.setTenantCode(code);
-        tenant.setLegalName("Ziro WMS Integration Test");
-        tenant.setDisplayName(displayName);
-        tenant.setStatus(status);
-        return tenant;
-    }
-
-    private static TenantMembershipEntity membership(
-            Long tenantId,
-            Long userId,
-            MembershipStatus status) {
-        TenantMembershipEntity membership = new TenantMembershipEntity();
-        membership.setTenantId(tenantId);
-        membership.setUserId(userId);
-        membership.setStatus(status);
-        return membership;
-    }
-}        String userPublicId = user.getPublicId();
+        String userPublicId = user.getPublicId();
         String membershipPublicId = membership.getPublicId();
         Long tenantId = tenant.getId();
         Long membershipId = membership.getId();
@@ -206,4 +181,3 @@ class WmsLoginMembershipRepositoryIntegrationTest {
         membership.setStatus(status);
         return membership;
     }
-}
