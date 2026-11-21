@@ -172,9 +172,9 @@ class WmsActiveBearerTokenLifecycleMySqlHttpTest {
     }
 
     private static String pem(String label, byte[] encoded) {
-        return "-----BEGIN " + label + "-----\\n"
-                + Base64.getMimeEncoder(64, new byte[]{'\\n'}).encodeToString(encoded)
-                + "\\n-----END " + label + "-----";
+        return "-----BEGIN " + label + "-----\n"
+                + Base64.getMimeEncoder(64, new byte[]{'\n'}).encodeToString(encoded)
+                + "\n-----END " + label + "-----";
     }
 
     private org.springframework.test.web.servlet.ResultActions performProtectedRequest(String token)
