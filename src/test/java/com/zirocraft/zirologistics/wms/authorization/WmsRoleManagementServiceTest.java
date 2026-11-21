@@ -151,6 +151,41 @@ class WmsRoleManagementServiceTest {
         verifyNoInteractions(jdbc);
     }
 
+    @Test
+    void cannotDelegatePermissionThatCurrentActorDoesNotPossess() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_PERMISSION_MANAGE", "WMS_ROLE_READ")));
+        when(jdbc.queryForList(contains("SELECT id FROM tenants"), eq(Long.class), eq(10L)))
+                .thenReturn(List.of(10L));
+        when(jdbc.queryForList(contains("SELECT id, public_id, role_code"), eq(10L), eq("custom-role")))
+                .thenReturn(List.of(java.util.Map.of(
+                        "id", 70L, "public_id", "custom-role", "role_code", "CUSTOM",
+                        "role_name", "Custom", "is_system_role", 0,
+                        "status", "ACTIVE", "version", 0L)));
+
+        assertThrows(AccessDeniedException.class, () ->
+                service.replaceRolePermissions(principal(), "custom-role", List.of("WMS_ITEM_CREATE"), 0));
+
+        verify(jdbc, never()).update(contains("DELETE FROM role_permissions"), anyLong());
+        verify(jdbc, never()).update(contains("INSERT INTO role_permissions"), anyLong(), anyString());
+    }
+
+    @Test
+    void cannotReadOrMutateRoleOwnedByAnotherTenant() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_UPDATE")));
+        when(jdbc.queryForList(contains("SELECT id FROM tenants"), eq(Long.class), eq(10L)))
+                .thenReturn(List.of(10L));
+        when(jdbc.queryForList(contains("SELECT id, public_id, role_code"), eq(10L), eq("foreign-role")))
+                .thenReturn(List.of());
+
+        assertThrows(WmsResourceNotFoundException.class, () ->
+                service.updateRole(principal(), "foreign-role", "Attacker Update", null, 0));
+
+        verify(jdbc, never()).update(contains("UPDATE roles SET role_name"), any(), any(),
+                anyLong(), anyString(), anyLong());
+    }
+
     private static WmsAuthenticatedPrincipal principal() {
         return new WmsAuthenticatedPrincipal(
                 "user-public", 10L, "tenant-public", 30L, "membership-public",
