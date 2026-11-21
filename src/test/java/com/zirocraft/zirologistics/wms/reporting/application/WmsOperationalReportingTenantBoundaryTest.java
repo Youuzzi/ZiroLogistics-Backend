@@ -46,7 +46,7 @@ class WmsOperationalReportingTenantBoundaryTest {
     void mismatchedTenantContextIsDeniedBeforeAnyReportQuery() {
         when(accessService.resolve("user-public", "membership-a"))
                 .thenReturn(new WmsMembershipAccess(
-                        30L, "user-public", 10L, "tenant-a", 10L, "membership-a", Set.of("WMS_OPERATIONAL_REPORT_READ")));
+                        30L, "user-public", 10L, "tenant-a", 30L, "membership-a", Set.of("WMS_OPERATIONAL_REPORT_READ")));
 
         assertThrows(AccessDeniedException.class, () -> service.operationalSummary(principal));
 
@@ -71,6 +71,6 @@ class WmsOperationalReportingTenantBoundaryTest {
 
     private WmsMembershipAccess access(Set<String> permissions) {
         return new WmsMembershipAccess(
-                30L, "user-public", 10L, "tenant-a", 20L, "membership-a", permissions);
+                30L, "user-public", 20L, "tenant-a", 30L, "membership-a", permissions);
     }
 }
