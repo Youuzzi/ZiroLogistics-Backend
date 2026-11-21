@@ -160,6 +160,7 @@ jobs:
               'replacer.full_list(0).url=http://127.0.0.1:8081/.*'
             printf 'replacer.full_list(0).replacement=%s\\n' "$ZAP_AUTH_HEADER_VALUE"
           } > "$options_file"
+          chmod 644 "$options_file"
           docker run --rm --network host \
             -v "$PWD:/zap/wrk:rw" \
             -v "$options_file:/zap/wrk/zap-auth-options.prop:ro" \
