@@ -86,9 +86,22 @@ jobs:
         if: steps.scope.outputs.run_backend_tests == 'true'
         run: docker compose --env-file .env.example -f compose.yml config --quiet
 
+      - name: Capture resolved Maven dependency tree
+        if: steps.scope.outputs.run_backend_tests == 'true'
+        run: ./mvnw --batch-mode --no-transfer-progress dependency:tree -Dverbose -DoutputFile=target/dependency-tree.txt
+
       - name: Run full regression and package WMS runtime
         if: steps.scope.outputs.run_backend_tests == 'true'
         run: ./mvnw --batch-mode --no-transfer-progress -Pwms-runtime clean verify
+
+      - name: Upload resolved dependency tree
+        if: always() && steps.scope.outputs.run_backend_tests == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wms-maven-dependency-tree
+          path: target/dependency-tree.txt
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload JaCoCo coverage report
         if: always() && steps.scope.outputs.run_backend_tests == 'true'
@@ -117,7 +130,7 @@ jobs:
       scan-args: |-
         --recursive
         ./
-      fail-on-vuln: false
+      fail-on-vuln: true
     permissions:
       actions: read
       contents: read
