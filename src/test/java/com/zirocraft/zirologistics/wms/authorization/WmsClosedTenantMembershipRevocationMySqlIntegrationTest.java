@@ -84,8 +84,10 @@ class WmsClosedTenantMembershipRevocationMySqlIntegrationTest {
         membership.setStatus(MembershipStatus.ACTIVE);
         membership = membershipRepository.saveAndFlush(membership);
 
-        assertEquals(membership.getPublicId(),
-                accessService.resolve(user.getPublicId(), membership.getPublicId()).membershipPublicId());
+        String userPublicId = user.getPublicId();
+        String membershipPublicId = membership.getPublicId();
+        assertEquals(membershipPublicId,
+                accessService.resolve(userPublicId, membershipPublicId).membershipPublicId());
 
         String op = UUID.randomUUID().toString();
         lifecycleService.transition(WmsTenantLifecycleAction.SUSPEND, tenant.getPublicId(),
@@ -99,6 +101,6 @@ class WmsClosedTenantMembershipRevocationMySqlIntegrationTest {
         assertEquals("ACTIVE", jdbc.queryForObject(
                 "SELECT status FROM tenant_memberships WHERE id = ?", String.class, membership.getId()));
         assertThrows(WmsMembershipAccessDeniedException.class,
-                () -> accessService.resolve(user.getPublicId(), membership.getPublicId()));
+                () -> accessService.resolve(userPublicId, membershipPublicId));
     }
 }
