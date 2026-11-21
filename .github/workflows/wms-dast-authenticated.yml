@@ -124,7 +124,7 @@ jobs:
           set -euo pipefail
           now="$(date +%s)"
           header="$(printf '%s' '{"alg":"RS256","kid":"wms-dast-key","typ":"JWT"}' | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
-          payload="$(printf '{"iss":"https://zirologistics.local","aud":["zirologistics-wms-access"],"sub":"d0a57000-0000-4000-8000-000000000001","mid":"d0a57000-0000-4000-8000-000000000003","token_use":"access","cv":0,"iat":%s,"exp":%s,"jti":"wms-dast-%s"}' "$now" "$((now + 600))" "$now" | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          payload="$(printf '{"iss":"https://zirologistics.local","aud":["zirologistics-wms-access"],"sub":"d0a57000-0000-4000-8000-000000000001","mid":"d0a57000-0000-4000-8000-000000000003","token_use":"access","cv":0,"iat":%s,"exp":%s,"jti":"wms-dast-%s"}' "$now" "$((now + 3600))" "$now" | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
           signing_input="$header.$payload"
           signature="$(printf '%s' "$signing_input" | openssl dgst -sha256 -sign /tmp/wms-dast-private.pem | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
           token="$signing_input.$signature"
