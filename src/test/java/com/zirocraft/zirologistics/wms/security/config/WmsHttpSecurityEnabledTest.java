@@ -19,9 +19,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.time.Instant;
 import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.mockito.Mockito.when;
@@ -126,6 +128,46 @@ class WmsHttpSecurityEnabledTest {
     }
 
     @Test
+    void rejectsMalformedJsonOnAuthenticatedRuntimeRoute() throws Exception {
+        configureValidBearerAuthentication();
+        mockMvc.perform(post("/wms/security-probe/json")
+                        .header("Authorization", "Bearer valid-test-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rejectsUnsupportedContentTypeOnAuthenticatedRuntimeRoute() throws Exception {
+        configureValidBearerAuthentication();
+        mockMvc.perform(post("/wms/security-probe/json")
+                        .header("Authorization", "Bearer valid-test-token")
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .content("{}"))
+                .andExpect(status().isUnsupportedMediaType());
+    }
+
+    private void configureValidBearerAuthentication() {
+        Instant now = Instant.now();
+        Jwt jwt = Jwt.withTokenValue("valid-test-token")
+                .header("alg", "RS256")
+                .subject("user-public-id")
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(600))
+                .claim("mid", "membership-public-id")
+                .claim("token_use", "access")
+                .claim("cv", 0L)
+                .build();
+        WmsAuthenticatedPrincipal principal = new WmsAuthenticatedPrincipal(
+                "user-public-id", 10L, "tenant-public-id",
+                20L, "membership-public-id", Set.of("inventory.balance.read"));
+        WmsJwtAuthenticationToken authentication = new WmsJwtAuthenticationToken(
+                principal, Set.of(new SimpleGrantedAuthority("PERM_inventory.balance.read")));
+        when(accessJwtDecoder.decode("valid-test-token")).thenReturn(jwt);
+        when(authenticationConverter.convert(jwt)).thenReturn(authentication);
+    }
+
+    @Test
     void acceptsOnlyBearerTokensResolvedByWmsAuthenticationConverter() throws Exception {
         Instant now = Instant.now();
         Jwt jwt = Jwt.withTokenValue("valid-test-token")
@@ -176,6 +218,12 @@ class WmsHttpSecurityEnabledTest {
         @GetMapping(value = "/wms/security-probe", produces = MediaType.TEXT_PLAIN_VALUE)
         String probe() {
             return "wms-protected";
+        }
+
+        @PostMapping(value = "/wms/security-probe/json", consumes = MediaType.APPLICATION_JSON_VALUE,
+                produces = MediaType.TEXT_PLAIN_VALUE)
+        String protectedJson(@RequestBody Map<String, Object> payload) {
+            return "wms-protected-json";
         }
     }
 }
