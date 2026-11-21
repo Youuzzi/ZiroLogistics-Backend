@@ -147,6 +147,35 @@ class WmsPasswordManagementMySqlIntegrationTest {
         assertNull(token.revokedAt());
     }
 
+    @Test
+    void expiredResetTokenCannotChangePasswordAndRemainsUnconsumed() throws Exception {
+        UserEntity user = createUser("expired-reset", "OriginalPassword123");
+        passwordManagementService.requestPasswordReset(user.getEmail());
+
+        OutboxPayload outbox = latestOutbox(user.getEmail(), "PASSWORD_RESET");
+        byte[] plaintext = decryptOutbox(outbox, user.getEmail(), WmsIdentityActionTokenPurpose.PASSWORD_RESET);
+        String rawToken = objectMapper.readTree(plaintext).get("actionToken").asText();
+        byte[] digest = tokenGenerator.digestPresentedToken(rawToken);
+
+        jdbcTemplate.update("""
+                UPDATE wms_identity_action_tokens
+                SET created_at = UTC_TIMESTAMP() - INTERVAL 2 SECOND,
+                    expires_at = UTC_TIMESTAMP() - INTERVAL 1 SECOND
+                WHERE token_digest = ?
+                """, digest);
+
+        assertThrows(WmsIdentityActionTokenRejectedException.class,
+                () -> passwordManagementService.completePasswordReset(rawToken, "ResetPassword456"));
+
+        UserEntity unchanged = userRepository.findById(user.getId()).orElseThrow();
+        assertTrue(passwordEncoder.matches("OriginalPassword123", unchanged.getPasswordHash()));
+        assertFalse(passwordEncoder.matches("ResetPassword456", unchanged.getPasswordHash()));
+
+        WmsIdentityActionTokenRecord token = findToken(digest);
+        assertNull(token.consumedAt());
+        assertNull(token.revokedAt());
+    }
+
     private UserEntity createUser(String label, String rawPassword) {
         UserEntity user = new UserEntity();
         user.setEmail(label + "." + UUID.randomUUID() + "@example.test");
