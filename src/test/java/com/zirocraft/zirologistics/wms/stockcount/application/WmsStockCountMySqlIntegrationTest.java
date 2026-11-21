@@ -1427,6 +1427,7 @@ class WmsStockCountMySqlIntegrationTest {
     @Test
     void tenantCannotReadForeignStockCountOrItsCountLines() {
         Fixture foreign = fixture("NONE");
+        receive(foreign, "1.0000");
         String foreignCountId = createAndPlan(foreign);
 
         assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
@@ -1439,10 +1440,12 @@ class WmsStockCountMySqlIntegrationTest {
 
     @Test
     void tenantCannotRecordAResultAgainstAnotherTenantsCountLine() {
+        receive(fixture, "1.0000");
         String ownCountId = createAndPlan(fixture);
         stockCountService.start(fixture.principal(), ownCountId);
 
         Fixture foreign = fixture("NONE");
+        receive(foreign, "1.0000");
         String foreignCountId = createAndPlan(foreign);
         Map<String, Object> foreignStarted = stockCountService.start(foreign.principal(), foreignCountId);
         @SuppressWarnings("unchecked")
