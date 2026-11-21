@@ -50,7 +50,7 @@ class WmsHttpSecurityEnabledTest {
 
     @Test
     void rejectsRequestsWithoutBearerToken() throws Exception {
-        mockMvc.perform(get("/wms/security-probe"))
+        mockMvc.perform(get("/api/wms/v1/security-probe"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -101,7 +101,7 @@ class WmsHttpSecurityEnabledTest {
         when(accessJwtDecoder.decode("valid-test-token")).thenReturn(jwt);
         when(authenticationConverter.convert(jwt)).thenReturn(authentication);
 
-        mockMvc.perform(get("/wms/security-probe")
+        mockMvc.perform(get("/api/wms/v1/security-probe")
                         .header("Authorization", "Bearer valid-test-token")
                         .accept(MediaType.TEXT_PLAIN))
                 .andExpect(status().isOk())
@@ -125,7 +125,7 @@ class WmsHttpSecurityEnabledTest {
             return "wms-not-public-get";
         }
 
-        @GetMapping(value = "/wms/security-probe", produces = MediaType.TEXT_PLAIN_VALUE)
+        @GetMapping(value = "/api/wms/v1/security-probe", produces = MediaType.TEXT_PLAIN_VALUE)
         String probe() {
             return "wms-protected";
         }
