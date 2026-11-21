@@ -107,20 +107,20 @@ class WmsLivePermissionRevocationMySqlIntegrationTest {
         String membershipPublicId = membership.getPublicId();
 
         WmsMembershipAccess before = accessService.resolve(userPublicId, membershipPublicId);
-        assertTrue(before.permissions().contains(permissionCode),
+        assertTrue(before.permissionCodes().contains(permissionCode),
                 "permission must be present before revocation");
 
         jdbc.update("DELETE FROM role_permissions WHERE role_id = ? AND permission_id = ?",
                 roleId, permissionId);
         WmsMembershipAccess afterPermissionRevocation =
                 accessService.resolve(userPublicId, membershipPublicId);
-        assertFalse(afterPermissionRevocation.permissions().contains(permissionCode),
+        assertFalse(afterPermissionRevocation.permissionCodes().contains(permissionCode),
                 "revoked role permission must not survive in a previously authenticated identity");
 
         jdbc.update("DELETE FROM membership_roles WHERE tenant_id = ? AND membership_id = ? AND role_id = ?",
                 tenant.getId(), membership.getId(), roleId);
         WmsMembershipAccess afterRoleDemotion = accessService.resolve(userPublicId, membershipPublicId);
-        assertTrue(afterRoleDemotion.permissions().isEmpty(),
+        assertTrue(afterRoleDemotion.permissionCodes().isEmpty(),
                 "role demotion must remove all permissions on the next resolution");
         assertEquals(membershipPublicId, afterRoleDemotion.membershipPublicId());
     }
