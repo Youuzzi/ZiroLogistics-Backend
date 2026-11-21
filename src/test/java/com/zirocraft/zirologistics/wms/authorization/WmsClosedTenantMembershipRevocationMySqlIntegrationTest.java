@@ -28,6 +28,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.UUID;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -59,6 +60,70 @@ class WmsClosedTenantMembershipRevocationMySqlIntegrationTest {
     @Autowired private TenantMembershipRepository membershipRepository;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private PasswordEncoder passwordEncoder;
+
+    @Test
+    void removedMembershipInvalidatesAnExistingIdentityOnTheNextAccessResolution() {
+        UserEntity user = createTestUser();
+        TenantEntity tenant = createTestTenant("REMOVED");
+        TenantMembershipEntity membership = createTestMembership(user, tenant);
+        String userPublicId = user.getPublicId();
+        String membershipPublicId = membership.getPublicId();
+
+        assertEquals(membershipPublicId,
+                accessService.resolve(userPublicId, membershipPublicId).membershipPublicId());
+
+        assertEquals(1, jdbc.update(
+                "UPDATE tenant_memberships SET status = 'REMOVED' WHERE id = ?", membership.getId()));
+
+        assertEquals("REMOVED", jdbc.queryForObject(
+                "SELECT status FROM tenant_memberships WHERE id = ?", String.class, membership.getId()));
+        assertThrows(WmsMembershipAccessDeniedException.class,
+                () -> accessService.resolve(userPublicId, membershipPublicId));
+    }
+
+    @Test
+    void cannotSwitchIntoAnotherUsersMembershipBySupplyingItsForeignTenantMembershipId() {
+        UserEntity userA = createTestUser();
+        UserEntity userB = createTestUser();
+        TenantEntity tenantA = createTestTenant("SWITCH_A");
+        TenantEntity tenantB = createTestTenant("SWITCH_B");
+        TenantMembershipEntity membershipA = createTestMembership(userA, tenantA);
+        TenantMembershipEntity membershipB = createTestMembership(userB, tenantB);
+
+        assertEquals(membershipA.getPublicId(),
+                accessService.resolve(userA.getPublicId(), membershipA.getPublicId()).membershipPublicId());
+        assertThrows(WmsMembershipAccessDeniedException.class,
+                () -> accessService.resolve(userA.getPublicId(), membershipB.getPublicId()));
+    }
+
+    private UserEntity createTestUser() {
+        String suffix = UUID.randomUUID().toString();
+        UserEntity user = new UserEntity();
+        user.setEmail("membership-boundary-" + suffix + "@example.test");
+        user.setUsername("member-" + suffix.substring(0, 8));
+        user.setPasswordHash(passwordEncoder.encode("TestPassword123"));
+        user.setFullName("Membership Boundary Test");
+        user.setStatus(UserStatus.ACTIVE);
+        return userRepository.saveAndFlush(user);
+    }
+
+    private TenantEntity createTestTenant(String prefix) {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        TenantEntity tenant = new TenantEntity();
+        tenant.setTenantCode(prefix + "-" + suffix.toUpperCase(Locale.ROOT));
+        tenant.setLegalName("Membership Boundary Tenant " + suffix);
+        tenant.setDisplayName("Membership Boundary " + suffix);
+        tenant.setStatus(TenantStatus.ACTIVE);
+        return tenantRepository.saveAndFlush(tenant);
+    }
+
+    private TenantMembershipEntity createTestMembership(UserEntity user, TenantEntity tenant) {
+        TenantMembershipEntity membership = new TenantMembershipEntity();
+        membership.setTenantId(tenant.getId());
+        membership.setUserId(user.getId());
+        membership.setStatus(MembershipStatus.ACTIVE);
+        return membershipRepository.saveAndFlush(membership);
+    }
 
     @Test
     void closedTenantInvalidatesAnExistingUserMembershipOnTheNextAccessResolution() {
