@@ -1,4 +1,4 @@
-import http from 'k6';
+import http from 'k6/http';
 import { check, sleep } from 'k6';
 const target = __ENV.WMS_K6_TARGET || 'http://127.0.0.1:8081/api/wms/v1/tenants/current/warehouses';
 export const options = { vus: 2, duration: '20s', thresholds: { checks: ['rate==1'] } };
