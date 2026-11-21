@@ -26,6 +26,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 @WebMvcTest(controllers = WmsTenantProfileController.class)
 @ContextConfiguration(classes = WmsHttpSecurityTestApplication.class)
@@ -67,7 +68,9 @@ class WmsTenantProfileRequestParsingHttpTest {
                         .with(authentication(authenticated(principal())))
                         .contentType(MediaType.TEXT_PLAIN)
                         .content("{}"))
-                .andExpect(status().isUnsupportedMediaType());
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.code").value("UNSUPPORTED_MEDIA_TYPE"))
+                .andExpect(jsonPath("$.message").value("The request content type is not supported"));
 
         verifyNoInteractions(profileService);
     }
