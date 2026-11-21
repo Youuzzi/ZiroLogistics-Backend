@@ -42,6 +42,9 @@ jobs:
           WMS_JWT_KEY_ID=dast-ephemeral-key
           WMS_JWT_PUBLIC_KEY_PEM='$(cat /tmp/wms-dast-public.pem)'
           WMS_JWT_PRIVATE_KEY_PEM='$(cat /tmp/wms-dast-private.pem)'
+          WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_ENABLED=true
+          WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_CURRENT_KEY_VERSION=1
+          WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_KEYS_1=$(openssl rand -base64 32 | tr -d '\\n')
           EOF
           chmod 600 .env.dast
           echo "MYSQL_ROOT_PASSWORD=${root_password}" >> "$GITHUB_ENV"
