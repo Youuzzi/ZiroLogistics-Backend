@@ -992,4 +992,29 @@ class WmsOutboundShipmentMySqlIntegrationTest {
     private record Fixture(long tenantId, String warehousePublicId, String receivingLocationPublicId,
                            String supplierPublicId, String customerPublicId, String itemPublicId,
                            String membershipPublicId, WmsAuthenticatedPrincipal principal) {}
+    @Test
+    void rejectedPartialReleasePreservesShipmentStateAndReservation() {
+        String shipmentId = createShipment(fixture);
+        String lineId = addLine(fixture, shipmentId, "5.0000");
+        shipmentService.allocate(fixture.principal(), shipmentId, lineId,
+                new WmsOutboundShipmentService.AllocationCommand(List.of(
+                        new WmsOutboundShipmentService.AllocationLine(
+                                fixture.receivingLocationPublicId(), null, new BigDecimal("3.0000"), List.of()))));
+
+        assertEquals("DRAFT", shipmentStatus(fixture, shipmentId));
+        assertEquals(new BigDecimal("3.0000"), reserved(fixture));
+        assertEquals(new BigDecimal("2.0000"), available(fixture));
+
+        assertThrows(IllegalStateException.class, () -> shipmentService.release(fixture.principal(), shipmentId));
+
+        assertEquals("DRAFT", shipmentStatus(fixture, shipmentId));
+        assertEquals(new BigDecimal("3.0000"), reserved(fixture));
+        assertEquals(new BigDecimal("2.0000"), available(fixture));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id = ? AND subject_public_id = ?
+                  AND event_type = 'OUTBOUND_SHIPMENT_RELEASED'
+                """, fixture.tenantId(), shipmentId));
+    }
+
 }
