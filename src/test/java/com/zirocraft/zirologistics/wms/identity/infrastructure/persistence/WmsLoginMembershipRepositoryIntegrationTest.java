@@ -181,3 +181,4 @@ class WmsLoginMembershipRepositoryIntegrationTest {
         membership.setStatus(status);
         return membership;
     }
+}
