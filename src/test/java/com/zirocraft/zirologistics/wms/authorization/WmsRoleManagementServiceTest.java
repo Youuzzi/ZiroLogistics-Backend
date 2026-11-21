@@ -13,6 +13,7 @@ import org.springframework.security.access.AccessDeniedException;
 
 import java.util.List;
 import java.util.Set;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.contains;
@@ -99,6 +100,25 @@ class WmsRoleManagementServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.listRoles(principal, 0, 201));
 
         verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void cannotDelegateInventoryPostingPermissionEvenWhenActorCurrentlyHasIt() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_PERMISSION_MANAGE", "WMS_INVENTORY_POST")));
+        when(jdbc.queryForList(contains("SELECT id FROM tenants"), eq(Long.class), eq(10L)))
+                .thenReturn(List.of(10L));
+        when(jdbc.queryForList(contains("SELECT id, public_id, role_code"), eq(10L), eq("custom-role")))
+                .thenReturn(List.of(Map.of("id", 99L, "public_id", "custom-role",
+                        "role_code", "CUSTOM", "is_system_role", 0, "version", 0L)));
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.replaceRolePermissions(principal, "custom-role",
+                        List.of("WMS_INVENTORY_POST"), 0));
+
+        verify(jdbc, never()).update(contains("DELETE FROM role_permissions"), anyLong());
+        verify(jdbc, never()).update(contains("INSERT INTO role_permissions"), any(Object[].class));
     }
 
     @Test
