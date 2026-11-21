@@ -35,6 +35,9 @@ jobs:
               environment:
                 WMS_JWT_PUBLIC_KEY_PEM: ${WMS_JWT_PUBLIC_KEY_PEM}
                 WMS_JWT_PRIVATE_KEY_PEM: ${WMS_JWT_PRIVATE_KEY_PEM}
+                WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_ENABLED: "true"
+                WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_CURRENT_KEY_VERSION: "1"
+                WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_KEYS_1: ${WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_KEYS_1}
           YAML
           {
             printf '%s\n' "WMS_DB_USERNAME=wmsdast" \
@@ -47,14 +50,18 @@ jobs:
               "WMS_JWT_SELECTION_AUDIENCE=zirologistics-wms-selection" \
               "WMS_JWT_ACCESS_AUDIENCE=zirologistics-wms-access" \
               "WMS_JWT_KEY_ID=wms-dast-key"
+            printf "WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_ENABLED=true\n"
+            printf "WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_CURRENT_KEY_VERSION=1\n"
+            printf "WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_KEYS_1=%s\n" "$(openssl rand -base64 32)"
             printf "WMS_JWT_PUBLIC_KEY_PEM='%s'\n" "$(cat /tmp/wms-dast-public.pem)"
             printf "WMS_JWT_PRIVATE_KEY_PEM='%s'\n" "$(cat /tmp/wms-dast-private.pem)"
           } > /tmp/wms-dast.env
 
       - name: Start disposable WMS runtime
         run: |
+          set -euo pipefail
           docker compose --env-file /tmp/wms-dast.env -f compose.yml -f /tmp/wms-dast-compose.yml up --build -d
-          for attempt in $(seq 1 90); do
+          for attempt in $(seq 1 150); do
             code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8081/api/wms/v1/tenants/current/profile || true)"
             if [[ "$code" == "401" ]]; then
               exit 0
