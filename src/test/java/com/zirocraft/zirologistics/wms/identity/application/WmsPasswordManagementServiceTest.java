@@ -102,7 +102,6 @@ class WmsPasswordManagementServiceTest {
         UserEntity snapshot = activeUser(42L, "account-public-42", "old-argon2-hash", 7L);
         when(userRepository.findByPublicId("account-public-42")).thenReturn(Optional.of(snapshot));
         when(passwordEncoder.matches("CurrentPassword123", "old-argon2-hash")).thenReturn(true);
-        when(passwordEncoder.matches("CurrentPassword123", "old-argon2-hash")).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class,
                 () -> service.changePassword(
