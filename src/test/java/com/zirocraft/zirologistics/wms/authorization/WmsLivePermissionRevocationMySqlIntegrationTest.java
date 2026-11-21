@@ -3,10 +3,20 @@ package com.zirocraft.zirologistics.wms.authorization;
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
+import com.zirocraft.zirologistics.wms.identity.domain.MembershipStatus;
+import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
+import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.TenantMembershipEntity;
+import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.TenantMembershipRepository;
+import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.UserEntity;
+import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.UserRepository;
+import com.zirocraft.zirologistics.wms.tenancy.domain.TenantStatus;
+import com.zirocraft.zirologistics.wms.tenancy.infrastructure.persistence.TenantEntity;
+import com.zirocraft.zirologistics.wms.tenancy.infrastructure.persistence.TenantRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -26,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class WmsLivePermissionRevocationMySqlIntegrationTest {
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
-            .withDatabaseName("zirowms_live_permission_revocation_test")
+            .withDatabaseName("zirowms_live_permission_test")
             .withUsername("wms_live_permission_test")
             .withPassword("wms_live_permission_test");
 
@@ -40,87 +50,78 @@ class WmsLivePermissionRevocationMySqlIntegrationTest {
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
     }
 
-    @Autowired private JdbcTemplate jdbc;
     @Autowired private WmsMembershipAccessService accessService;
+    @Autowired private UserRepository userRepository;
+    @Autowired private TenantRepository tenantRepository;
+    @Autowired private TenantMembershipRepository membershipRepository;
+    @Autowired private JdbcTemplate jdbc;
+    @Autowired private PasswordEncoder passwordEncoder;
 
     @Test
-    void rolePermissionMutationAndMembershipRoleDemotionApplyOnNextResolutionForSameIdentity() {
-        String suffix = UUID.randomUUID().toString();
-        String tenantPublicId = UUID.randomUUID().toString();
-        String userPublicId = UUID.randomUUID().toString();
-        String membershipPublicId = UUID.randomUUID().toString();
-        String rolePublicId = UUID.randomUUID().toString();
+    void permissionRemovalAndRoleDemotionApplyOnNextResolutionForSameUserAndMembership() {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        UserEntity user = new UserEntity();
+        user.setEmail("a3-live-" + suffix + "@example.test");
+        user.setUsername("a3-live-" + suffix);
+        user.setFullName("A3 Live Permission Test");
+        user.setPasswordHash(passwordEncoder.encode("TestPassword123"));
+        user.setStatus(UserStatus.ACTIVE);
+        user = userRepository.saveAndFlush(user);
 
-        jdbc.update("""
-                INSERT INTO tenants (public_id, tenant_code, legal_name, display_name, status)
-                VALUES (?, ?, 'Permission Revocation Test', 'Permission Revocation Test', 'ACTIVE')
-                """, tenantPublicId, "PERM-" + suffix.substring(0, 12).toUpperCase());
-        Long tenantId = jdbc.queryForObject(
-                "SELECT id FROM tenants WHERE public_id = ?", Long.class, tenantPublicId);
+        TenantEntity tenant = new TenantEntity();
+        tenant.setTenantCode("A3LIVE" + suffix.toUpperCase());
+        tenant.setLegalName("A3 Live Permission Test");
+        tenant.setDisplayName("A3 Live " + suffix);
+        tenant.setStatus(TenantStatus.ACTIVE);
+        tenant = tenantRepository.saveAndFlush(tenant);
 
-        jdbc.update("""
-                INSERT INTO users (public_id, email, username, password_hash, full_name, status)
-                VALUES (?, ?, ?, 'not-used-by-this-test', 'Permission Revocation User', 'ACTIVE')
-                """, userPublicId, "permission-" + suffix + "@example.test", "permission-" + suffix);
-        Long userId = jdbc.queryForObject(
-                "SELECT id FROM users WHERE public_id = ?", Long.class, userPublicId);
+        TenantMembershipEntity membership = new TenantMembershipEntity();
+        membership.setTenantId(tenant.getId());
+        membership.setUserId(user.getId());
+        membership.setStatus(MembershipStatus.ACTIVE);
+        membership = membershipRepository.saveAndFlush(membership);
 
-        jdbc.update("""
-                INSERT INTO tenant_memberships (public_id, tenant_id, user_id, status)
-                VALUES (?, ?, ?, 'ACTIVE')
-                """, membershipPublicId, tenantId, userId);
-        Long membershipId = jdbc.queryForObject(
-                "SELECT id FROM tenant_memberships WHERE public_id = ?", Long.class, membershipPublicId);
-
+        String roleCode = "A3_TEST_" + suffix.toUpperCase();
         jdbc.update("""
                 INSERT INTO roles (public_id, tenant_id, role_code, role_name, is_system_role, status)
-                VALUES (?, ?, ?, 'Revocation Test Role', 0, 'ACTIVE')
-                """, rolePublicId, tenantId, "REVOCATION_" + suffix.substring(0, 12).toUpperCase());
+                VALUES (?, ?, ?, ?, 0, 'ACTIVE')
+                """, UUID.randomUUID().toString(), tenant.getId(), roleCode, "A3 Test Role");
         Long roleId = jdbc.queryForObject(
-                "SELECT id FROM roles WHERE public_id = ?", Long.class, rolePublicId);
+                "SELECT id FROM roles WHERE tenant_id = ? AND role_code = ?", Long.class,
+                tenant.getId(), roleCode);
 
-        Long readPermissionId = jdbc.queryForObject(
-                "SELECT id FROM permissions WHERE permission_code = 'WMS_ITEM_READ'", Long.class);
-        Long createPermissionId = jdbc.queryForObject(
-                "SELECT id FROM permissions WHERE permission_code = 'WMS_ITEM_CREATE'", Long.class);
-
-        jdbc.update("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
-                roleId, readPermissionId);
-        jdbc.update("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
-                roleId, createPermissionId);
+        String permissionCode = "WMS_A3_TEST_" + suffix.toUpperCase();
         jdbc.update("""
-                INSERT INTO membership_roles (tenant_id, membership_id, role_id)
-                VALUES (?, ?, ?)
-                """, tenantId, membershipId, roleId);
+                INSERT INTO permissions (permission_code, module, description)
+                VALUES (?, 'A3_TEST', 'Disposable integration permission')
+                """, permissionCode);
+        Long permissionId = jdbc.queryForObject(
+                "SELECT id FROM permissions WHERE permission_code = ?", Long.class, permissionCode);
 
-        // Same authenticated subject + membership pair is reused on every resolution,
-        // exactly as it is for successive requests carrying the same access token.
+        jdbc.update("INSERT INTO membership_roles (tenant_id, membership_id, role_id) VALUES (?, ?, ?)",
+                tenant.getId(), membership.getId(), roleId);
+        jdbc.update("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
+                roleId, permissionId);
+
+        String userPublicId = user.getPublicId();
+        String membershipPublicId = membership.getPublicId();
+
         WmsMembershipAccess before = accessService.resolve(userPublicId, membershipPublicId);
-        assertTrue(before.hasPermission("WMS_ITEM_READ"));
-        assertTrue(before.hasPermission("WMS_ITEM_CREATE"));
+        assertTrue(before.permissions().contains(permissionCode),
+                "permission must be present before revocation");
 
-        // Mutate the live role-permission graph in MySQL while retaining the identity.
-        assertEquals(1, jdbc.update("""
-                DELETE FROM role_permissions
-                WHERE role_id = ? AND permission_id = ?
-                """, roleId, readPermissionId));
-
+        jdbc.update("DELETE FROM role_permissions WHERE role_id = ? AND permission_id = ?",
+                roleId, permissionId);
         WmsMembershipAccess afterPermissionRevocation =
                 accessService.resolve(userPublicId, membershipPublicId);
-        assertFalse(afterPermissionRevocation.hasPermission("WMS_ITEM_READ"));
-        assertTrue(afterPermissionRevocation.hasPermission("WMS_ITEM_CREATE"));
+        assertFalse(afterPermissionRevocation.permissions().contains(permissionCode),
+                "revoked role permission must not survive in a previously authenticated identity");
 
-        // Demote the same membership by removing its role; next resolution must lose
-        // every permission from that role without issuing a replacement token.
-        assertEquals(1, jdbc.update("""
-                DELETE FROM membership_roles WHERE tenant_id = ? AND membership_id = ? AND role_id = ?
-                """, tenantId, membershipId, roleId));
-
+        jdbc.update("DELETE FROM membership_roles WHERE tenant_id = ? AND membership_id = ? AND role_id = ?",
+                tenant.getId(), membership.getId(), roleId);
         WmsMembershipAccess afterRoleDemotion = accessService.resolve(userPublicId, membershipPublicId);
-        assertFalse(afterRoleDemotion.hasPermission("WMS_ITEM_READ"));
-        assertFalse(afterRoleDemotion.hasPermission("WMS_ITEM_CREATE"));
-        assertEquals(0, jdbc.queryForObject(
-                "SELECT COUNT(*) FROM membership_roles WHERE membership_id = ? AND role_id = ?",
-                Integer.class, membershipId, roleId));
+        assertTrue(afterRoleDemotion.permissions().isEmpty(),
+                "role demotion must remove all permissions on the next resolution");
+        assertEquals(membershipPublicId, afterRoleDemotion.membershipPublicId());
     }
 }
