@@ -68,6 +68,6 @@ class WmsPickingPackingTenantBoundaryTest {
 
     private WmsMembershipAccess access(String permission) {
         return new WmsMembershipAccess(
-                30L, "user-public", 10L, "tenant-a", 20L, "membership-a", Set.of(permission));
+                30L, "user-public", 20L, "tenant-a", 30L, "membership-a", Set.of(permission));
     }
 }
