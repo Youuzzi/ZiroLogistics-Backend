@@ -55,7 +55,19 @@ The advisory data lists 7.0.9 as the open-source patched version. Spring Boot 3.
 
 Commons Compress 1.28.0 is used rather than the minimum 1.26.0 advisory fix because 1.26.1 changed TAR stream charset handling to use Commons IO, avoiding a runtime linkage failure against the newer Commons Codec line managed by Spring Boot.
 
-Reachability must be reviewed against the actual controller and view configuration. The WMS application is REST-oriented; however, a REST architecture label alone is insufficient to close either advisory. If the application does not register SSE view-fragment rendering or XsltView resolution, record the code/config evidence and treat the findings as conditionally not reachable. Otherwise, plan a separately tested Spring Framework 7 / Spring Boot 4 migration or an upstream supported patch.
+### Reachability review performed
+
+The source tree was reviewed for these exact trigger paths:
+
+- All 19 WMS HTTP controller classes under `src/main/java/com/zirocraft/zirologistics/wms/**/http/*Controller.java` are annotated `@RestController`; none is a view-rendering `@Controller`.
+- No controller declares `SseEmitter` or `ServerSentEvent`.
+- No controller or WMS configuration class references `XsltView` or `ViewResolver`.
+- No HTML, JSP, XSL/XSLT, or template resources exist under `src/main/resources`.
+- Controller routes are explicit REST mappings; no catch-all view-rendering controller mapping was found.
+
+Based on that code/config review, the two Spring Framework advisories are **accepted as conditionally not reachable in the current WMS runtime**, not fixed in the dependency. The root `osv-scanner.toml` contains narrowly scoped ignores for these two CVEs only, with this rationale. The workflow remains `fail-on-vuln: true`, so any other new/unaccepted advisory still fails CI.
+
+Re-open this decision immediately if SSE endpoints, view fragments, `XsltView`, a view resolver, or server-rendered templates are introduced. Otherwise, plan a separately tested Spring Framework 7 / Spring Boot 4 migration or apply an upstream supported 6.2 patch if one becomes available.
 
 ### Tomcat 10.1.62 residual risk
 
@@ -76,6 +88,16 @@ Reachability must be reviewed against the actual controller and view configurati
 5. Review CodeQL findings separately; OSV does not substitute for static code analysis.
 6. Do not enable `fail-on-vuln: true` until the known remaining findings are either remediated or formally triaged. After triage, configure the workflow to fail on unaccepted vulnerabilities so future regressions cannot silently pass.
 
+## Post-remediation scan and accepted risk
+
+- Run: `44905144282`, commit `2c9a503cc98c323c87ff9a115f5c6a8461e4d43f`
+- SARIF artifact: `14707478237`
+- OSV result: 1 affected package, 2 Critical advisories, 0 High, 0 Medium, 0 Low, 0 Unknown.
+- Both remaining results are on `org.springframework:spring-webmvc@6.2.19`: CVE-2026-47890 and CVE-2026-47884.
+- Compared with the original 69-result inventory, 67 advisory matches are no longer reported after the dependency upgrades.
+- The OSV workflow in this PR sets `fail-on-vuln: true`; the current run correctly failed while the two unaccepted findings were present.
+- The two remaining findings are listed in `osv-scanner.toml` only after the source/config reachability review above. A fresh scan must confirm the ignore configuration is honored and that no other findings remain.
+
 ## Status
 
-This document records the original scan and the intended remediation in PR #237. It is not a final clean bill of health. The post-upgrade OSV run and Spring Framework conditional reachability review are still required.
+The dependency upgrades and the two conditional Spring Framework exceptions are documented separately. This is not a claim that Spring Framework 6.2.19 is patched; it is an explicit, evidence-based non-reachability decision for the current REST-only WMS application. Keep the scanner blocking all other findings.
