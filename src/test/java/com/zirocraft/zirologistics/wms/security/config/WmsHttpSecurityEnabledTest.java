@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -38,6 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "wms.security.http.auth-endpoints-enabled=true"
 })
 class WmsHttpSecurityEnabledTest {
+
+    private static final AtomicInteger PUBLIC_POST_INVOCATIONS = new AtomicInteger();
 
     @Autowired
     private MockMvc mockMvc;
@@ -82,6 +85,47 @@ class WmsHttpSecurityEnabledTest {
     }
 
     @Test
+    void everyExplicitPublicAuthenticationRouteRequiresPostAndOnlyPostIsPublic() throws Exception {
+        String[] publicPostRoutes = {
+                "/api/wms/v1/auth/credentials",
+                "/api/wms/v1/auth/tenant-selection",
+                "/api/wms/v1/auth/password-reset-requests",
+                "/api/wms/v1/auth/password-resets",
+                "/api/wms/v1/auth/email-verification-requests",
+                "/api/wms/v1/auth/email-verifications",
+                "/api/wms/v1/invitations/acceptances"
+        };
+
+        for (String route : publicPostRoutes) {
+            mockMvc.perform(post(route).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isOk());
+            mockMvc.perform(get(route))
+                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .put(route).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .delete(route))
+                    .andExpect(status().isUnauthorized());
+        }
+    }
+
+    @Test
+    void unsupportedMethodsCannotInvokePublicPostHandler() throws Exception {
+        PUBLIC_POST_INVOCATIONS.set(0);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/api/wms/v1/auth/credentials"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/api/wms/v1/auth/credentials")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        org.assertj.core.api.Assertions.assertThat(PUBLIC_POST_INVOCATIONS.get()).isZero();
+    }
+
+    @Test
     void acceptsOnlyBearerTokensResolvedByWmsAuthenticationConverter() throws Exception {
         Instant now = Instant.now();
         Jwt jwt = Jwt.withTokenValue("valid-test-token")
@@ -112,6 +156,7 @@ class WmsHttpSecurityEnabledTest {
     static class ProbeController {
         @PostMapping(value = "/api/wms/v1/auth/credentials", produces = MediaType.TEXT_PLAIN_VALUE)
         String publicPost() {
+            PUBLIC_POST_INVOCATIONS.incrementAndGet();
             return "wms-public-post";
         }
 
