@@ -35,6 +35,8 @@ services:
       WMS_JWT_SELECTION_AUDIENCE: ${WMS_JWT_SELECTION_AUDIENCE:-zirologistics-wms-selection}
       WMS_JWT_ACCESS_AUDIENCE: ${WMS_JWT_ACCESS_AUDIENCE:-zirologistics-wms-access}
       WMS_JWT_KEY_ID: ${WMS_JWT_KEY_ID:-local-disabled}
+      WMS_JWT_PUBLIC_KEY_PEM: ${WMS_JWT_PUBLIC_KEY_PEM:-}
+      WMS_JWT_PRIVATE_KEY_PEM: ${WMS_JWT_PRIVATE_KEY_PEM:-}
     ports:
       - "8081:8080"
     restart: unless-stopped
