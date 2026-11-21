@@ -29,7 +29,7 @@
 | `org.springframework.boot:spring-boot-autoconfigure` | 3.5.13 | 1 | Medium | Upgrade parent to 3.5.16 |
 | `org.springframework.boot:spring-boot-starter-mail` | 3.5.13 | 1 | Medium | Upgrade parent to 3.5.16 |
 | `org.springframework.boot:spring-boot-devtools` | 3.5.13 | 1 | High | Remove development-only dependency |
-| `org.apache.commons:commons-compress` | 1.24.0 | 2 | Medium | Pin 1.26.0 |
+| `org.apache.commons:commons-compress` | 1.24.0 | 2 | Medium | Pin 1.28.0 |
 | `org.apache.logging.log4j:log4j-api` | 2.24.3 | 1 | Medium | Pin 2.25.5 |
 | `ch.qos.logback:logback-core` | 1.5.32 | 2 | Low | Pin 1.5.38 |
 
@@ -52,6 +52,8 @@ Two Critical advisories remain associated with Spring Framework 6.2.17 in the or
 - CVE-2026-47884 / GHSA-pc63-qcmh-9cmg: XsltView path limitation that can lead to SSRF/RCE under the described view-rendering conditions.
 
 The advisory data lists 7.0.9 as the open-source patched version. Spring Boot 3.5.16 manages Spring Framework 6.2.19, which fixes the other 6.2.17 findings but remains within the affected range for these two advisories. This PR does not claim those two findings are fixed.
+
+Commons Compress 1.28.0 is used rather than the minimum 1.26.0 advisory fix because 1.26.1 changed TAR stream charset handling to use Commons IO, avoiding a runtime linkage failure against the newer Commons Codec line managed by Spring Boot.
 
 Reachability must be reviewed against the actual controller and view configuration. The WMS application is REST-oriented; however, a REST architecture label alone is insufficient to close either advisory. If the application does not register SSE view-fragment rendering or XsltView resolution, record the code/config evidence and treat the findings as conditionally not reachable. Otherwise, plan a separately tested Spring Framework 7 / Spring Boot 4 migration or an upstream supported patch.
 
