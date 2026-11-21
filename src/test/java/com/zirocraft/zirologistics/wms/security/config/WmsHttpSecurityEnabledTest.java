@@ -154,15 +154,18 @@ class WmsHttpSecurityEnabledTest {
 
     @RestController
     static class ProbeController {
-        @PostMapping(value = "/api/wms/v1/auth/credentials", produces = MediaType.TEXT_PLAIN_VALUE)
+        @PostMapping(value = {
+                "/api/wms/v1/auth/credentials",
+                "/api/wms/v1/auth/tenant-selection",
+                "/api/wms/v1/auth/password-reset-requests",
+                "/api/wms/v1/auth/password-resets",
+                "/api/wms/v1/auth/email-verification-requests",
+                "/api/wms/v1/auth/email-verifications",
+                "/api/wms/v1/invitations/acceptances"
+        }, produces = MediaType.TEXT_PLAIN_VALUE)
         String publicPost() {
             PUBLIC_POST_INVOCATIONS.incrementAndGet();
             return "wms-public-post";
-        }
-
-        @PostMapping(value = "/api/wms/v1/invitations/acceptances", produces = MediaType.TEXT_PLAIN_VALUE)
-        String publicInvitationAcceptance() {
-            return "wms-public-invitation-acceptance";
         }
 
         @GetMapping(value = "/api/wms/v1/auth/credentials", produces = MediaType.TEXT_PLAIN_VALUE)
