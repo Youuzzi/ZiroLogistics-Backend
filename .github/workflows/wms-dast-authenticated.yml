@@ -71,7 +71,7 @@ jobs:
           docker compose --env-file /tmp/wms-dast.env -f compose.yml -f /tmp/wms-dast-compose.yml exec -T mysql \
             mysql --user=root --password=wmsdast-root-password zirologistics_wms <<'SQL'
           INSERT INTO users (public_id, email, username, password_hash, full_name, status)
-          VALUES ('dast-user-0000-0000-0000-000000000001', 'wms-dast@example.invalid',
+          VALUES ('d0a57000-0000-4000-8000-000000000001', 'wms-dast@example.invalid',
                   'wms-dast', 'not-used-for-bearer-auth', 'Disposable WMS DAST User', 'ACTIVE');
 
           INSERT INTO tenants (public_id, tenant_code, legal_name, display_name, status, timezone, default_currency)
@@ -87,7 +87,7 @@ jobs:
           VALUES ('WMS_WAREHOUSE_READ', 'WAREHOUSE', 'Read tenant warehouses for DAST');
 
           INSERT INTO roles (public_id, tenant_id, role_code, role_name, is_system_role, status)
-          SELECT 'dast-role-0000-0000-0000-000000000001', id, 'DAST_READ_ONLY',
+          SELECT 'd0a57000-0000-4000-8000-000000000004', id, 'DAST_READ_ONLY',
                  'Disposable DAST Read Only', 0, 'ACTIVE'
           FROM tenants WHERE tenant_code = 'DAST-TENANT';
 
@@ -117,7 +117,7 @@ jobs:
           set -euo pipefail
           now="$(date +%s)"
           header="$(printf '%s' '{"alg":"RS256","kid":"wms-dast-key","typ":"JWT"}' | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
-          payload="$(printf '{"iss":"https://zirologistics.local","aud":["zirologistics-wms-access"],"sub":"dast-user-0000-0000-0000-000000000001","mid":"dast-membership-0000-0000-000000000001","token_use":"access","cv":0,"iat":%s,"exp":%s,"jti":"wms-dast-%s"}' "$now" "$((now + 600))" "$now" | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          payload="$(printf '{"iss":"https://zirologistics.local","aud":["zirologistics-wms-access"],"sub":"d0a57000-0000-4000-8000-000000000001","mid":"dast-membership-0000-0000-000000000001","token_use":"access","cv":0,"iat":%s,"exp":%s,"jti":"wms-dast-%s"}' "$now" "$((now + 600))" "$now" | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
           signing_input="$header.$payload"
           signature="$(printf '%s' "$signing_input" | openssl dgst -sha256 -sign /tmp/wms-dast-private.pem | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
           token="$signing_input.$signature"
