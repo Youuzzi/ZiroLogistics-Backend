@@ -391,6 +391,46 @@ class WmsOutboundShipmentMySqlIntegrationTest {
     }
 
     @Test
+    void outboundShipmentRejectsForeignTenantWarehouseCustomerAndItemReferencesWithoutSideEffects() {
+        Fixture otherTenant = fixture("NONE");
+        String ownShipmentId = createShipment(fixture);
+        assertNotNull(ownShipmentId);
+        int shipmentCountBefore = count("SELECT COUNT(*) FROM outbound_shipments WHERE tenant_id=?", fixture.tenantId());
+        int lineCountBefore = count("SELECT COUNT(*) FROM outbound_shipment_lines WHERE tenant_id=?", fixture.tenantId());
+        int auditCountBefore = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id=?", fixture.tenantId());
+
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> shipmentService.create(fixture.principal(),
+                        new WmsOutboundShipmentService.CreateShipmentCommand(
+                                otherTenant.warehousePublicId(), fixture.customerPublicId(), null,
+                                "CROSS-WH-" + UUID.randomUUID(), null, "SALES", null, null)));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> shipmentService.create(fixture.principal(),
+                        new WmsOutboundShipmentService.CreateShipmentCommand(
+                                fixture.warehousePublicId(), otherTenant.customerPublicId(), null,
+                                "CROSS-CUSTOMER-" + UUID.randomUUID(), null, "SALES", null, null)));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> shipmentService.addLine(fixture.principal(), ownShipmentId,
+                        new WmsOutboundShipmentService.ShipmentLineCommand(
+                                otherTenant.itemPublicId(), new BigDecimal("1.0000"), null)));
+
+        assertEquals(shipmentCountBefore,
+                count("SELECT COUNT(*) FROM outbound_shipments WHERE tenant_id=?", fixture.tenantId()));
+        assertEquals(lineCountBefore,
+                count("SELECT COUNT(*) FROM outbound_shipment_lines WHERE tenant_id=?", fixture.tenantId()));
+        assertEquals(auditCountBefore,
+                count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id=?", fixture.tenantId()));
+        assertEquals("DRAFT", shipmentStatus(fixture, ownShipmentId));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+        assertEquals(BigDecimal.ZERO.setScale(4), reserved(fixture));
+
+        String validLineId = addLine(fixture, ownShipmentId, "1.0000");
+        assertNotNull(validLineId);
+        assertEquals(1, count("SELECT COUNT(*) FROM outbound_shipment_lines WHERE tenant_id=? AND public_id=?",
+                fixture.tenantId(), validLineId));
+    }
+
+    @Test
     void outboundShipmentAndPickingResourcesAreTenantIsolatedAcrossWorkflowServices() {
         String shipmentId = createShipment(fixture);
         String lineId = addLine(fixture, shipmentId, "5.0000");
