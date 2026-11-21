@@ -19,10 +19,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.time.Instant;
 import java.util.Set;
+import java.util.Map;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -102,7 +104,7 @@ class WmsHttpSecurityEnabledTest {
         when(accessJwtDecoder.decode("valid-test-token")).thenReturn(jwt);
         when(authenticationConverter.convert(jwt)).thenReturn(authentication);
 
-        mockMvc.perform(get("/wms/security-probe/tenant?tenantId=tenant-attacker")
+        mockMvc.perform(post("/wms/security-probe/tenant?tenantId=tenant-attacker")
                         .header("Authorization", "Bearer valid-test-token")
                         .header("X-Tenant-ID", "tenant-attacker")
                         .header("X-Tenant-Public-Id", "tenant-attacker")
@@ -161,8 +163,10 @@ class WmsHttpSecurityEnabledTest {
             return "wms-protected";
         }
 
-        @GetMapping(value = "/wms/security-probe/tenant", produces = MediaType.TEXT_PLAIN_VALUE)
-        String tenant(@AuthenticationPrincipal WmsAuthenticatedPrincipal principal) {
+        @PostMapping(value = "/wms/security-probe/tenant", consumes = MediaType.APPLICATION_JSON_VALUE,
+                produces = MediaType.TEXT_PLAIN_VALUE)
+        String tenant(@AuthenticationPrincipal WmsAuthenticatedPrincipal principal,
+                      @RequestBody Map<String, Object> request) {
             return principal.tenantPublicId();
         }
     }
