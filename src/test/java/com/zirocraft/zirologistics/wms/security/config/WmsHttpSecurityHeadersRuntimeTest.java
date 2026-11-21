@@ -42,6 +42,7 @@ class WmsHttpSecurityHeadersRuntimeTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(header().exists("X-Frame-Options"))
-                .andExpect(header().string("Cache-Control", containsString("no-store")));
+                .andExpect(header().string("Cache-Control", containsString("no-store")))
+                .andExpect(header().string("Cross-Origin-Resource-Policy", "same-origin"));
     }
 }
