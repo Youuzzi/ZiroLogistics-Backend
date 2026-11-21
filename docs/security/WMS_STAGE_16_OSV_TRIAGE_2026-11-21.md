@@ -1,0 +1,103 @@
+# Stage 16 OSV dependency triage — 2026-11-21
+
+## Evidence
+
+- Repository: `Youuzzi/ZiroLogistics-Backend`
+- Scan workflow: Backend CI, OSV Scanner reusable workflow v2.7.1
+- Scan result: 69 advisory matches across 18 Maven packages
+- Severity totals from the scanner log: 10 Critical, 21 High, 31 Medium, 7 Low
+- SARIF artifact: `OSV Scanner SARIF file.zip`, artifact ID `14706809136`
+- Associated run: `44904131600`
+- SARIF contains 69 individual results. The reusable workflow's green conclusion is not evidence of zero vulnerabilities: `fail-on-vuln: false` is configured, and the scan log also reported a results-file handling failure before the SARIF reporter emitted its findings.
+
+## Package inventory
+
+| Package | Observed version | Advisory matches | Highest severity | Remediation in this PR |
+|---|---:|---:|---|---|
+| `org.apache.tomcat.embed:tomcat-embed-core` | 10.1.53 | 16 | Critical | Upgrade to 10.1.62 |
+| `org.springframework:spring-webmvc` | 6.2.17 | 11 | Critical | Boot-managed 6.2.19; two conditional Critical advisories remain |
+| `com.fasterxml.jackson.core:jackson-databind` | 2.21.2 | 16 | High | Jackson BOM 2.21.8 |
+| `com.fasterxml.jackson.core:jackson-core` | 2.21.2 | 3 | High | Jackson BOM 2.21.8 |
+| `org.springframework.data:spring-data-commons` | 3.5.10 | 4 | High | Boot-managed Spring Data 2025.0.12 |
+| `org.springframework.security:spring-security-web` | 6.5.9 | 2 | Medium | Boot-managed Spring Security 6.5.11 |
+| `org.springframework.security:spring-security-core` | 6.5.9 | 2 | Medium | Boot-managed Spring Security 6.5.11 |
+| `org.springframework.security:spring-security-oauth2-jose` | 6.5.9 | 1 | Medium | Boot-managed Spring Security 6.5.11 |
+| `org.springframework:spring-expression` | 6.2.17 | 3 | High | Boot-managed 6.2.19 |
+| `org.springframework:spring-web` | 6.2.17 | 1 | Medium | Boot-managed 6.2.19 |
+| `org.springframework:spring-core` | 6.2.17 | 1 | Low | Boot-managed 6.2.19 |
+| `org.springframework.boot:spring-boot` | 3.5.13 | 1 | High | Upgrade parent to 3.5.16 |
+| `org.springframework.boot:spring-boot-autoconfigure` | 3.5.13 | 1 | Medium | Upgrade parent to 3.5.16 |
+| `org.springframework.boot:spring-boot-starter-mail` | 3.5.13 | 1 | Medium | Upgrade parent to 3.5.16 |
+| `org.springframework.boot:spring-boot-devtools` | 3.5.13 | 1 | High | Remove development-only dependency |
+| `org.apache.commons:commons-compress` | 1.24.0 | 2 | Medium | Pin 1.28.0 |
+| `org.apache.logging.log4j:log4j-api` | 2.24.3 | 1 | Medium | Pin 2.25.5 |
+| `ch.qos.logback:logback-core` | 1.5.32 | 2 | Low | Pin 1.5.38 |
+
+Package totals above are counts of advisory matches, not distinct vulnerabilities exploitable through application code. One package version can match several advisories.
+
+## Reachability and risk triage
+
+### Runtime-sensitive components
+
+- **Tomcat embedded core:** present in the production web runtime. Eight of the matches were Critical in the observed version. This is a runtime component and must be upgraded; do not dismiss these as test-only.
+- **Jackson core/databind:** used by the HTTP JSON stack. Treat as reachable input-processing dependencies; upgrade rather than accepting the findings.
+- **Spring Security:** directly participates in the authentication and authorization boundary. Upgrade to the fixed managed line.
+- **Spring Data / Spring Framework:** present in repository and MVC runtime paths. Upgrade the general advisory set to the fixed 6.2.19 / 2025.0.12 lines.
+
+### Conditional Spring Framework Critical advisories
+
+Two Critical advisories remain associated with Spring Framework 6.2.17 in the original scan:
+
+- CVE-2026-47890 / GHSA-j9f9-w8pj-32f8: SSE stream corruption while rendering view fragments.
+- CVE-2026-47884 / GHSA-pc63-qcmh-9cmg: XsltView path limitation that can lead to SSRF/RCE under the described view-rendering conditions.
+
+The advisory data lists 7.0.9 as the open-source patched version. Spring Boot 3.5.16 manages Spring Framework 6.2.19, which fixes the other 6.2.17 findings but remains within the affected range for these two advisories. This PR does not claim those two findings are fixed.
+
+Commons Compress 1.28.0 is used rather than the minimum 1.26.0 advisory fix because 1.26.1 changed TAR stream charset handling to use Commons IO, avoiding a runtime linkage failure against the newer Commons Codec line managed by Spring Boot.
+
+### Reachability review performed
+
+The source tree was reviewed for these exact trigger paths:
+
+- All 19 WMS HTTP controller classes under `src/main/java/com/zirocraft/zirologistics/wms/**/http/*Controller.java` are annotated `@RestController`; none is a view-rendering `@Controller`.
+- No controller declares `SseEmitter` or `ServerSentEvent`.
+- No controller or WMS configuration class references `XsltView` or `ViewResolver`.
+- No HTML, JSP, XSL/XSLT, or template resources exist under `src/main/resources`.
+- Controller routes are explicit REST mappings; no catch-all view-rendering controller mapping was found.
+
+Based on that code/config review, the two Spring Framework advisories are **accepted as conditionally not reachable in the current WMS runtime**, not fixed in the dependency. The root `osv-scanner.toml` contains narrowly scoped ignores for these two CVEs only, with this rationale. The workflow remains `fail-on-vuln: true`, so any other new/unaccepted advisory still fails CI.
+
+Re-open this decision immediately if SSE endpoints, view fragments, `XsltView`, a view resolver, or server-rendered templates are introduced. Otherwise, plan a separately tested Spring Framework 7 / Spring Boot 4 migration or apply an upstream supported 6.2 patch if one becomes available.
+
+### Tomcat 10.1.62 residual risk
+
+10.1.62 is selected because it includes fixes for the observed 10.1.53 findings. The Tomcat advisory page also identifies a newer issue affecting 10.1.62 in TLS-PSK clustering, fixed in 10.1.63 when released. WMS does not configure Tomcat clustering or TLS-PSK. Confirm this remains true in deployment configuration; do not use Tomcat clustering with 10.1.62.
+
+### Dependency scope caveats
+
+- `commons-compress` appears in the Maven scan, but its exact resolved scope and dependency path must be verified from the Maven dependency tree. If it is only pulled by Testcontainers, document it as test-scope rather than runtime exposure; still upgrade it.
+- `spring-boot-devtools` is development-only and is removed from the application dependency graph in this PR.
+- The scanner output does not establish exploitability or call-path reachability. Dependency presence, severity, reachability and fix status are separate fields.
+
+## Required post-remediation validation
+
+1. Run `./mvnw --batch-mode --no-transfer-progress -Pwms-runtime clean verify` on Java 21.
+2. Build the WMS Docker image and inspect the resolved runtime dependency graph.
+3. Re-run OSV and retain the new SARIF artifact.
+4. Compare before/after package versions and advisory counts.
+5. Review CodeQL findings separately; OSV does not substitute for static code analysis.
+6. Do not enable `fail-on-vuln: true` until the known remaining findings are either remediated or formally triaged. After triage, configure the workflow to fail on unaccepted vulnerabilities so future regressions cannot silently pass.
+
+## Post-remediation scan and accepted risk
+
+- Run: `44905144282`, commit `2c9a503cc98c323c87ff9a115f5c6a8461e4d43f`
+- SARIF artifact: `14707478237`
+- OSV result: 1 affected package, 2 Critical advisories, 0 High, 0 Medium, 0 Low, 0 Unknown.
+- Both remaining results are on `org.springframework:spring-webmvc@6.2.19`: CVE-2026-47890 and CVE-2026-47884.
+- Compared with the original 69-result inventory, 67 advisory matches are no longer reported after the dependency upgrades.
+- The OSV workflow in this PR sets `fail-on-vuln: true`; the current run correctly failed while the two unaccepted findings were present.
+- The two remaining findings are listed in `osv-scanner.toml` only after the source/config reachability review above. A fresh scan must confirm the ignore configuration is honored and that no other findings remain.
+
+## Status
+
+The dependency upgrades and the two conditional Spring Framework exceptions are documented separately. This is not a claim that Spring Framework 6.2.19 is patched; it is an explicit, evidence-based non-reachability decision for the current REST-only WMS application. Keep the scanner blocking all other findings.
