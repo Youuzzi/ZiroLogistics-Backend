@@ -141,13 +141,35 @@ class MySqlWmsIdentityActionTokenStorageAdapterIntegrationTest {
     }
 
     @Test
-    void concurrentTokenConsumptionAllowsExactlyOneWinner() throws Exception {
-        long userId = insertUser("consume");
-        String email = uniqueEmail("consume");
+    void concurrentTokenConsumptionAllowsExactlyOneWinnerForEveryOneTimeTokenPurpose() throws Exception {
+        for (WmsIdentityActionTokenPurpose purpose : List.of(
+                WmsIdentityActionTokenPurpose.INVITATION,
+                WmsIdentityActionTokenPurpose.EMAIL_VERIFICATION,
+                WmsIdentityActionTokenPurpose.PASSWORD_RESET)) {
+            assertConcurrentConsumptionSingleWinner(purpose);
+        }
+    }
+
+    private static void assertConcurrentConsumptionSingleWinner(
+            WmsIdentityActionTokenPurpose purpose) throws Exception {
+        String label = "consume-" + purpose.name().toLowerCase(java.util.Locale.ROOT);
+        String email = uniqueEmail(label);
+        Long userId = null;
+        Long tenantId = null;
+        Long inviterId = null;
+        if (purpose == WmsIdentityActionTokenPurpose.INVITATION) {
+            tenantId = insertTenant();
+            inviterId = insertUser(label + "-inviter");
+        } else {
+            userId = insertUser(label);
+        }
         byte[] digest = randomDigest();
+        Long boundUserId = userId;
+        Long boundTenantId = tenantId;
+        Long boundInviterId = inviterId;
         long tokenId = transactionTemplate.execute(status -> adapter.insert(
-                digest, WmsIdentityActionTokenPurpose.PASSWORD_RESET,
-                userId, null, null, email, NOW.plusSeconds(1_800), NOW));
+                digest, purpose, boundUserId, boundTenantId, boundInviterId,
+                email, NOW.plusSeconds(1_800), NOW));
 
         int workers = 2;
         CountDownLatch ready = new CountDownLatch(workers);
@@ -163,8 +185,8 @@ class MySqlWmsIdentityActionTokenStorageAdapterIntegrationTest {
                         throw new IllegalStateException("Concurrent consume test start timed out");
                     }
                     return transactionTemplate.execute(status -> {
-                        Optional<WmsIdentityActionTokenRecord> token = adapter.findByDigestForUpdate(
-                                digest, WmsIdentityActionTokenPurpose.PASSWORD_RESET);
+                        Optional<WmsIdentityActionTokenRecord> token =
+                                adapter.findByDigestForUpdate(digest, purpose);
                         if (token.isEmpty() || !token.get().isUsableAt(NOW)) {
                             return false;
                         }
@@ -181,15 +203,16 @@ class MySqlWmsIdentityActionTokenStorageAdapterIntegrationTest {
                     winners++;
                 }
             }
-            assertEquals(1, winners);
+            assertEquals(1, winners, "exactly one consumer must win for purpose " + purpose);
         } finally {
             executor.shutdownNow();
         }
 
-        WmsIdentityActionTokenRecord consumed = find(digest, WmsIdentityActionTokenPurpose.PASSWORD_RESET);
+        WmsIdentityActionTokenRecord consumed = find(digest, purpose);
         assertEquals(tokenId, consumed.id());
         assertNotNull(consumed.consumedAt());
         assertFalse(consumed.isUsableAt(NOW.plusSeconds(2)));
+        assertTrue(adapter.findByDigest(digest, purpose).isPresent());
     }
 
     @Test
