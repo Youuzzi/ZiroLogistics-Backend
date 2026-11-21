@@ -57,6 +57,19 @@ class WmsHttpSecurityEnabledTest {
     }
 
     @Test
+    void rejectsBearerTokenWhenJwtDecoderFailsWithoutInvokingProtectedRoute() throws Exception {
+        when(accessJwtDecoder.decode("malformed-token"))
+                .thenThrow(new JwtException("synthetic decoder rejection"));
+
+        mockMvc.perform(get("/wms/security-probe")
+                        .header("Authorization", "Bearer malformed-token")
+                        .accept(MediaType.TEXT_PLAIN))
+                .andExpect(status().isUnauthorized());
+
+        verify(accessJwtDecoder).decode("malformed-token");
+    }
+
+    @Test
     void permitsOnlyExactPublicPostAuthenticationRoutes() throws Exception {
         mockMvc.perform(post("/api/wms/v1/auth/credentials")
                         .contentType(MediaType.APPLICATION_JSON)
