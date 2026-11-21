@@ -39,7 +39,7 @@ class WmsCsrfBoundaryHttpTest {
         mockMvc.perform(post("/api/wms/v1/auth/credentials")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk());
     }
 
     @Test
