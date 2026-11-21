@@ -152,11 +152,24 @@ class MySqlWmsIdentityActionTokenStorageAdapterIntegrationTest {
 
     private static void assertConcurrentConsumptionSingleWinner(
             WmsIdentityActionTokenPurpose purpose) throws Exception {
-        long userId = insertUser("consume-" + purpose.name().toLowerCase(java.util.Locale.ROOT));
-        String email = uniqueEmail("consume-" + purpose.name().toLowerCase(java.util.Locale.ROOT));
+        String label = "consume-" + purpose.name().toLowerCase(java.util.Locale.ROOT);
+        String email = uniqueEmail(label);
+        Long userId = null;
+        Long tenantId = null;
+        Long inviterId = null;
+        if (purpose == WmsIdentityActionTokenPurpose.INVITATION) {
+            tenantId = insertTenant();
+            inviterId = insertUser(label + "-inviter");
+        } else {
+            userId = insertUser(label);
+        }
         byte[] digest = randomDigest();
+        Long boundUserId = userId;
+        Long boundTenantId = tenantId;
+        Long boundInviterId = inviterId;
         long tokenId = transactionTemplate.execute(status -> adapter.insert(
-                digest, purpose, userId, null, null, email, NOW.plusSeconds(1_800), NOW));
+                digest, purpose, boundUserId, boundTenantId, boundInviterId,
+                email, NOW.plusSeconds(1_800), NOW));
 
         int workers = 2;
         CountDownLatch ready = new CountDownLatch(workers);
