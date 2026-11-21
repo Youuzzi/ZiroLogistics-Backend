@@ -11,6 +11,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -30,20 +31,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 class WmsHttpSecurityMembershipRevocationRuntimeTest {
 
-    private final MockMvc mockMvc;
+    @Autowired
+    private MockMvc mockMvc;
 
-    private final JwtDecoder accessJwtDecoder;
+    @MockBean(name = "wmsAccessJwtDecoder")
+    private JwtDecoder accessJwtDecoder;
 
-    private final WmsJwtAuthenticationConverter authenticationConverter;
-
-    WmsHttpSecurityMembershipRevocationRuntimeTest(
-            MockMvc mockMvc,
-            @MockBean(name = "wmsAccessJwtDecoder") JwtDecoder accessJwtDecoder,
-            @MockBean WmsJwtAuthenticationConverter authenticationConverter) {
-        this.mockMvc = mockMvc;
-        this.accessJwtDecoder = accessJwtDecoder;
-        this.authenticationConverter = authenticationConverter;
-    }
+    @MockBean
+    private WmsJwtAuthenticationConverter authenticationConverter;
 
     @Test
     void deniesProtectedHttpRequestWhenMembershipResolutionRejectsExistingBearerToken() throws Exception {
