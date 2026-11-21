@@ -169,4 +169,41 @@ class WmsLoginMembershipRepositoryIntegrationTest {
         membership.setStatus(status);
         return membership;
     }
+}        String userPublicId = user.getPublicId();
+        String membershipPublicId = membership.getPublicId();
+        Long tenantId = tenant.getId();
+        Long membershipId = membership.getId();
+
+        assertEquals(userPublicId, membershipAccessService.resolve(
+                userPublicId, membershipPublicId).userPublicId());
+
+        jdbc.update("UPDATE tenants SET status = 'SUSPENDED' WHERE id = ?", tenantId);
+        assertThrows(WmsMembershipAccessDeniedException.class, () ->
+                membershipAccessService.resolve(userPublicId, membershipPublicId));
+
+        jdbc.update("UPDATE tenants SET status = 'ACTIVE' WHERE id = ?", tenantId);
+        jdbc.update("UPDATE tenant_memberships SET status = 'SUSPENDED' WHERE id = ?", membershipId);
+        assertThrows(WmsMembershipAccessDeniedException.class, () ->
+                membershipAccessService.resolve(userPublicId, membershipPublicId));
+    }
+
+    private static TenantEntity tenant(String code, String displayName, TenantStatus status) {
+        TenantEntity tenant = new TenantEntity();
+        tenant.setTenantCode(code);
+        tenant.setLegalName("Ziro WMS Integration Test");
+        tenant.setDisplayName(displayName);
+        tenant.setStatus(status);
+        return tenant;
+    }
+
+    private static TenantMembershipEntity membership(
+            Long tenantId,
+            Long userId,
+            MembershipStatus status) {
+        TenantMembershipEntity membership = new TenantMembershipEntity();
+        membership.setTenantId(tenantId);
+        membership.setUserId(userId);
+        membership.setStatus(status);
+        return membership;
+    }
 }
