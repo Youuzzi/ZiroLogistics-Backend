@@ -151,14 +151,14 @@ jobs:
           options_file="$(mktemp)"
           trap 'rm -f "$options_file"' EXIT
           {
-            printf '%s\\n' \
+            printf '%s\n' \
               'replacer.full_list(0).description=wms-bearer-auth' \
               'replacer.full_list(0).enabled=true' \
               'replacer.full_list(0).matchtype=REQ_HEADER' \
               'replacer.full_list(0).matchstr=Authorization' \
               'replacer.full_list(0).regex=false' \
               'replacer.full_list(0).url=http://127.0.0.1:8081/.*'
-            printf 'replacer.full_list(0).replacement=%s\\n' "$ZAP_AUTH_HEADER_VALUE"
+            printf 'replacer.full_list(0).replacement=%s\n' "$ZAP_AUTH_HEADER_VALUE"
           } > "$options_file"
           chmod 644 "$options_file"
           docker run --rm --network host \
