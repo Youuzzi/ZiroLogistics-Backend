@@ -75,17 +75,16 @@ jobs:
                   'wms-dast', 'not-used-for-bearer-auth', 'Disposable WMS DAST User', 'ACTIVE');
 
           INSERT INTO tenants (public_id, tenant_code, legal_name, display_name, status, timezone, default_currency)
-          VALUES ('dast-tenant-0000-0000-000000000001', 'DAST-TENANT',
+          VALUES ('d0a57000-0000-4000-8000-000000000002', 'DAST-TENANT',
                   'Disposable WMS DAST Tenant', 'WMS DAST Tenant', 'ACTIVE', 'Asia/Jakarta', 'IDR');
 
           INSERT INTO tenant_memberships (public_id, tenant_id, user_id, status, joined_at)
-          SELECT 'dast-membership-0000-000000000001', t.id, u.id, 'ACTIVE', UTC_TIMESTAMP(6)
+          SELECT 'd0a57000-0000-4000-8000-000000000003', t.id, u.id, 'ACTIVE', UTC_TIMESTAMP(6)
           FROM tenants t CROSS JOIN users u
           WHERE t.tenant_code = 'DAST-TENANT' AND u.email = 'wms-dast@example.invalid';
 
           INSERT IGNORE INTO permissions (permission_code, module, description)
-          VALUES ('WMS_TENANT_PROFILE_READ', 'TENANCY', 'Read current tenant profile for DAST'),
-                 ('WMS_WAREHOUSE_READ', 'WAREHOUSE', 'Read tenant warehouses for DAST');
+          VALUES ('WMS_WAREHOUSE_READ', 'WAREHOUSE', 'Read tenant warehouses for DAST');
 
           INSERT INTO roles (public_id, tenant_id, role_code, role_name, is_system_role, status)
           SELECT 'dast-role-0000-0000-0000-000000000001', id, 'DAST_READ_ONLY',
