@@ -76,7 +76,7 @@ class WmsJwtConfigurationTest {
         JwtEncoder encoder = new WmsJwtConfiguration().wmsJwtEncoder(properties, material);
         JwtDecoder accessDecoder = new WmsJwtConfiguration().wmsAccessJwtDecoder(properties, material);
 
-        Instant expiredAt = Instant.now().minusSeconds(30);
+        Instant expiredAt = Instant.now().minusSeconds(300);
         String token = encodeWithOverrides(encoder, properties, "access",
                 properties.getAccessAudience(), "membership-public-id",
                 properties.getIssuer(), expiredAt.minusSeconds(60), expiredAt, properties.getKeyId());
