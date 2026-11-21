@@ -33,7 +33,7 @@ class WmsJwtAuthenticationConverterTest {
     void resolvesTenantAndCurrentPermissionsFromDatabase() {
         WmsMembershipAccess access = new WmsMembershipAccess(
                 11L, "user-public-id", 22L, "tenant-public-id",
-                33L, "membership-public-id",
+                33L, "membership-public-id", 0L,
                 Set.of("inventory.balance.read", "outbound.shipment.create"));
         when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
                 .thenReturn(access);
@@ -94,6 +94,18 @@ class WmsJwtAuthenticationConverterTest {
     }
 
     @Test
+    void rejectsAccessTokenIssuedBeforeCredentialVersionWasIncremented() {
+        when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
+                .thenReturn(new WmsMembershipAccess(
+                        11L, "user-public-id", 22L, "tenant-public-id",
+                        33L, "membership-public-id", 1L, Set.of()));
+
+        assertThatThrownBy(() -> converter.convert(accessToken(
+                "user-public-id", "membership-public-id")))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+    }
+
+    @Test
     void rejectsMembershipThatIsNoLongerActiveOrDoesNotBelongToUser() {
         when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
                 .thenThrow(new WmsMembershipAccessDeniedException());
@@ -109,7 +121,7 @@ class WmsJwtAuthenticationConverterTest {
         when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
                 .thenReturn(new WmsMembershipAccess(
                         11L, "different-user", 22L, "tenant-public-id",
-                        33L, "different-membership", Set.of()));
+                        33L, "different-membership", 0L, Set.of()));
 
         assertThatThrownBy(() -> converter.convert(accessToken(
                 "user-public-id", "membership-public-id")))
@@ -126,7 +138,8 @@ class WmsJwtAuthenticationConverterTest {
                 .header("alg", "RS256")
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(600))
-                .claim("token_use", tokenUse);
+                .claim("token_use", tokenUse)
+                .claim("cv", 0L);
         if (subject != null) {
             builder.subject(subject);
         }

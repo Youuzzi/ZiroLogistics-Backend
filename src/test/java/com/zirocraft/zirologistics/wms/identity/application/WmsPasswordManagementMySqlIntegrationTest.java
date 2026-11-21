@@ -3,6 +3,14 @@ package com.zirocraft.zirologistics.wms.identity.application;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
+import com.zirocraft.zirologistics.wms.identity.domain.MembershipStatus;
+import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.TenantMembershipEntity;
+import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.TenantMembershipRepository;
+import com.zirocraft.zirologistics.wms.security.application.WmsJwtAuthenticationConverter;
+import com.zirocraft.zirologistics.wms.tenancy.domain.TenantStatus;
+import com.zirocraft.zirologistics.wms.tenancy.infrastructure.persistence.TenantEntity;
+import com.zirocraft.zirologistics.wms.tenancy.infrastructure.persistence.TenantRepository;
 import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
 import com.zirocraft.zirologistics.wms.identity.domain.WmsEncryptedEmailPayload;
 import com.zirocraft.zirologistics.wms.identity.domain.WmsIdentityActionTokenPurpose;
@@ -14,6 +22,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -66,6 +76,10 @@ class WmsPasswordManagementMySqlIntegrationTest {
     @Autowired private WmsIdentityActionTokenGenerator tokenGenerator;
     @Autowired private WmsIdentityActionTokenStoragePort tokenStorage;
     @Autowired private UserRepository userRepository;
+    @Autowired private TenantRepository tenantRepository;
+    @Autowired private TenantMembershipRepository membershipRepository;
+    @Autowired private WmsMembershipAccessService membershipAccessService;
+    @Autowired private WmsJwtAuthenticationConverter authenticationConverter;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private ObjectMapper objectMapper;
@@ -88,6 +102,7 @@ class WmsPasswordManagementMySqlIntegrationTest {
 
         UserEntity updated = userRepository.findById(user.getId()).orElseThrow();
         assertTrue(passwordEncoder.matches("ResetPassword456", updated.getPasswordHash()));
+        assertEquals(1L, updated.getCredentialVersion());
         assertFalse(passwordEncoder.matches("OriginalPassword123", updated.getPasswordHash()));
 
         WmsIdentityActionTokenRecord token = findToken(tokenGenerator.digestPresentedToken(rawToken));
@@ -112,6 +127,7 @@ class WmsPasswordManagementMySqlIntegrationTest {
 
         UserEntity updated = userRepository.findById(user.getId()).orElseThrow();
         assertTrue(passwordEncoder.matches("ChangedPassword456", updated.getPasswordHash()));
+        assertEquals(1L, updated.getCredentialVersion());
 
         WmsIdentityActionTokenRecord token = findToken(tokenGenerator.digestPresentedToken(rawToken));
         assertNull(token.consumedAt());
@@ -119,6 +135,53 @@ class WmsPasswordManagementMySqlIntegrationTest {
 
         assertThrows(WmsIdentityActionTokenRejectedException.class,
                 () -> passwordManagementService.completePasswordReset(rawToken, "ResetPassword789"));
+    }
+
+    @Test
+    void passwordChangeInvalidatesPreviouslyIssuedAccessTokenWithoutWaitingForExpiry() {
+        UserEntity user = createUser("credential-version", "OriginalPassword123");
+        TenantEntity tenant = createTenant();
+        TenantMembershipEntity membership = new TenantMembershipEntity();
+        membership.setTenantId(tenant.getId());
+        membership.setUserId(user.getId());
+        membership.setStatus(MembershipStatus.ACTIVE);
+        membership = membershipRepository.saveAndFlush(membership);
+
+        var before = membershipAccessService.resolve(user.getPublicId(), membership.getPublicId());
+        assertEquals(0L, before.credentialVersion());
+
+        Instant now = Instant.now();
+        Jwt previouslyIssuedToken = Jwt.withTokenValue("old-access-token")
+                .header("alg", "RS256")
+                .subject(user.getPublicId())
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(600))
+                .claim("token_use", "access")
+                .claim("mid", membership.getPublicId())
+                .claim("cv", before.credentialVersion())
+                .build();
+
+        assertTrue(authenticationConverter.convert(previouslyIssuedToken).isAuthenticated());
+
+        passwordManagementService.changePassword(
+                user.getPublicId(), "OriginalPassword123", "ChangedPassword456");
+
+        UserEntity changed = userRepository.findById(user.getId()).orElseThrow();
+        assertEquals(1L, changed.getCredentialVersion());
+        assertThrows(OAuth2AuthenticationException.class,
+                () -> authenticationConverter.convert(previouslyIssuedToken));
+
+        var after = membershipAccessService.resolve(user.getPublicId(), membership.getPublicId());
+        Jwt newlyIssuedToken = Jwt.withTokenValue("new-access-token")
+                .header("alg", "RS256")
+                .subject(user.getPublicId())
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(600))
+                .claim("token_use", "access")
+                .claim("mid", membership.getPublicId())
+                .claim("cv", after.credentialVersion())
+                .build();
+        assertTrue(authenticationConverter.convert(newlyIssuedToken).isAuthenticated());
     }
 
     @Test
@@ -145,6 +208,16 @@ class WmsPasswordManagementMySqlIntegrationTest {
         WmsIdentityActionTokenRecord token = findToken(tokenGenerator.digestPresentedToken(rawToken));
         assertNotNull(token.consumedAt());
         assertNull(token.revokedAt());
+    }
+
+    private TenantEntity createTenant() {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        TenantEntity tenant = new TenantEntity();
+        tenant.setTenantCode("CRED-" + suffix.toUpperCase());
+        tenant.setLegalName("Credential Version Tenant " + suffix);
+        tenant.setDisplayName("Credential Version " + suffix);
+        tenant.setStatus(TenantStatus.ACTIVE);
+        return tenantRepository.saveAndFlush(tenant);
     }
 
     private UserEntity createUser(String label, String rawPassword) {

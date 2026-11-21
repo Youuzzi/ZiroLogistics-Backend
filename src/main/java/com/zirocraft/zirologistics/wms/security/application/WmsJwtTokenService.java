@@ -89,6 +89,7 @@ public class WmsJwtTokenService {
                 .id(UUID.randomUUID().toString())
                 .claim("token_use", ACCESS_TOKEN_USE)
                 .claim("mid", access.membershipPublicId())
+                .claim("cv", access.credentialVersion())
                 .build();
 
         return encode(claims);

@@ -166,6 +166,6 @@ class WmsTenantInvitationServiceTest {
     private static WmsMembershipAccess activeAccess(Set<String> permissions) {
         return new WmsMembershipAccess(
                 7L, "user-public-1", 5L, "tenant-public-5",
-                11L, "membership-public-11", permissions);
+                11L, "membership-public-11", 0L, permissions);
     }
 }

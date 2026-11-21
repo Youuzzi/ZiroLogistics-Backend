@@ -73,7 +73,7 @@ class WmsJwtTokenServiceTest {
     void issuesTenantBoundAccessTokenFromResolvedMembershipWithoutEmbeddingPermissions() {
         WmsMembershipAccess access = new WmsMembershipAccess(
                 10L, "user-public-id", 20L, "tenant-public-id",
-                30L, "membership-public-id", Set.of("inventory.balance.read"));
+                30L, "membership-public-id", 4L, Set.of("inventory.balance.read"));
 
         when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
                 .thenReturn(access);
@@ -91,6 +91,7 @@ class WmsJwtTokenServiceTest {
         assertThat(claims.getAudience()).containsExactly("zirologistics-wms-api");
         assertThat(claims.getClaimAsString("token_use")).isEqualTo("access");
         assertThat(claims.getClaimAsString("mid")).isEqualTo("membership-public-id");
+        assertThat(claims.getClaims()).containsEntry("cv", 4L);
         assertThat(claims.getId()).isNotBlank();
         assertThat(Duration.between(claims.getIssuedAt(), claims.getExpiresAt()))
                 .isEqualTo(Duration.ofMinutes(10));
