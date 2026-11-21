@@ -1,6 +1,9 @@
 package com.zirocraft.zirologistics.wms.identity.infrastructure.persistence;
 
 import com.zirocraft.zirologistics.wms.identity.domain.MembershipStatus;
+import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessDeniedException;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.TenantMembershipEntity;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.TenantMembershipRepository;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.UserEntity;
@@ -11,6 +14,7 @@ import com.zirocraft.zirologistics.wms.tenancy.infrastructure.persistence.Tenant
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
@@ -113,6 +117,37 @@ class WmsLoginMembershipRepositoryIntegrationTest {
         assertFalse(result.stream().anyMatch(item ->
                 item.getTenantPublicId().equals(suspendedTenantPublicId)));
         assertNotNull(result.get(0).getMembershipPublicId());
+    }
+
+    @Test
+    void activeAccessResolutionFailsAfterTenantOrMembershipIsSuspended() {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        UserEntity user = new UserEntity();
+        user.setEmail("access-lifecycle-" + suffix + "@example.test");
+        user.setUsername("access-lifecycle-" + suffix);
+        user.setPasswordHash("test-only-placeholder-hash");
+        user.setFullName("Access Lifecycle Test User");
+        user.setStatus(UserStatus.ACTIVE);
+        user = userRepository.saveAndFlush(user);
+
+        TenantEntity tenant = tenant("ACCESS-LIFECYCLE-" + suffix,
+                "Access Lifecycle Tenant", TenantStatus.ACTIVE);
+        tenant = tenantRepository.saveAndFlush(tenant);
+        TenantMembershipEntity membership = membership(
+                tenant.getId(), user.getId(), MembershipStatus.ACTIVE);
+        membership = tenantMembershipRepository.saveAndFlush(membership);
+
+        assertEquals(user.getPublicId(), membershipAccessService.resolve(
+                user.getPublicId(), membership.getPublicId()).userPublicId());
+
+        jdbc.update("UPDATE tenants SET status = 'SUSPENDED' WHERE id = ?", tenant.getId());
+        assertThrows(WmsMembershipAccessDeniedException.class, () ->
+                membershipAccessService.resolve(user.getPublicId(), membership.getPublicId()));
+
+        jdbc.update("UPDATE tenants SET status = 'ACTIVE' WHERE id = ?", tenant.getId());
+        jdbc.update("UPDATE tenant_memberships SET status = 'SUSPENDED' WHERE id = ?", membership.getId());
+        assertThrows(WmsMembershipAccessDeniedException.class, () ->
+                membershipAccessService.resolve(user.getPublicId(), membership.getPublicId()));
     }
 
     private static TenantEntity tenant(String code, String displayName, TenantStatus status) {
