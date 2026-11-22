@@ -28,6 +28,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Future;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.CountDownLatch;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -1056,6 +1061,118 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         jdbc.update("INSERT INTO business_partner_roles (tenant_id, business_partner_id, role_type) VALUES (?, ?, ?)",
                 tenantId, id, role);
         return publicId;
+    }
+
+    @Test
+    void outboundShipmentRejectsForeignTenantWarehouseCustomerAndItemReferencesWithoutSideEffects() {
+        Fixture otherTenant = fixture("NONE");
+        String ownShipmentId = createShipment(fixture);
+        assertNotNull(ownShipmentId);
+        int shipmentCountBefore = count("SELECT COUNT(*) FROM outbound_shipments WHERE tenant_id=?", fixture.tenantId());
+        int lineCountBefore = count("SELECT COUNT(*) FROM outbound_shipment_lines WHERE tenant_id=?", fixture.tenantId());
+        int auditCountBefore = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id=?", fixture.tenantId());
+
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> shipmentService.create(fixture.principal(),
+                        new WmsOutboundShipmentService.CreateShipmentCommand(
+                                otherTenant.warehousePublicId(), fixture.customerPublicId(), null,
+                                "CROSS-WH-" + UUID.randomUUID(), null, "SALES", null, null)));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> shipmentService.create(fixture.principal(),
+                        new WmsOutboundShipmentService.CreateShipmentCommand(
+                                fixture.warehousePublicId(), otherTenant.customerPublicId(), null,
+                                "CROSS-CUSTOMER-" + UUID.randomUUID(), null, "SALES", null, null)));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> shipmentService.addLine(fixture.principal(), ownShipmentId,
+                        new WmsOutboundShipmentService.ShipmentLineCommand(
+                                otherTenant.itemPublicId(), new BigDecimal("1.0000"), null)));
+
+        assertEquals(shipmentCountBefore,
+                count("SELECT COUNT(*) FROM outbound_shipments WHERE tenant_id=?", fixture.tenantId()));
+        assertEquals(lineCountBefore,
+                count("SELECT COUNT(*) FROM outbound_shipment_lines WHERE tenant_id=?", fixture.tenantId()));
+        assertEquals(auditCountBefore,
+                count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id=?", fixture.tenantId()));
+        assertEquals("DRAFT", shipmentStatus(fixture, ownShipmentId));
+        assertEquals(new BigDecimal("5.0000"), onHand(fixture));
+        assertEquals(BigDecimal.ZERO.setScale(4), reserved(fixture));
+
+        String validLineId = addLine(fixture, ownShipmentId, "1.0000");
+        assertNotNull(validLineId);
+        assertEquals(1, count("SELECT COUNT(*) FROM outbound_shipment_lines WHERE tenant_id=? AND public_id=?",
+                fixture.tenantId(), validLineId));
+    }
+
+    @Test
+    void rejectedPartialReleasePreservesShipmentStateAndReservation() {
+        String shipmentId = createShipment(fixture);
+        String lineId = addLine(fixture, shipmentId, "5.0000");
+        shipmentService.allocate(fixture.principal(), shipmentId, lineId,
+                new WmsOutboundShipmentService.AllocationCommand(List.of(
+                        new WmsOutboundShipmentService.AllocationLine(
+                                fixture.receivingLocationPublicId(), null, new BigDecimal("3.0000"), List.of()))));
+
+        assertEquals("DRAFT", shipmentStatus(fixture, shipmentId));
+        assertEquals(new BigDecimal("3.0000"), reserved(fixture));
+        assertEquals(new BigDecimal("2.0000"), available(fixture));
+
+        assertThrows(IllegalStateException.class, () -> shipmentService.release(fixture.principal(), shipmentId));
+
+        assertEquals("DRAFT", shipmentStatus(fixture, shipmentId));
+        assertEquals(new BigDecimal("3.0000"), reserved(fixture));
+        assertEquals(new BigDecimal("2.0000"), available(fixture));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id = ? AND subject_public_id = ?
+                  AND event_type = 'OUTBOUND_SHIPMENT_RELEASED'
+                """, fixture.tenantId(), shipmentId));
+    }
+
+    @Test
+    void concurrentReleaseRequestsAllowOnlyOneShipmentStateTransition() throws Exception {
+        String shipmentId = createShipment(fixture);
+        String lineId = addLine(fixture, shipmentId, "5.0000");
+        shipmentService.allocate(fixture.principal(), shipmentId, lineId,
+                new WmsOutboundShipmentService.AllocationCommand(List.of(
+                        new WmsOutboundShipmentService.AllocationLine(
+                                fixture.receivingLocationPublicId(), null, new BigDecimal("5.0000"), List.of()))));
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Callable<Boolean> attempt = () -> {
+                ready.countDown();
+                if (!start.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Concurrent release barrier timed out");
+                }
+                try {
+                    shipmentService.release(fixture.principal(), shipmentId);
+                    return true;
+                } catch (IllegalStateException rejected) {
+                    return false;
+                }
+            };
+            Future<Boolean> first = executor.submit(attempt);
+            Future<Boolean> second = executor.submit(attempt);
+            assertTrue(ready.await(10, TimeUnit.SECONDS),
+                    "Both independent requests must reach the release barrier");
+            start.countDown();
+
+            int successfulTransitions = (first.get(30, TimeUnit.SECONDS) ? 1 : 0)
+                    + (second.get(30, TimeUnit.SECONDS) ? 1 : 0);
+            assertEquals(1, successfulTransitions);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+
+        assertEquals("RELEASED", shipmentStatus(fixture, shipmentId));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id = ? AND subject_public_id = ?
+                  AND event_type = 'OUTBOUND_SHIPMENT_RELEASED'
+                """, fixture.tenantId(), shipmentId));
     }
 
     private record Fixture(long tenantId, String warehousePublicId, String receivingLocationPublicId,
