@@ -176,6 +176,36 @@ jobs:
             --summary-export target/wms-k6/summary.json \
             tests/performance/wms-read-only.js
 
+      - name: Enforce k6 summary thresholds
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+          summary = json.loads(Path("target/wms-k6/summary.json").read_text())
+          metrics = summary.get("metrics", {})
+          checks = metrics.get("checks", {}).get("value")
+          errors = metrics.get("http_req_failed", {}).get("value")
+          p95 = metrics.get("http_req_duration", {}).get("p(95)")
+          if checks is None or errors is None or p95 is None:
+              print("Required k6 metrics are missing from summary")
+              sys.exit(1)
+          print(f"checks={checks:.4f}; http_req_failed={errors:.4f}; p95={p95:.2f}ms")
+          failures = []
+          if checks <= 0.99:
+              failures.append("checks must be >99%")
+          if errors >= 0.01:
+              failures.append("HTTP error rate must be <1%")
+          if p95 >= 1000:
+              failures.append("p95 must be <1000ms")
+          if failures:
+              print("k6 quality gate failed:", "; ".join(failures))
+              sys.exit(1)
+          print("k6 metrics satisfy the read-only baseline gates")
+          PY
+
       - name: Upload k6 performance summary
         if: always()
         uses: actions/upload-artifact@v4
