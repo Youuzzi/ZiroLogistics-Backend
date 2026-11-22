@@ -1,5 +1,7 @@
 package com.zirocraft.zirologistics.wms.outbound.application;
 
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
+
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.inbound.application.WmsInboundReceivingService;
 import com.zirocraft.zirologistics.wms.picking.application.WmsPickingManagementService;
