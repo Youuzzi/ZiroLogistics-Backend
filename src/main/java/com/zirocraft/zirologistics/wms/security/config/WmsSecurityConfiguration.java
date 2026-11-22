@@ -16,6 +16,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.header.writers.CrossOriginResourcePolicyHeaderWriter.CrossOriginResourcePolicy;
 import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
@@ -43,6 +44,8 @@ public class WmsSecurityConfiguration {
         http
                 .securityMatcher("/**")
                 .cors(cors -> cors.configurationSource(wmsCorsConfigurationSource))
+                .headers(headers -> headers
+                        .crossOriginResourcePolicy(corp -> corp.policy(CrossOriginResourcePolicy.SAME_ORIGIN)))
                 .csrf(csrf -> csrf.ignoringRequestMatchers(
                         // WMS APIs authenticate exclusively with bearer tokens and never use browser sessions/cookies.
                         "/api/wms/**"))
@@ -75,7 +78,6 @@ public class WmsSecurityConfiguration {
 
         return http.build();
     }
-
     @Bean
     @Order(1)
     @ConditionalOnProperty(
@@ -88,6 +90,8 @@ public class WmsSecurityConfiguration {
         http
                 .securityMatcher("/**")
                 .cors(cors -> cors.configurationSource(wmsCorsConfigurationSource))
+                .headers(headers -> headers
+                        .crossOriginResourcePolicy(corp -> corp.policy(CrossOriginResourcePolicy.SAME_ORIGIN)))
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
