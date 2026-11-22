@@ -1,6 +1,9 @@
 package com.zirocraft.zirologistics.wms.security.config;
 
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
+import com.zirocraft.zirologistics.wms.security.application.WmsJwtTokenService;
+import com.zirocraft.zirologistics.wms.security.application.WmsCredentialVersionClaim;
+import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationException;
 import com.zirocraft.zirologistics.wms.identity.domain.MembershipStatus;
 import com.zirocraft.zirologistics.wms.identity.application.WmsEmailOutboxEncryptionService;
 import com.zirocraft.zirologistics.wms.identity.application.WmsPasswordManagementService;
