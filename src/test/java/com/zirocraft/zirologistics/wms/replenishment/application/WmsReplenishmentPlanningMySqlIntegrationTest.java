@@ -436,6 +436,30 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
     }
 
     @Test
+    void manualReplenishmentTaskDetailIsTenantScopedInMySql() {
+        Fixture tenantA = fixture("NONE");
+        Fixture tenantB = fixture("NONE");
+        receive(tenantA, tenantA.sourceLocationPublicId(), "2.0000");
+
+        Map<String, Object> created = taskService.createManual(tenantA.principal(),
+                new WmsReplenishmentTaskService.ManualTaskCommand(
+                        tenantA.warehousePublicId(), null, null,
+                        List.of(new WmsReplenishmentTaskService.ManualTaskLine(
+                                tenantA.itemPublicId(), tenantA.sourceLocationPublicId(),
+                                tenantA.destinationLocationPublicId(), null, BigDecimal.ONE, null))));
+        String taskPublicId = (String) created.get("public_id");
+
+        assertEquals(1, count("SELECT COUNT(*) FROM replenishment_tasks WHERE tenant_id=? AND public_id=?",
+                tenantA.tenantId(), taskPublicId));
+        assertEquals(0, count("SELECT COUNT(*) FROM replenishment_tasks WHERE tenant_id=? AND public_id=?",
+                tenantB.tenantId(), taskPublicId));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> taskService.get(tenantB.principal(), taskPublicId));
+        assertEquals(1, count("SELECT COUNT(*) FROM replenishment_tasks WHERE tenant_id=? AND public_id=?",
+                tenantA.tenantId(), taskPublicId));
+    }
+
+    @Test
     void manualTaskRequiresLotForLotTrackedItemsAndRejectsForeignLot() {
         Fixture lotFixture = fixture("LOT");
         receiveLot(lotFixture, lotFixture.sourceLocationPublicId(),
