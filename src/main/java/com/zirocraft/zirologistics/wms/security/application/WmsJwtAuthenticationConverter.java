@@ -12,6 +12,8 @@ import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.stream.Collectors;
 
 /**
@@ -34,12 +36,12 @@ public class WmsJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
         Object subjectClaim = jwt.getClaims().get("sub");
         Object membershipClaim = jwt.getClaims().get("mid");
         Object tokenUseClaim = jwt.getClaims().get("token_use");
-        Object credentialVersionClaim = jwt.getClaims().get("cv");
+        Long tokenCredentialVersion = parseCredentialVersion(jwt.getClaims().get("cv"));
 
         if (!(subjectClaim instanceof String userPublicId) || userPublicId.isBlank()
                 || !(membershipClaim instanceof String membershipPublicId) || membershipPublicId.isBlank()
                 || !(tokenUseClaim instanceof String tokenUse) || !"access".equals(tokenUse)
-                || !(credentialVersionClaim instanceof Number tokenCredentialVersion)) {
+                || tokenCredentialVersion == null) {
             throw invalidToken();
         }
 
@@ -53,7 +55,6 @@ public class WmsJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
         if (access == null
                 || !userPublicId.equals(access.userPublicId())
                 || !membershipPublicId.equals(access.membershipPublicId())
-                || tokenCredentialVersion == null
                 || tokenCredentialVersion.longValue() != access.credentialVersion()) {
             throw invalidToken();
         }
@@ -71,6 +72,24 @@ public class WmsJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
                 .collect(Collectors.toUnmodifiableSet());
 
         return new WmsJwtAuthenticationToken(principal, authorities);
+    }
+
+    private static Long parseCredentialVersion(Object claim) {
+        try {
+            if (claim instanceof Byte value) return nonNegative(value.longValue());
+            if (claim instanceof Short value) return nonNegative(value.longValue());
+            if (claim instanceof Integer value) return nonNegative(value.longValue());
+            if (claim instanceof Long value) return nonNegative(value);
+            if (claim instanceof BigInteger value) return nonNegative(value.longValueExact());
+            if (claim instanceof BigDecimal value) return nonNegative(value.longValueExact());
+        } catch (ArithmeticException ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    private static Long nonNegative(long value) {
+        return value < 0 ? null : value;
     }
 
     private static OAuth2AuthenticationException invalidToken() {
