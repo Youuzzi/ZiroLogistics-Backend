@@ -2,6 +2,7 @@ package com.zirocraft.zirologistics.wms.security.config;
 
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.identity.domain.MembershipStatus;
+import com.zirocraft.zirologistics.wms.identity.application.WmsEmailOutboxEncryptionService;
 import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.TenantMembershipEntity;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.TenantMembershipRepository;
@@ -84,6 +85,10 @@ class WmsActiveBearerTokenLifecycleMySqlHttpTest {
 
     @MockBean(name = "wmsAccessJwtDecoder")
     private JwtDecoder accessJwtDecoder;
+
+
+    @MockBean
+    private WmsEmailOutboxEncryptionService emailOutboxEncryptionService;
 
     @Test
     void existingBearerTokenIsDeniedImmediatelyAfterItsTenantIsClosed() throws Exception {
