@@ -72,6 +72,28 @@ class WmsJwtAuthenticationConverterTest {
     }
 
     @Test
+    void rejectsTokensIssuedForOtherPurposesBeforeResolvingMembership() {
+        Jwt tenantSelection = accessToken("user-public-id", "membership-public-id", "tenant_selection");
+        Jwt passwordReset = accessToken("user-public-id", "membership-public-id", "password_reset");
+        Jwt invitation = accessToken("user-public-id", "membership-public-id", "invitation");
+
+        assertThatThrownBy(() -> converter.convert(tenantSelection)).isInstanceOf(OAuth2AuthenticationException.class);
+        assertThatThrownBy(() -> converter.convert(passwordReset)).isInstanceOf(OAuth2AuthenticationException.class);
+        assertThatThrownBy(() -> converter.convert(invitation)).isInstanceOf(OAuth2AuthenticationException.class);
+        org.mockito.Mockito.verifyNoInteractions(membershipAccessService);
+    }
+
+    @Test
+    void rejectsTokenWhenPurposeClaimIsMissing() {
+        Instant now = Instant.now();
+        Jwt missingPurpose = Jwt.withTokenValue("test-token").header("alg", "RS256")
+                .subject("user-public-id").issuedAt(now).expiresAt(now.plusSeconds(600))
+                .claim("mid", "membership-public-id").build();
+        assertThatThrownBy(() -> converter.convert(missingPurpose)).isInstanceOf(OAuth2AuthenticationException.class);
+        org.mockito.Mockito.verifyNoInteractions(membershipAccessService);
+    }
+
+    @Test
     void rejectsMembershipThatIsNoLongerActiveOrDoesNotBelongToUser() {
         when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
                 .thenThrow(new WmsMembershipAccessDeniedException());
@@ -94,12 +116,29 @@ class WmsJwtAuthenticationConverterTest {
                 .isInstanceOf(OAuth2AuthenticationException.class);
     }
 
+    @Test
+    void rejectsNullMembershipResolution() {
+        when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
+                .thenReturn(null);
+
+        assertThatThrownBy(() -> converter.convert(accessToken(
+                "user-public-id", "membership-public-id")))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .hasMessageContaining("Invalid bearer token");
+        verify(membershipAccessService).resolve("user-public-id", "membership-public-id");
+    }
+
     private static Jwt accessToken(String subject, String membershipId) {
+        return accessToken(subject, membershipId, "access");
+    }
+
+    private static Jwt accessToken(String subject, String membershipId, String tokenUse) {
         Instant now = Instant.now();
         Jwt.Builder builder = Jwt.withTokenValue("test-token")
                 .header("alg", "RS256")
                 .issuedAt(now)
-                .expiresAt(now.plusSeconds(600));
+                .expiresAt(now.plusSeconds(600))
+                .claim("token_use", tokenUse);
         if (subject != null) {
             builder.subject(subject);
         }
