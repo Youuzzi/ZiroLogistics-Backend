@@ -2,6 +2,7 @@ package com.zirocraft.zirologistics.wms.security.application;
 
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
+import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationException;
 import com.zirocraft.zirologistics.wms.security.config.WmsJwtProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
@@ -49,8 +50,9 @@ public class WmsJwtTokenService {
     /**
      * Issues a tenant-selection token only after the caller has independently authenticated the user.
      */
-    public String issueTenantSelectionToken(String authenticatedUserPublicId) {
+    public String issueTenantSelectionToken(String authenticatedUserPublicId, Long credentialVersion) {
         requireIdentifier(authenticatedUserPublicId, "authenticated user");
+        requireCredentialVersion(credentialVersion);
 
         Instant issuedAt = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -62,6 +64,7 @@ public class WmsJwtTokenService {
                 .expiresAt(issuedAt.plus(TENANT_SELECTION_TTL))
                 .id(UUID.randomUUID().toString())
                 .claim("token_use", TENANT_SELECTION_TOKEN_USE)
+                .claim("cv", credentialVersion)
                 .build();
 
         return encode(claims);
@@ -71,12 +74,18 @@ public class WmsJwtTokenService {
      * Issues a tenant-bound access token from a membership already resolved against current DB state.
      * Permissions are deliberately not copied into the token; they are resolved from the database.
      */
-    public String issueAccessToken(String authenticatedUserPublicId, String selectedMembershipPublicId) {
+    public String issueAccessToken(
+            String authenticatedUserPublicId, String selectedMembershipPublicId, Long selectionCredentialVersion) {
         requireIdentifier(authenticatedUserPublicId, "authenticated user");
         requireIdentifier(selectedMembershipPublicId, "selected membership");
+        requireCredentialVersion(selectionCredentialVersion);
 
         WmsMembershipAccess access = membershipAccessService.resolve(
                 authenticatedUserPublicId, selectedMembershipPublicId);
+        if (access.credentialVersion() == null
+                || !selectionCredentialVersion.equals(access.credentialVersion())) {
+            throw new WmsCredentialAuthenticationException();
+        }
 
         Instant issuedAt = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -100,6 +109,13 @@ public class WmsJwtTokenService {
                 .keyId(properties.getKeyId())
                 .build();
         return jwtEncoder.encode(JwtEncoderParameters.from(headers, claims)).getTokenValue();
+    }
+
+    private static Long requireCredentialVersion(Long credentialVersion) {
+        if (credentialVersion == null || credentialVersion < 0) {
+            throw new WmsCredentialAuthenticationException();
+        }
+        return credentialVersion;
     }
 
     private static void requireIdentifier(String value, String label) {
