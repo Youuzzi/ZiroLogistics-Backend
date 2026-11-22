@@ -30,7 +30,21 @@ The shorter fixture username `wms_active_token_http_test` is included in #234, #
 
 PR #256 Backend CI #962 also failed at this same shared Testcontainers fixture. The k6 workflow itself succeeded on its latest head; the Backend CI failure is not a k6 workload failure.
 
-## 3. CI scope optimization defect found and fixed on PR #237 branch
+## 3. Credential-version revocation gap found and fixed on PR #234 branch
+
+Audit found that password changes invalidated existing access tokens but a previously issued tenant-selection token had no credential-version claim. Because tenant selection can mint a new access token, a stale selection token could otherwise refresh access during its short validity window after a password change.
+
+The current PR #234 head **860bad2** now:
+- includes the credential-version claim in tenant-selection tokens;
+- validates the `tenant_selection` purpose and requires a valid version claim at the controller boundary;
+- compares the selection token's version with the current membership-resolved user version before minting an access token;
+- adds controller unit coverage and a MySQL integration regression proving an old selection token cannot mint a new access token after password change.
+
+Backend CI and CodeQL are currently running on this new head. This fix is **not yet integrated**.
+
+The unique HTTP runtime tests from #247 have also been ported into #234, and #253's null membership-resolution test was already ported there. Those standalone PRs are now redundant and #253 is closed.
+
+## 4. CI scope optimization defect found and fixed on PR #237 branch
 
 The docs-only scope check was comparing the event's stale `base.sha` to `github.sha` (the synthetic PR merge SHA). When main advanced after the PR event, the diff included unrelated base-branch code changes, causing a documentation-only PR (#175) to run the full Maven regression.
 
@@ -43,7 +57,7 @@ A local Git simulation verified:
 
 CI run #966 is validating this workflow change. It is **not yet CI-verified**.
 
-## 4. DAST baseline — latest actual artifact
+## 5. DAST baseline — latest actual artifact
 
 PR #235 latest run **#8** succeeded (run ID `44941989564`) and retained artifact `wms-zap-baseline` (ID `14721579195`).
 
@@ -51,7 +65,7 @@ The report contains one Informational alert, `Non-Storable Content`, with 3 inst
 
 This remains unauthenticated/perimeter evidence only.
 
-## 5. Authenticated DAST — latest actual artifact
+## 6. Authenticated DAST — latest actual artifact
 
 PR #245 authenticated ZAP run **#26** succeeded (run ID `45040771306`) and retained artifact `wms-zap-authenticated` (ID `14761094821`).
 
@@ -65,7 +79,7 @@ The scan is deliberately limited to 3 protected read routes. It does **not** cov
 
 The original CSRF findings were confirmed in PR #237 CodeQL SARIF (2 findings at `WmsSecurityConfiguration.java`). PR #249 CodeQL SARIF has 0 results after scoping the CSRF exemption to stateless bearer API routes. PR #245 includes that scoped fix plus the CORP header remediation.
 
-## 6. Dependency scan disposition
+## 7. Dependency scan disposition
 
 Earlier PR #237 strict OSV scan succeeded on head **7a41eb3**. The scan was blocking (`fail-on-vuln: true`) and its log explicitly filtered two accepted Spring advisories:
 
@@ -76,7 +90,7 @@ The exceptions are based on source/config reachability review for the current RE
 
 A new commit on #237 adds `effectiveUntil = 2026-12-31` to both exceptions. Current #237 Backend CI #966 and CodeQL #277 are in progress. The exceptions remain a residual risk and must be reassessed before expiry or if view/SSE features are introduced.
 
-## 7. Authenticated k6 read-only baseline — actual results
+## 8. Authenticated k6 read-only baseline — actual results
 
 PR #256 run **#7** succeeded (run ID `45042767798`) with artifact `wms-k6-read-only-baseline` (ID `14762029263`).
 
@@ -89,7 +103,7 @@ Run profile and results:
 
 This is a disposable, authenticated, read-only baseline. It is **not** representative of receiving, putaway, picking, packing, inventory posting, replenishment, transfer, stock count, or shipment release throughput, and it is not a production-capacity claim.
 
-## 8. Tenant/workflow coverage map
+## 9. Tenant/workflow coverage map
 
 ### MySQL/Testcontainers integration evidence
 - #179 inventory posting cross-tenant and foreign-resource references, with balance/ledger/audit state assertions.
@@ -116,28 +130,28 @@ This is a disposable, authenticated, read-only baseline. It is **not** represent
 - #230 exact public-route/method boundary, malformed JSON, and unsupported content type.
 - #217 issuer/expiry, #216 error leakage, #212 unchanged-password rejection, #211 expired reset token, #209 CORS boundaries, #208 partial release, #204 concurrent outbound release, #207 quantity precision.
 
-## 9. Remaining material gaps
+## 10. Remaining material gaps
 
 1. Authenticated DAST covers only 3 read routes; WMS write endpoints and workflow state transitions are not scanned.
 2. k6 covers read-only endpoints only. A representative authenticated business workflow benchmark remains unimplemented.
 3. MySQL tenant A/B write-path coverage is still uneven. Picking/packing, transfer, replenishment, adjustment/shipping, and some warehouse/location mutations rely on focused mocks or HTTP boundary tests rather than end-to-end MySQL ownership/unchanged-state assertions.
 4. The new security/dependency changes have not been integrated together on one branch and rerun against current main.
 5. CI scope fix, dependency exception expiry, credential-version invalidation, and current main regression must all complete on their latest SHAs.
-6. PR/doc inventory is stale across #174, #177, #178, #210, #213, and #214. Consolidate current evidence into this closure document and close obsolete audit/spec PRs.
+6. Obsolete audit/spec/matrix PRs #174, #177, #178, #210, and #213 have been closed as superseded. #175 now holds refreshed closure evidence; #214 remains closed.
 
-## 10. Dependency-safe merge order (no merge performed)
+## 11. Dependency-safe merge order (no merge performed)
 
 1. #245 — scoped CSRF/CORP + authenticated DAST evidence (CI and DAST currently green).
 2. #237 — Spring dependency remediation, strict OSV, expiring advisory exceptions, and CI scope correction (latest CI pending).
 3. #234 — credential-version invalidation and shortened Testcontainers username (latest CI pending).
-4. Rebase and integrate #247 HTTP JWT runtime tests and #248 role matrix; then #243/#244/#219 tenant/security lifecycle tests.
+4. #247 HTTP JWT runtime tests are consolidated into #234; integrate #248 role matrix, then #243/#244/#219 tenant/security lifecycle tests.
 5. Integrate #230 route/method/content-type HTTP tests.
 6. Integrate #235 baseline scan automation if retained.
 7. Integrate #256 authenticated read-only k6 baseline (k6 workflow green; backend CI blocked by shared fixture on main).
 8. Integrate tenant/workflow test PRs #179, #182, #183, #197, #198, #205 and supplementary #176/#200–#203/#204/#207–#208. Revalidate each on the latest base.
 9. Run full CI, CodeQL, strict OSV, DAST and relevant k6 workloads on the combined integration commit.
 
-## 11. Closure decision
+## 12. Closure decision
 
 Stage 16 is **NOT READY** until:
 - current main CI is green after the shared Testcontainers fixture fix;
