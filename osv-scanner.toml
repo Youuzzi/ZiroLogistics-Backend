@@ -7,8 +7,10 @@
 
 [[IgnoredVulns]]
 id = "CVE-2026-47890"
+effectiveUntil = 2026-12-31
 reason = "Accepted as not reachable in the current WMS runtime after source/config review: all 19 HTTP controllers are @RestController; no SseEmitter/ServerSentEvent, view-fragment rendering, ViewResolver, XsltView, or server-rendered template resources exist. Reassess if these features are introduced. See docs/security/WMS_STAGE_16_OSV_TRIAGE_2026-11-21.md."
 
 [[IgnoredVulns]]
 id = "CVE-2026-47884"
+effectiveUntil = 2026-12-31
 reason = "Accepted as not reachable in the current WMS runtime after source/config review: all 19 HTTP controllers are @RestController with explicit REST mappings; no XsltView, ViewResolver, or server-rendered templates exist. Reassess if view rendering or catch-all view mappings are introduced. See docs/security/WMS_STAGE_16_OSV_TRIAGE_2026-11-21.md."
