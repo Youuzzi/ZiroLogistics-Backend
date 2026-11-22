@@ -61,31 +61,6 @@ class WmsTenantProfileControllerHttpTest {
     }
 
     @Test
-    void tenantProfileResponseDoesNotExposeInternalTenantOrMembershipIdentifiers() throws Exception {
-        WmsAuthenticatedPrincipal principal = principal();
-        when(profileService.getCurrent(principal)).thenReturn(profile());
-
-        mockMvc.perform(get(ROUTE).with(authentication(authenticated(principal))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.publicId").value("tenant-public-id"))
-                .andExpect(jsonPath("$.tenantId").doesNotExist())
-                .andExpect(jsonPath("$.id").doesNotExist())
-                .andExpect(jsonPath("$.membershipId").doesNotExist())
-                .andExpect(jsonPath("$.userId").doesNotExist())
-                .andExpect(jsonPath("$.passwordHash").doesNotExist())
-                .andExpect(jsonPath("$.databaseUrl").doesNotExist());
-
-        verify(profileService).getCurrent(principal);
-    }
-
-    @Test
-    void tenantProfileMutationRequiresAuthentication() throws Exception {
-        mockMvc.perform(put(ROUTE).contentType(MediaType.APPLICATION_JSON).content("{}"))
-                .andExpect(status().isUnauthorized());
-        verifyNoInteractions(profileService);
-    }
-
-    @Test
     void readsOnlyTheAuthenticatedCurrentTenantProfile() throws Exception {
         WmsAuthenticatedPrincipal principal = principal();
         when(profileService.getCurrent(principal)).thenReturn(profile());
@@ -130,6 +105,55 @@ class WmsTenantProfileControllerHttpTest {
     }
 
     @Test
+    void ignoresTenantSelectorsSuppliedThroughHeadersAndQueryParameters() throws Exception {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(profileService.getCurrent(principal)).thenReturn(profile());
+
+        mockMvc.perform(get(ROUTE)
+                        .with(authentication(authenticated(principal)))
+                        .header("X-Tenant-Id", "999999")
+                        .header("X-Tenant-Public-Id", "foreign-tenant-public-id")
+                        .param("tenantId", "999999")
+                        .param("tenantPublicId", "foreign-tenant-public-id"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicId").value("tenant-public-id"));
+
+        verify(profileService).getCurrent(principal);
+        verifyNoMoreInteractions(profileService);
+    }
+
+    @Test
+    void ignoresTenantSelectorsInjectedIntoProfileUpdateBody() throws Exception {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(profileService.updateCurrent(eq(principal), any())).thenReturn(profile());
+
+        mockMvc.perform(put(ROUTE)
+                        .with(authentication(authenticated(principal)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "tenantId":999999,
+                                  "tenantPublicId":"foreign-tenant-public-id",
+                                  "legalName":"Updated Legal Entity",
+                                  "displayName":"Updated Display",
+                                  "timezone":"Asia/Jakarta",
+                                  "defaultCurrency":"IDR",
+                                  "expectedVersion":3
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicId").value("tenant-public-id"));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(
+                com.zirocraft.zirologistics.wms.tenancy.application.WmsTenantProfileUpdate.class);
+        verify(profileService).updateCurrent(eq(principal), captor.capture());
+        assertEquals(3L, captor.getValue().expectedVersion());
+        assertEquals("Updated Legal Entity", captor.getValue().legalName());
+        assertEquals("Updated Display", captor.getValue().displayName());
+        verifyNoMoreInteractions(profileService);
+    }
+
+    @Test
     void rejectsInvalidCurrencyShapeBeforeCallingService() throws Exception {
         WmsAuthenticatedPrincipal principal = principal();
         mockMvc.perform(put(ROUTE)
@@ -146,6 +170,31 @@ class WmsTenantProfileControllerHttpTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        verifyNoInteractions(profileService);
+    }
+
+    @Test
+    void tenantProfileResponseDoesNotExposeInternalTenantOrMembershipIdentifiers() throws Exception {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(profileService.getCurrent(principal)).thenReturn(profile());
+
+        mockMvc.perform(get(ROUTE).with(authentication(authenticated(principal))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicId").value("tenant-public-id"))
+                .andExpect(jsonPath("$.tenantId").doesNotExist())
+                .andExpect(jsonPath("$.id").doesNotExist())
+                .andExpect(jsonPath("$.membershipId").doesNotExist())
+                .andExpect(jsonPath("$.userId").doesNotExist())
+                .andExpect(jsonPath("$.passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.databaseUrl").doesNotExist());
+
+        verify(profileService).getCurrent(principal);
+    }
+
+    @Test
+    void tenantProfileMutationRequiresAuthentication() throws Exception {
+        mockMvc.perform(put(ROUTE).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(profileService);
     }
 
