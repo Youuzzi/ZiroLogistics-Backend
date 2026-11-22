@@ -242,3 +242,30 @@ The shared failure was MySQL error 1470: the original fixture username wms_activ
 ### Gate 1 closure criteria
 
 Gate 1 is not complete until every unique change is represented in an active PR, duplicates and stale artifacts are explicitly dispositioned, all retained changes have CI/CodeQL evidence on a current head, the reporting integration test is validated, and a final combined regression succeeds. No merge or PR closure is authorized by this audit.
+
+
+## 14. Post-integration CI refresh — 2026-11-23
+
+The latest exact-head checks have now completed for the main consolidated branches:
+
+- #234 — head 37f8e3a4: Backend CI and CodeQL both SUCCESS.
+- #259 — head 6aeac271: Backend CI and CodeQL both SUCCESS.
+- #257 — head 1b389449: Backend CI and CodeQL both SUCCESS.
+- #244 — head 9c661a7f: Backend CI and CodeQL both SUCCESS.
+- #248 — head 0039e09e: Backend CI and CodeQL both SUCCESS.
+- #200 — head 21f0197f: Backend CI and CodeQL both SUCCESS.
+- #203 — head 6dbee37c: Backend CI and CodeQL both SUCCESS.
+- #245 — head ccc94a4c: Backend CI and CodeQL both SUCCESS.
+- #237 — head 42233c83: Backend CI and CodeQL both SUCCESS.
+- #256 — head ef8d6c04: Backend CI and CodeQL both SUCCESS.
+- #205 — head 6f6ea4f3: CodeQL SUCCESS; Backend CI IN PROGRESS. This head now includes current main as a merge parent and is mergeable.
+- #217 — rebased onto current main and now mergeable; no completed CI run has yet been observed on its rebased head.
+- #176 — still not mergeable as a standalone PR, but its unique warehouse tests are included in #234, whose current-head CI is green.
+
+### Draft PRs still needing disposition
+
+The following 21 PRs remain drafts and currently report a dirty/non-mergeable relationship with main: #219, #216, #212, #209, #207, #201, #198, #197, #195, #194, #193, #192, #191, #190, #189, #188, #187, #186, #182, #180, and #179.
+
+They are not considered release-ready. Their unique tests must either be integrated into a green current-base PR or the draft branch must be rebased and validated before it is promoted. This is separate from the already-green consolidated PRs above. Do not close these drafts automatically; first compare their unique coverage against the consolidated branches.
+
+#205's earlier cancelled run was on an older head and is not counted as current-head evidence. Its new Backend CI run must finish successfully before reporting tenant-isolation coverage can be marked validated.
