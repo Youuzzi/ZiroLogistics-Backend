@@ -67,7 +67,8 @@ class WmsActiveBearerTokenLifecycleMySqlHttpTest {
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
             .withDatabaseName("zirowms_active_token_http_test")
             .withUsername("wms_active_token_http_test")
-            .withPassword("wms_active_token_http_test");
+            .withPassword("wms_active_token_http_test")
+            .withLogConsumer(frame -> System.out.print(frame.getUtf8String()));
 
     @DynamicPropertySource
     static void configureDatabase(DynamicPropertyRegistry registry) {
