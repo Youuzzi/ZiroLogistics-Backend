@@ -30,9 +30,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class WmsOperationalReportingMySqlTenantIsolationTest {
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
-            .withDatabaseName("zirowms_reporting_isolation_test")
-            .withUsername("zirowms_reporting_isolation_test")
-            .withPassword("zirowms_reporting_isolation_test");
+            .withDatabaseName("wms_reporting_iso")
+            .withUsername("wms_reporting_iso")
+            .withPassword("wms_reporting_iso");
 
     @DynamicPropertySource
     static void configureWmsDatabase(DynamicPropertyRegistry registry) {
