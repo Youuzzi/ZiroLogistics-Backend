@@ -183,3 +183,62 @@ Stage 16 is **NOT READY** until:
 - final full regression is green on the integrated commit.
 
 No PR is merged by this audit. Main remains untouched.
+
+
+## 13. Gate 1 PR audit update — 2026-11-23
+
+**Gate 1 remains OPEN. No PR has been merged.** This update supersedes the older head/status snapshot above where it conflicts.
+
+### Latest verified CI heads
+
+| PR | Head | Backend CI | CodeQL | Notes |
+|---|---|---|---|---|
+| #257 | 1b389449 | Success | Success | Consolidates MySQL tenant reads plus outbound foreign-reference, rejected partial-release, and concurrent-release tests |
+| #244 | 9c661a7f | Success | Success | Tenant-selector spoofing plus profile response/internal-ID and authentication-boundary tests |
+| #248 | 0039e09e | Success | Success | Role permission matrix plus protected inventory-posting delegation test |
+| #200 | 21f0197f | Success | Success | Transfer cross-tenant MySQL boundary |
+| #203 | 6dbee37c | Success | Success | Adjustment/shipping tenant-boundary supplemental tests |
+| #245 | ccc94a4c | Success | Success | Scoped CSRF/CORP and authenticated DAST automation; header-runtime test is also present in #234 |
+| #237 | 42233c83 | Success | Success | Dependency remediation, strict OSV, expiring exceptions, and CI scope correction |
+| #256 | ef8d6c04 | Success | Success | Authenticated read-only k6 baseline |
+| #259 | 6aeac271 | Success | Success | Concurrent one-time token consumption race across every token purpose |
+| #234 | 37f8e3a4 | In progress | Success | Credential-version token invalidation plus consolidated JWT, warehouse, transfer, password-reset, and decoder-boundary tests |
+| #205 | aca252ff | No run on this head yet | No run on this head yet | Reporting MySQL tenant isolation remains unique; previous Backend CI attempt was cancelled after the branch update |
+| #176 | 7e9b66bc | No run on this head | No run on this head | Its warehouse tests are also included in #234; the earlier failing run was on the pre-fixture head |
+
+The above conclusions are tied to the exact head SHAs shown. A green run on an older SHA is not treated as evidence for a newer head.
+
+### Consolidated test coverage recovered during the audit
+
+- #234 now carries the unique warehouse boundary tests from #176, permission-revocation conversion coverage from #185, transfer membership-context tests from #196, expired reset-token coverage from #211, and invalid-bearer decoder HTTP coverage from #184. Its credential-version implementation also covers the JWT claim-type/null-resolution fixes previously isolated in #247/#252/#253/#258.
+- #257 now carries the unique outbound foreign warehouse/customer/item reference test from #183, rejected partial-release state-preservation test from #208, and concurrent release single-winner test from #204. The replenishment task tenant-read methods from #202 are already present there.
+- #244 now carries #180's tenant-profile response redaction and unauthenticated mutation assertions, alongside the tenant-selector spoofing tests from #228/#236.
+- #248 now carries #181's protected WMS_INVENTORY_POST delegation boundary test.
+- #245 contains the runtime security-header assertion originally left out of closed PR #220; the same assertion is also present in #234.
+- #205 contains the recovered reporting service tenant-boundary unit test from #199 and retains its separate MySQL tenant-isolation integration test.
+- #259 restores the all-purpose concurrent token-consumption race test from closed PR #232.
+
+### Closed-PR disposition
+
+Closed does not mean irrelevant. The audit compared each candidate with main and the active PR heads:
+
+- **Already present or superseded:** #233 request-parsing tests are present on main; #225 closed-tenant access-resolution test is present on main; #239 role-management assertions are already present on main/the active role test branch; #202 is covered by #257; #247/#252/#253 JWT boundaries are covered by #234/#258; #241/#250's unsupported-content-type work is covered by merged #240.
+- **Recovered into active work:** #199/#206 into reporting/warehouse coverage; #181 into #248; #184/#185/#196/#211/#176 into #234; #183/#204/#208 into #257; #220 into #245/#234; #228/#236/#180 profile assertions into #244; #232 into #259.
+- **Superseded implementation/automation:** #242's dependency and CI remediation is represented by the active #237 branch; #246 authenticated DAST is superseded by #245; #231 baseline DAST is superseded by #235.
+- **Historical or stale evidence, not code to restore blindly:** #174/#177/#178/#210/#213/#214 are audit/spec artifacts whose snapshots need reconciliation before reuse. #173 is a 403-only unauthenticated perimeter smoke; it is not treated as a business-performance test and is not restored as a substitute for the authenticated read-only baseline in #256.
+
+### Shared Testcontainers fixture root cause
+
+The shared failure was MySQL error 1470: the original fixture username wms_active_token_lifecycle_http_test exceeded MySQL's 32-character account-name limit. The corrected fixture uses a short username and ephemeral RSA test keys, and mocks the email-outbox encryption dependency for this isolated HTTP lifecycle test. The corrected fixture has been propagated to the active unique QA branches. PR #176's old failure is therefore not attributed to its warehouse assertions.
+
+### Remaining integration risks
+
+1. #234 and #245 share identical WmsSecurityConfiguration and WmsHttpSecurityHeadersRuntimeTest; #234 has the broader HTTP route/malformed-request test set, while #245 contributes authenticated DAST automation and its OpenAPI artifacts. Keep their merge order coordinated.
+2. #234 is still running Backend CI on its latest consolidated head. Do not declare credential-version invalidation complete until that exact run succeeds.
+3. #205's reporting MySQL integration test has no completed Backend CI run on its latest head yet. It remains a Gate 1 blocker for reporting tenant-isolation evidence.
+4. Several older open branches were updated with the corrected shared fixture but have not produced a new workflow run on the updated head. Treat those heads as unverified until their changes are validated in a consolidated current-base CI run or a fresh PR workflow run.
+5. The two Spring Framework advisories in osv-scanner.toml remain accepted residual risk until 2026-12-31; they are not fixed vulnerabilities. Reassess before expiry and whenever SSE/view-rendering features are introduced.
+
+### Gate 1 closure criteria
+
+Gate 1 is not complete until every unique change is represented in an active PR, duplicates and stale artifacts are explicitly dispositioned, all retained changes have CI/CodeQL evidence on a current head, the reporting integration test is validated, and a final combined regression succeeds. No merge or PR closure is authorized by this audit.
