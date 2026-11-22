@@ -37,6 +37,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Instant;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.util.Base64;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -53,11 +56,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @ActiveProfiles("wms")
 @TestPropertySource(properties = {
-        "wms.security.jwt.enabled=false",
+        "wms.security.jwt.enabled=true",
         "wms.security.http.auth-endpoints-enabled=false"
 })
 class WmsActiveBearerTokenLifecycleMySqlHttpTest {
     private static final String ROUTE = "/api/wms/v1/security-probe";
+    private static final KeyPair TEST_RSA_KEY_PAIR = generateTestRsaKeyPair();
 
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
@@ -73,6 +77,14 @@ class WmsActiveBearerTokenLifecycleMySqlHttpTest {
         registry.add("spring.flyway.enabled", () -> true);
         registry.add("spring.flyway.locations", () -> "classpath:db/wms-migration");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+        registry.add("wms.security.jwt.issuer", () -> "https://zirologistics.test");
+        registry.add("wms.security.jwt.tenant-selection-audience", () -> "wms-tenant-selection-test");
+        registry.add("wms.security.jwt.access-audience", () -> "wms-access-test");
+        registry.add("wms.security.jwt.key-id", () -> "wms-test-key");
+        registry.add("wms.security.jwt.public-key-pem",
+                () -> toPem("PUBLIC KEY", TEST_RSA_KEY_PAIR.getPublic().getEncoded()));
+        registry.add("wms.security.jwt.private-key-pem",
+                () -> toPem("PRIVATE KEY", TEST_RSA_KEY_PAIR.getPrivate().getEncoded()));
     }
 
     @Autowired private MockMvc mockMvc;
@@ -85,7 +97,6 @@ class WmsActiveBearerTokenLifecycleMySqlHttpTest {
 
     @MockBean(name = "wmsAccessJwtDecoder")
     private JwtDecoder accessJwtDecoder;
-
 
     @MockBean
     private WmsEmailOutboxEncryptionService emailOutboxEncryptionService;
@@ -152,6 +163,23 @@ class WmsActiveBearerTokenLifecycleMySqlHttpTest {
     private org.springframework.test.web.servlet.ResultActions performProtectedRequest(String token)
             throws Exception {
         return mockMvc.perform(get(ROUTE).header("Authorization", "Bearer " + token));
+    }
+
+    private static KeyPair generateTestRsaKeyPair() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            return generator.generateKeyPair();
+        } catch (Exception exception) {
+            throw new ExceptionInInitializerError(exception);
+        }
+    }
+
+    private static String toPem(String label, byte[] encodedKey) {
+        String body = Base64.getMimeEncoder(64, new byte[] {'\\n'})
+                .encodeToString(encodedKey);
+        return "-----BEGIN " + label + "-----\\n" + body
+                + "\\n-----END " + label + "-----";
     }
 
     private void stubAccessToken(String token, String userPublicId, String membershipPublicId) {
