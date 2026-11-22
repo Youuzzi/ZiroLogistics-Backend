@@ -110,27 +110,6 @@ class WmsActiveBearerTokenLifecycleMySqlHttpTest {
     private WmsEmailOutboxEncryptionService emailOutboxEncryptionService;
 
     @Test
-    void passwordChangeInvalidatesPreviouslyIssuedTenantSelectionToken() {
-        UserEntity user = createUser();
-        TenantEntity tenant = createTenant("STALE_SELECTION");
-        TenantMembershipEntity membership = createMembership(user, tenant);
-        Long issuedCredentialVersion = user.getCredentialVersion();
-
-        String selectionToken = jwtTokenService.issueTenantSelectionToken(
-                user.getPublicId(), issuedCredentialVersion);
-        Jwt decodedSelection = tenantSelectionJwtDecoder.decode(selectionToken);
-
-        passwordManagementService.changePassword(
-                user.getPublicId(), "TestPassword123", "TestPassword456");
-        assertEquals(issuedCredentialVersion + 1L, jdbc.queryForObject(
-                "SELECT credential_version FROM users WHERE id = ?", Long.class, user.getId()));
-
-        assertThrows(WmsCredentialAuthenticationException.class, () -> jwtTokenService.issueAccessToken(
-                decodedSelection.getSubject(), membership.getPublicId(),
-                WmsCredentialVersionClaim.parse(decodedSelection.getClaims().get("cv"))));
-    }
-
-    @Test
     void staleTenantSelectionTokenCannotMintAccessTokenAfterPasswordChange() {
         UserEntity user = createUser();
         TenantEntity tenant = createTenant("SELECTION_VERSION");
