@@ -118,7 +118,7 @@ jobs:
           FROM tenants WHERE tenant_code = 'DAST-TENANT';
           SQL
 
-      - name: Create short-lived signed access token and verify protected routes
+      - name: Create short-lived signed access token and verify protected route contract
         shell: bash
         run: |
           set -euo pipefail
@@ -133,8 +133,17 @@ jobs:
           echo "ZAP_AUTH_HEADER_VALUE=Bearer $token" >> "$GITHUB_ENV"
           echo "ZAP_AUTH_HEADER_SITE=http://127.0.0.1:8081" >> "$GITHUB_ENV"
 
-          unauthenticated="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8081/api/wms/v1/tenants/current/warehouses)"
-          test "$unauthenticated" = "401"
+          protected_paths=(
+            "/api/wms/v1/tenants/current/profile"
+            "/api/wms/v1/tenants/current/warehouses"
+            "/api/wms/v1/tenants/current/warehouses/d0a57000-0000-4000-8000-000000000005"
+          )
+          for path in "${protected_paths[@]}"; do
+            unauthenticated="$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:8081${path}")"
+            test "$unauthenticated" = "401"
+            curl --fail --silent --show-error -H "Authorization: Bearer $token" \
+              "http://127.0.0.1:8081${path}" -o /dev/null
+          done
           curl --fail --silent --show-error -H "Authorization: Bearer $token" \
             http://127.0.0.1:8081/api/wms/v1/tenants/current/profile > /tmp/wms-dast-profile.json
           curl --fail --silent --show-error -H "Authorization: Bearer $token" \
@@ -174,12 +183,13 @@ jobs:
             -J /zap/wrk/target/wms-dast-authenticated/report.json \
             -I
 
-      - name: Verify ZAP exercised authenticated protected endpoints
+      - name: Verify ZAP covered protected endpoints and report no 401s
         if: always()
         shell: bash
         run: |
           python - <<'PY'
           import json, pathlib, sys
+          from urllib.parse import urlparse
           report = pathlib.Path("target/wms-dast-authenticated/report.json")
           if not report.exists():
               print("Authenticated ZAP report is missing")
@@ -190,23 +200,28 @@ jobs:
               "/api/wms/v1/tenants/current/warehouses/d0a57000-0000-4000-8000-000000000005",
           }
           data = json.loads(report.read_text())
+          seen = set()
           unauthorized = []
           for site in data.get("site", []):
               for alert in site.get("alerts", []):
-                  if alert.get("name") != "A Client Error response code was returned by the server":
-                      continue
                   for instance in alert.get("instances", []):
-                      from urllib.parse import urlparse
                       path = urlparse(instance.get("uri", "")).path
-                      if path in protected and instance.get("evidence") == "401":
+                      if path in protected:
+                          seen.add(path)
+                      if (alert.get("name") == "A Client Error response code was returned by the server"
+                              and path in protected and instance.get("evidence") == "401"):
                           unauthorized.append(instance.get("uri"))
-          if unauthorized:
-              print("ZAP did not authenticate these protected endpoints:", *unauthorized, sep="\\n")
+          missing = protected - seen
+          if missing:
+              print("ZAP report does not demonstrate visits to protected endpoints:", *sorted(missing), sep="\\n")
               sys.exit(1)
-          print("ZAP report contains no 401 responses for the authenticated protected endpoint inventory.")
+          if unauthorized:
+              print("ZAP reported 401 responses for protected endpoints:", *unauthorized, sep="\\n")
+              sys.exit(1)
+          print("ZAP alert instances demonstrate visits to all protected endpoints; pre-scan curl checks confirm unauthenticated 401 and authenticated 2xx.")
           PY
 
-      - name: Fail on high-risk ZAP findings
+      - name: Fail on medium-or-higher ZAP findings
         if: always()
         shell: bash
         run: |
@@ -217,16 +232,16 @@ jobs:
               print("Authenticated ZAP report is missing")
               sys.exit(1)
           data = json.loads(report.read_text())
-          high = []
+          medium_or_high = []
           for site in data.get("site", []):
               for alert in site.get("alerts", []):
-                  if int(alert.get("riskcode", 0)) >= 3:
-                      high.append((alert.get("riskdesc"), alert.get("name"), alert.get("url")))
-          if high:
-              for finding in high:
-                  print("HIGH-RISK:", *finding)
+                  if int(alert.get("riskcode", 0)) >= 2:
+                      medium_or_high.append((alert.get("riskdesc"), alert.get("name"), alert.get("url")))
+          if medium_or_high:
+              for finding in medium_or_high:
+                  print("MEDIUM-OR-HIGH:", *finding)
               sys.exit(1)
-          print("No High-risk ZAP alerts were reported in the authenticated API scan.")
+          print("No Medium-or-High ZAP alerts were reported in the authenticated API scan.")
           PY
 
       - name: Upload authenticated ZAP reports
