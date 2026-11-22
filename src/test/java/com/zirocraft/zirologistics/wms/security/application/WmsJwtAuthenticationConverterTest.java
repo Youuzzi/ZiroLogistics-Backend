@@ -138,6 +138,18 @@ class WmsJwtAuthenticationConverterTest {
                 .isInstanceOf(OAuth2AuthenticationException.class);
     }
 
+    @Test
+    void rejectsNullMembershipResolutionAsInvalidBearerToken() {
+        when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
+                .thenReturn(null);
+
+        assertThatThrownBy(() -> converter.convert(accessToken(
+                "user-public-id", "membership-public-id")))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .hasMessageContaining("Invalid bearer token");
+        verify(membershipAccessService).resolve("user-public-id", "membership-public-id");
+    }
+
     private static Jwt tokenWithCredentialVersion(Object version) {
         Instant now = Instant.now();
         return Jwt.withTokenValue("test-token")
