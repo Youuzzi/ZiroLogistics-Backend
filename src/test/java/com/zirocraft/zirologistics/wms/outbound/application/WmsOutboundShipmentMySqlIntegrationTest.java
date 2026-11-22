@@ -420,6 +420,30 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                         "PACK-" + UUID.randomUUID().toString().substring(0, 8), null)).get("public_id");
 
         Fixture otherTenant = fixture("NONE");
+
+        assertEquals(1, count(
+                "SELECT COUNT(*) FROM outbound_shipments WHERE tenant_id=? AND public_id=?",
+                fixture.tenantId(), shipmentId));
+        assertEquals(0, count(
+                "SELECT COUNT(*) FROM outbound_shipments WHERE tenant_id=? AND public_id=?",
+                otherTenant.tenantId(), shipmentId));
+        assertThrows(WmsResourceNotFoundException.class,
+                () -> shipmentService.get(otherTenant.principal(), shipmentId));
+        assertEquals(1, count(
+                "SELECT COUNT(*) FROM outbound_shipments WHERE tenant_id=? AND public_id=?",
+                fixture.tenantId(), shipmentId));
+
+        assertEquals(1, count(
+                "SELECT COUNT(*) FROM picking_tasks WHERE tenant_id=? AND public_id=?",
+                fixture.tenantId(), taskId));
+        assertEquals(0, count(
+                "SELECT COUNT(*) FROM picking_tasks WHERE tenant_id=? AND public_id=?",
+                otherTenant.tenantId(), taskId));
+        assertThrows(WmsResourceNotFoundException.class,
+                () -> pickingService.get(otherTenant.principal(), taskId));
+        assertEquals(1, count(
+                "SELECT COUNT(*) FROM picking_tasks WHERE tenant_id=? AND public_id=?",
+                fixture.tenantId(), taskId));
         assertEquals(1, count("SELECT COUNT(*) FROM packing_sessions WHERE tenant_id=? AND public_id=?",
                 fixture.tenantId(), sessionId));
         assertEquals(0, count("SELECT COUNT(*) FROM packing_sessions WHERE tenant_id=? AND public_id=?",
