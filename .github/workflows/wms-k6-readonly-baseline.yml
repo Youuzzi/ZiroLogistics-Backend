@@ -139,8 +139,9 @@ jobs:
           signing_input="$header.$payload"
           signature="$(printf '%s' "$signing_input" | openssl dgst -sha256 -sign /tmp/wms-k6-private.pem | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
           token="$signing_input.$signature"
+          echo "::add-mask::$token"
           echo "::add-mask::Bearer $token"
-          echo "WMS_K6_TOKEN=Bearer $token" >> "$GITHUB_ENV"
+          echo "WMS_K6_TOKEN=$token" >> "$GITHUB_ENV"
           echo "WMS_K6_WAREHOUSE_PUBLIC_ID=d0a57000-0000-4000-8000-000000000015" >> "$GITHUB_ENV"
 
           paths=(
