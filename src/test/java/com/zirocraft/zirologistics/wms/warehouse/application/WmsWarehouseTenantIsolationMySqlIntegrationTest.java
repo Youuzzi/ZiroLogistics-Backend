@@ -50,6 +50,8 @@ class WmsWarehouseTenantIsolationMySqlIntegrationTest {
         String warehouseA = createWarehouse(tenantA);
         String warehouseB = createWarehouse(tenantB);
         String foreignParentLocation = createLocation(tenantB, warehouseB);
+        assertEquals(1, count("SELECT COUNT(*) FROM warehouse_locations WHERE tenant_id=? AND public_id=?",
+                tenantB.tenantId(), foreignParentLocation), "Foreign parent must exist before the rejection assertion");
 
         var tenantAWarehouses = warehouseService.listWarehouses(tenantA.principal());
         assertEquals(1, tenantAWarehouses.size(), "Tenant A must see only its own warehouse");
