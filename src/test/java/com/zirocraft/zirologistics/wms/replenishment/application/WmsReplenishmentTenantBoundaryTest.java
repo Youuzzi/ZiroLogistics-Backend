@@ -33,7 +33,7 @@ class WmsReplenishmentTenantBoundaryTest {
                 "user-public", 20L, "tenant-a", 30L, "membership-a", Set.of());
         when(accessService.resolve("user-public", "membership-a")).thenReturn(
                 new WmsMembershipAccess(30L, "user-public", 20L, "tenant-a", 30L,
-                        "membership-a", Set.of("WMS_REPLENISHMENT_TASK_READ")));
+                        "membership-a", Set.of("WMS_REPLENISHMENT_READ")));
     }
 
     @Test
