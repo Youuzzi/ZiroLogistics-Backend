@@ -18,7 +18,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -61,8 +60,9 @@ class WmsActiveBearerTokenLifecycleMySqlHttpTest {
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
             .withDatabaseName("zirowms_active_token_http_test")
-            .withUsername("wms_active_token_lifecycle_http_test")
-            .withPassword("wms_active_token_lifecycle_http_test");
+            // MySQL account names are limited to 32 characters; keep test credentials short.
+            .withUsername("wms_active_token_http_test")
+            .withPassword("wms_active_token_http_test");
 
     @DynamicPropertySource
     static void configureDatabase(DynamicPropertyRegistry registry) {
