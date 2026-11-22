@@ -180,6 +180,67 @@ class WmsInboundReceivingMySqlIntegrationTest {
         assertEquals(0, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
     }
 
+
+    @Test
+    void inboundReceiptsAndReferencesAreIsolatedAcrossTenants() {
+        Fixture otherTenant = fixture("NONE");
+        String receiptId = createReceipt(fixture);
+        String ownLineId = addLine(fixture, receiptId, fixture.itemPublicId(), "5.0000");
+
+        assertTrue(receivingService.list(fixture.principal()).stream()
+                .anyMatch(row -> receiptId.equals(row.get("public_id"))));
+        assertFalse(receivingService.list(otherTenant.principal()).stream()
+                .anyMatch(row -> receiptId.equals(row.get("public_id"))));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> receivingService.get(otherTenant.principal(), receiptId));
+
+        int receiptCountBefore = count(
+                "SELECT COUNT(*) FROM inbound_receipts WHERE tenant_id = ?", fixture.tenantId());
+        int auditCountBefore = count(
+                "SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ?", fixture.tenantId());
+
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> receivingService.create(fixture.principal(),
+                        new WmsInboundReceivingService.ReceiptCommand(
+                                otherTenant.warehousePublicId(), fixture.supplierPublicId(), null,
+                                fixture.locationPublicId(), "CROSS-WH-" + UUID.randomUUID(),
+                                null, "PURCHASE", null, null)));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> receivingService.create(fixture.principal(),
+                        new WmsInboundReceivingService.ReceiptCommand(
+                                fixture.warehousePublicId(), otherTenant.supplierPublicId(), null,
+                                fixture.locationPublicId(), "CROSS-SUP-" + UUID.randomUUID(),
+                                null, "PURCHASE", null, null)));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> receivingService.create(fixture.principal(),
+                        new WmsInboundReceivingService.ReceiptCommand(
+                                fixture.warehousePublicId(), fixture.supplierPublicId(), null,
+                                otherTenant.locationPublicId(), "CROSS-LOC-" + UUID.randomUUID(),
+                                null, "PURCHASE", null, null)));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> receivingService.addLine(otherTenant.principal(), receiptId,
+                        new WmsInboundReceivingService.ReceiptLineCommand(
+                                otherTenant.itemPublicId(), new BigDecimal("1.0000"), null)));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> receivingService.addLine(fixture.principal(), receiptId,
+                        new WmsInboundReceivingService.ReceiptLineCommand(
+                                otherTenant.itemPublicId(), new BigDecimal("1.0000"), null)));
+
+        assertEquals(receiptCountBefore,
+                count("SELECT COUNT(*) FROM inbound_receipts WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM inbound_receipt_lines
+                WHERE tenant_id = ? AND inbound_receipt_id =
+                  (SELECT id FROM inbound_receipts WHERE tenant_id = ? AND public_id = ?)
+                """, fixture.tenantId(), fixture.tenantId(), receiptId));
+        assertEquals(auditCountBefore,
+                count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals("DRAFT", receiptStatus(fixture, receiptId));
+        assertEquals(1, count(
+                "SELECT COUNT(*) FROM inbound_receipt_lines WHERE tenant_id = ? AND public_id = ?",
+                fixture.tenantId(), ownLineId));
+    }
+
     private String createReceipt(Fixture f) {
         return (String) receivingService.create(f.principal(),
                 new WmsInboundReceivingService.ReceiptCommand(
