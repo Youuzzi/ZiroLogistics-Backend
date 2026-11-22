@@ -173,6 +173,31 @@ class WmsTenantProfileControllerHttpTest {
         verifyNoInteractions(profileService);
     }
 
+    @Test
+    void tenantProfileResponseDoesNotExposeInternalTenantOrMembershipIdentifiers() throws Exception {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(profileService.getCurrent(principal)).thenReturn(profile());
+
+        mockMvc.perform(get(ROUTE).with(authentication(authenticated(principal))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicId").value("tenant-public-id"))
+                .andExpect(jsonPath("$.tenantId").doesNotExist())
+                .andExpect(jsonPath("$.id").doesNotExist())
+                .andExpect(jsonPath("$.membershipId").doesNotExist())
+                .andExpect(jsonPath("$.userId").doesNotExist())
+                .andExpect(jsonPath("$.passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.databaseUrl").doesNotExist());
+
+        verify(profileService).getCurrent(principal);
+    }
+
+    @Test
+    void tenantProfileMutationRequiresAuthentication() throws Exception {
+        mockMvc.perform(put(ROUTE).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(profileService);
+    }
+
     private static UsernamePasswordAuthenticationToken authenticated(WmsAuthenticatedPrincipal principal) {
         return new UsernamePasswordAuthenticationToken(principal, null, List.of());
     }
