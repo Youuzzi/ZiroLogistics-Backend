@@ -53,7 +53,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @ActiveProfiles("wms")
 @TestPropertySource(properties = {
-        "wms.security.jwt.enabled=true",
+        "wms.security.jwt.enabled=false",
         "wms.security.http.auth-endpoints-enabled=false"
 })
 class WmsActiveBearerTokenLifecycleMySqlHttpTest {
