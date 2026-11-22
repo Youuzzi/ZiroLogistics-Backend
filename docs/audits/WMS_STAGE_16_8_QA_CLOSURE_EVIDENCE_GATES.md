@@ -26,7 +26,7 @@ Main Backend CI run **#952** on SHA `81dd5f914544a71f0fc7ced3ed820f885d680db1` f
 - Error: `WmsActiveBearerTokenLifecycleMySqlHttpTest` — MySQL Testcontainers startup failure.
 - Root cause: the fixture uses a MySQL username longer than the server's 32-character limit.
 
-The shorter fixture username `wms_active_token_http_test` is included in #234, #237, and #245. The latest #234 head **cc5c5c5** has Backend CI #986 in progress. Earlier attempts failed first from a transient Maven distribution download and then from test compilation errors; the missing imports and two stale token-service call sites were corrected on the latest head. Do not treat the fix as integrated until the CI run finishes and main is rerun.
+The shorter fixture username `wms_active_token_http_test` is included in #234, #237, and #245. The latest #234 head **5dd3d01** has Backend CI #991 in progress and CodeQL #302 succeeded. Earlier attempts failed from a transient Maven distribution download and stale test signatures/imports; those issues were corrected on the latest head. Do not treat the fix as integrated until the CI run finishes and main is rerun.
 
 PR #256 latest Backend CI #967 and CodeQL #278 succeeded on head **ef8d6c0**; k6 run #8 also succeeded. Its earlier Backend CI #962 failed on the shared fixture, which is fixed in the latest head.
 
@@ -42,7 +42,7 @@ The current PR #234 head **860bad2** now:
 
 Backend CI and CodeQL are currently running on this new head. This fix is **not yet integrated**.
 
-The unique HTTP runtime tests from #247 have also been ported into #234, and #253's null membership-resolution test was already ported there. Those standalone PRs are now redundant and #253 is closed.
+The unique HTTP runtime tests from #247 have also been ported into #234, and #253's null membership-resolution test was already ported there. #253 is closed; #247 is pending closure after #234's latest CI.
 
 ## 4. CI scope optimization defect found and fixed on PR #237 branch
 
