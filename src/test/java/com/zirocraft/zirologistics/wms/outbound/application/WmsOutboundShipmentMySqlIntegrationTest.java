@@ -414,6 +414,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                   location_name,location_type,status)
                 VALUES(?,?,?,?,'Tenant Read Boundary Staging','STAGING','ACTIVE')
                 """, staging, fixture.tenantId(), warehouseId, "STG_" + UUID.randomUUID().toString().substring(0, 8));
+        pickingService.start(fixture.principal(), taskId);
         pickingService.confirm(fixture.principal(), taskId, 1,
                 new WmsPickingManagementService.ConfirmPickingCommand(
                         UUID.randomUUID(), new BigDecimal("5.0000"), staging, List.of(), null));
