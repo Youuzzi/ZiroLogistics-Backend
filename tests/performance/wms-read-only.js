@@ -1,5 +1,5 @@
 import http from "k6/http";
-import { check } from "k6";
+import { check, sleep } from "k6";
 
 const baseUrl = __ENV.BASE_URL || "http://127.0.0.1:8081";
 const token = __ENV.WMS_TOKEN;
