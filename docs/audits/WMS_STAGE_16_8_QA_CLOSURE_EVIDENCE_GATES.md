@@ -1,84 +1,152 @@
 # Stage 16.8 — QA Closure Evidence Gates
 
-**Status:** Stage 16 remains OPEN. This document is updated from actual repository PR, CI, and retained scan artifacts reviewed on 2026-11-22. It is not a production-readiness declaration.
-**Scope:** Stage 16 Wave A security, tenant-isolation, dependency, DAST, performance and closure evidence.
+**Status: Stage 16 remains OPEN / NOT READY.** Updated 2026-11-22 from current PR heads, GitHub Actions runs, and retained artifacts. This is evidence tracking, not a production-readiness declaration.
 
-## Evidence that must exist before closure
+## 1. Current verified evidence
 
-| Area | Evidence expected | Current evidence/status | Closure condition |
-|---|---|---|---|
-| Risk-to-test traceability (WP16.1) | Risk/test matrix | PR #165 merged | Confirm matrix remains current |
-| Coverage baseline (WP16.2) | JaCoCo artifact | PR #166 merged; baseline only | Preserve baseline; targeted changes only, no arbitrary coverage chase |
-| Dependency scanning (WP16.3) | OSV report and finding disposition | PR #237 CI green; strict OSV scan; SARIF results empty after two documented ignores | Reassess the two ignored Spring advisories; keep scan blocking unaccepted findings |
-| Static analysis (WP16.4) | CodeQL results | PR #237 CodeQL SARIF had 2 CSRF alerts; PR #249 CodeQL artifact had 0 results after scoped CSRF fix | Re-run CodeQL on consolidated security changes |
-| HTTP security verification (WP16.5) | Authentication/authorization boundary tests | PRs #180–#195, #217–#219, #230, #247, #248 and related tests; CI is green on their recorded heads | Review exact route coverage and ensure fixes are validated on current base |
-| DAST baseline (WP16.6) | ZAP baseline artifact and triage | Executed twice successfully; details below. 0 High/Medium/Low; 1 Informational Non-Storable Content. Scan is unauthenticated/perimeter-only | Keep baseline as perimeter evidence; do not interpret as full API coverage |
-| Authenticated DAST | Authenticated ZAP artifact and triage | PR #245 run succeeded on its original head; details below. One Low CORP finding was observed and has been addressed in PR #245's updated branch; re-scan is pending | Confirm updated scan clears CORP and has actual protected-route coverage |
-| Performance (WP16.7) | k6 result artifact and interpretation | PR #173 is closed unmerged. No authenticated workflow/business-performance benchmark is present on main; no k6 result artifact is verified | Execute a representative authenticated business workflow benchmark and retain report before closure |
-| Tenant isolation follow-up | Tenant A/B tests plus no-side-effect assertions | MySQL tests in #179, #182, #183, #197, #198 and #205; focused mock-JDBC tests in #200–#203; warehouse #176. PR #206 test now asserts the exact not-found exception, CI pending. Old #199 was closed as stale; replacement #255 is on current main, CI pending | Ensure reads, writes, workflow references and reporting are covered by real MySQL tenant A/B fixtures; mock-only tests remain supplementary |
-| Closure matrix | PR inventory and evidence mapping | PR #214 is stale and has no check runs; its count/status snapshot must not be used as current | Refresh the inventory from current PR states and CI SHAs before final Stage 16 closure |
+| Area | Evidence | Current assessment |
+|---|---|---|
+| Risk traceability | #165 merged | Matrix exists; keep aligned to final coverage |
+| Coverage baseline | #166 merged; JaCoCo artifact | Baseline only; no arbitrary coverage target |
+| Dependency remediation | #237 | Earlier head passed CI and strict OSV. Current head adds expiry for the two accepted Spring exceptions and fixes CI diff scoping; new CI is running |
+| Static analysis | #237 CodeQL SARIF contains 2 CSRF findings; #249 SARIF contains 0 after scoped CSRF exemption | #245 includes the scoped fix; its CodeQL check passed, but the latest branch SARIF artifact was not available for direct result-count inspection |
+| HTTP/security tests | #180–#195, #217–#219, #230, #247, #248 and related tests | Good boundary coverage, but checks are on isolated PR heads and not yet integrated |
+| Tenant isolation | MySQL A/B integration tests #179, #182, #183, #197, #198, #205 | Stronger evidence for inventory, inbound, outbound, putaway, stock count and reporting |
+| Workflow/inventory integrity | #204 concurrency, #208 partial-release preservation, #207 quantity boundaries | Useful focused tests; still needs combined integration on one current base |
+| ZAP baseline | #235 latest disposable run #8 succeeded; artifact retained | Perimeter-only passive scan |
+| Authenticated ZAP | #245 latest authenticated run #26 succeeded; artifact retained | 3 protected read routes; 0 Medium/High; limited scope |
+| Authenticated performance | #256 k6 run #7 succeeded; artifact retained | Read-only baseline only, not business-workflow throughput |
+| Final regression | Current main CI #952 failed; current fixes are on PR branches | NOT READY until current base is green after integration |
 
-## DAST baseline evidence (actual runs)
+## 2. Current CI blocker and root cause
 
-Two successful disposable perimeter ZAP baseline runs were retained from PR #231 branch `qa/stage-16-a5-dast-execution`, commit `950410d31dec915c97e40b82c6c543536d201ba`:
+Main Backend CI run **#952** on SHA `81dd5f914544a71f0fc7ced3ed820f885d680db1` failed:
 
-- Run [44903819529](https://github.com/Youuzzi/ZiroLogistics-Backend/actions/runs/44903819529): successful; artifact `wms-zap-baseline`, ID `14707465336`.
-- Run [44903814826](https://github.com/Youuzzi/ZiroLogistics-Backend/actions/runs/44903814826): successful; artifact `wms-zap-baseline`, ID `14706474951`.
-- Each report: 0 High, 0 Medium, 0 Low, 1 Informational alert (`Non-Storable Content`); the summary reported 9 endpoints, 100% GET and 100% 4xx.
+- 347 tests run; 0 assertion failures; 1 error; 2 skipped.
+- Error: `WmsActiveBearerTokenLifecycleMySqlHttpTest` — MySQL Testcontainers startup failure.
+- Root cause: the fixture uses a MySQL username longer than the server's 32-character limit.
 
-The baseline is unauthenticated and perimeter-only. It is evidence that the disposable runtime was scanned, not that protected API routes or business workflows were tested.
+The shorter fixture username `wms_active_token_http_test` is included in #234, #237, and #245. The latest #234 head **484edef** has a new Backend CI run #964 in progress. Do not treat the fix as integrated until the CI run finishes and main is rerun.
 
-## Authenticated ZAP evidence (actual run)
+PR #256 Backend CI #962 also failed at this same shared Testcontainers fixture. The k6 workflow itself succeeded on its latest head; the Backend CI failure is not a k6 workload failure.
 
-PR #245 authenticated API scan ran successfully on original head `749014d52c54f128321d664dfb673cbaef7d73aa`:
+## 3. CI scope optimization defect found and fixed on PR #237 branch
 
-- Run [44936318748](https://github.com/Youuzzi/ZiroLogistics-Backend/actions/runs/44936318748): job `Authenticated WMS API scan (ZAP)` succeeded.
-- Artifact `wms-zap-authenticated`, ID `14719653642`.
-- Report: 0 High, 0 Medium, 1 Low (`Cross-Origin-Resource-Policy Header Missing or Invalid`, 3 instances), 2 Informational alerts (30 404 instances and 3 non-storable-content instances).
-- Report summary: 32 endpoints, 100% GET, 98% 4xx and 1% 2xx.
-- Scan scope is limited to the tenant profile, warehouse list and warehouse detail endpoints; it is not a full controller/workflow scan.
+The docs-only scope check was comparing the event's stale `base.sha` to `github.sha` (the synthetic PR merge SHA). When main advanced after the PR event, the diff included unrelated base-branch code changes, causing a documentation-only PR (#175) to run the full Maven regression.
 
-The Low CORP finding was remediated on PR #245's updated branch by setting `Cross-Origin-Resource-Policy: same-origin` in both WMS security chains and adding HTTP assertions. The CSRF exemption was also narrowed to stateless bearer API routes, and CSRF remains enabled outside `/api/wms/**`. The updated CI/DAST rerun is pending; do not call the finding closed until that run completes and the artifact is reviewed.
+The fix on PR #237 branch commit **42233c8** now fetches the current base ref and compares the PR head against the current merge-base. If fetching or merge-base fails, it safely falls back to full backend validation. The documentation `git diff --check` uses the same computed range.
 
-## Dependency and static-analysis disposition
+A local Git simulation verified:
+- stale-base documentation PR → documentation-only scope;
+- stale-base backend PR → backend scope;
+- shell syntax is valid.
 
-PR #237's strict OSV workflow completed successfully on its recorded head. Its SARIF artifact `results.sarif` contains 0 results because two Spring Framework advisories are explicitly ignored:
+CI run #966 is validating this workflow change. It is **not yet CI-verified**.
 
-- CVE-2026-47890
-- CVE-2026-47884
+## 4. DAST baseline — latest actual artifact
 
-The PR's source/config reachability review states the current WMS REST runtime has no SSE, view-fragment rendering, `XsltView`, `ViewResolver`, or server-rendered template resources. These advisories are accepted as conditionally unreachable—not fixed dependency vulnerabilities. The exception must be revisited if the trigger paths are introduced. Keep OSV strict/blocking for other unaccepted findings.
+PR #235 latest run **#8** succeeded (run ID `44941989564`) and retained artifact `wms-zap-baseline` (ID `14721579195`).
 
-CodeQL SARIF from PR #237 showed two `spring-disabled-csrf-protection` findings. PR #249's CodeQL SARIF had 0 results after narrowing the exemption. PR #245 now contains the same CSRF fix and CORP remediation; latest validation is pending.
+The report contains one Informational alert, `Non-Storable Content`, with 3 instances. No Low/Medium/High finding was reported in that artifact. The scan uses a disposable Compose project and does not target a developer or production database.
 
-## Tenant isolation evidence map
+This remains unauthenticated/perimeter evidence only.
 
-- **Real MySQL/Testcontainers:** #179 inventory posting foreign/mixed warehouse-location-item-lot-serial negative cases with balance, ledger, audit unchanged assertions; #182 inbound receiving cross-tenant tests; #183 outbound cross-tenant resource references; #197 putaway read isolation; #198 stock-count/count-line isolation; #205 operational reporting tenant isolation.
-- **Concurrency/integrity:** #204 concurrent outbound release transition; #208 partial release failure preserves shipment/reservation/availability/audit state; #207 decimal quantity boundary tests.
-- **Focused service/mock tests:** #200 transfer, #201 picking/packing, #202 replenishment, #203 adjustment/shipping, #206 foreign warehouse public ID. These are supplementary, not equivalent to full MySQL/HTTP tenant A/B tests.
-- **Warehouse service boundary:** #176 verifies tenant-scoped public-ID reads, foreign parent-location rejection, and no writes on rejection.
-- **Inventory source audit:** #177 is source SQL review only. #178 is a test specification only. Neither is runtime evidence.
+## 5. Authenticated DAST — latest actual artifact
 
-## Performance evidence
+PR #245 authenticated ZAP run **#26** succeeded (run ID `45040771306`) and retained artifact `wms-zap-authenticated` (ID `14761094821`).
 
-PR #173 is closed unmerged and describes only a low-load perimeter smoke. No verified k6 artifact exists for an authenticated business workflow. This is a Stage 16 closure blocker; do not infer performance readiness from ordinary CI duration or a denied-route smoke test.
+Report review:
+- 0 Medium and 0 High alerts.
+- 2 Informational alert types: 30 instances of the scanner's 404 response-code informational alert, and 3 `Non-Storable Content` instances.
+- Protected routes represented in the report: tenant profile, warehouse list, and warehouse detail.
+- Authenticated pre-scan route contract and teardown steps succeeded.
 
-## CI and PR hygiene
+The scan is deliberately limited to 3 protected read routes. It does **not** cover all WMS controllers, write operations, or business workflow attack paths.
 
-- The recorded successful checks are attached to individual commit SHAs. A green check on an older head/base is not evidence for a later fix.
-- PR #199 was closed as stale; its focused reporting boundary test was ported to #255, which uses current main. The old CI result is not transferred to #255.
-- PR #251 was closed as a duplicate of the Testcontainers username correction already included in #234 and #253.
-- PR #214 has no check runs and its inventory count is stale.
-- PR #206, #234, #245, #249 and #255 have changes requiring fresh validation; inspect latest SHA checks before deciding READY.
+The original CSRF findings were confirmed in PR #237 CodeQL SARIF (2 findings at `WmsSecurityConfiguration.java`). PR #249 CodeQL SARIF has 0 results after scoping the CSRF exemption to stateless bearer API routes. PR #245 includes that scoped fix plus the CORP header remediation.
 
-## Required closure decision
+## 6. Dependency scan disposition
 
-Stage 16 **NOT READY** until:
+Earlier PR #237 strict OSV scan succeeded on head **7a41eb3**. The scan was blocking (`fail-on-vuln: true`) and its log explicitly filtered two accepted Spring advisories:
 
-1. Latest security remediation CI and authenticated ZAP rerun complete successfully and artifacts are reviewed.
-2. No untriaged CodeQL/OSV findings remain; the two conditional Spring advisory exceptions remain explicit and reviewed.
-3. Tenant A/B MySQL tests cover representative reads, writes, cross-resource references, reporting and no-side-effect rejection; mock-only coverage is not treated as integration proof.
-4. A real authenticated business-workflow k6 benchmark is run, with load profile, request count, failure rate and latency percentiles retained.
-5. The PR inventory and merge order are refreshed against current heads/base SHAs, and the main branch is untouched by this audit until explicit merge approval.
+- `CVE-2026-47890`
+- `CVE-2026-47884`
 
-Green CI alone is not the Stage 16 closure signal.
+The exceptions are based on source/config reachability review for the current REST-only runtime; they are **accepted as conditionally unreachable, not fixed vulnerabilities**. The SARIF output was empty only after those suppressions.
+
+A new commit on #237 adds `effectiveUntil = 2026-12-31` to both exceptions. Current #237 Backend CI #966 and CodeQL #277 are in progress. The exceptions remain a residual risk and must be reassessed before expiry or if view/SSE features are introduced.
+
+## 7. Authenticated k6 read-only baseline — actual results
+
+PR #256 run **#7** succeeded (run ID `45042767798`) with artifact `wms-k6-read-only-baseline` (ID `14762029263`).
+
+Run profile and results:
+- 5 virtual users, 20 seconds, 150 iterations.
+- 450 HTTP requests across tenant profile, warehouse list, and warehouse detail.
+- 150/150 checks passed for each endpoint; 450 checks passed; 0 failed HTTP requests.
+- Average response duration: **9.20 ms**; p95: **17.98 ms**; maximum: **38.20 ms**.
+- Observed request rate: **14.57 requests/second** on the GitHub Actions runner.
+
+This is a disposable, authenticated, read-only baseline. It is **not** representative of receiving, putaway, picking, packing, inventory posting, replenishment, transfer, stock count, or shipment release throughput, and it is not a production-capacity claim.
+
+## 8. Tenant/workflow coverage map
+
+### MySQL/Testcontainers integration evidence
+- #179 inventory posting cross-tenant and foreign-resource references, with balance/ledger/audit state assertions.
+- #182 inbound receiving cross-tenant resource references.
+- #183 outbound cross-tenant resource references.
+- #197 putaway read isolation.
+- #198 stock count/count-line isolation.
+- #205 operational reporting tenant isolation.
+
+### Supplementary service/mock-JDBC coverage
+- #176 warehouse/location boundary.
+- #200 transfer.
+- #201 picking/packing.
+- #202 replenishment.
+- #203 adjustment/shipping.
+- These are useful focused checks, but they are not equivalent to real MySQL tenant A/B integration tests.
+
+### Security lifecycle and HTTP boundary evidence
+- #243 membership revocation and foreign tenant-switch denial in MySQL.
+- #219 tenant/membership suspension denial.
+- #244 HTTP tenant-context spoofing boundary.
+- #248 role-administration permission matrix.
+- #247 malformed/foreign JWT claim HTTP boundary.
+- #230 exact public-route/method boundary, malformed JSON, and unsupported content type.
+- #217 issuer/expiry, #216 error leakage, #212 unchanged-password rejection, #211 expired reset token, #209 CORS boundaries, #208 partial release, #204 concurrent outbound release, #207 quantity precision.
+
+## 9. Remaining material gaps
+
+1. Authenticated DAST covers only 3 read routes; WMS write endpoints and workflow state transitions are not scanned.
+2. k6 covers read-only endpoints only. A representative authenticated business workflow benchmark remains unimplemented.
+3. MySQL tenant A/B write-path coverage is still uneven. Picking/packing, transfer, replenishment, adjustment/shipping, and some warehouse/location mutations rely on focused mocks or HTTP boundary tests rather than end-to-end MySQL ownership/unchanged-state assertions.
+4. The new security/dependency changes have not been integrated together on one branch and rerun against current main.
+5. CI scope fix, dependency exception expiry, credential-version invalidation, and current main regression must all complete on their latest SHAs.
+6. PR/doc inventory is stale across #174, #177, #178, #210, #213, and #214. Consolidate current evidence into this closure document and close obsolete audit/spec PRs.
+
+## 10. Dependency-safe merge order (no merge performed)
+
+1. #245 — scoped CSRF/CORP + authenticated DAST evidence (CI and DAST currently green).
+2. #237 — Spring dependency remediation, strict OSV, expiring advisory exceptions, and CI scope correction (latest CI pending).
+3. #234 — credential-version invalidation and shortened Testcontainers username (latest CI pending).
+4. Rebase and integrate #247 HTTP JWT runtime tests and #248 role matrix; then #243/#244/#219 tenant/security lifecycle tests.
+5. Integrate #230 route/method/content-type HTTP tests.
+6. Integrate #235 baseline scan automation if retained.
+7. Integrate #256 authenticated read-only k6 baseline (k6 workflow green; backend CI blocked by shared fixture on main).
+8. Integrate tenant/workflow test PRs #179, #182, #183, #197, #198, #205 and supplementary #176/#200–#203/#204/#207–#208. Revalidate each on the latest base.
+9. Run full CI, CodeQL, strict OSV, DAST and relevant k6 workloads on the combined integration commit.
+
+## 11. Closure decision
+
+Stage 16 is **NOT READY** until:
+- current main CI is green after the shared Testcontainers fixture fix;
+- latest #234/#237 heads finish CI and CodeQL;
+- CSRF findings are cleared on the integrated commit;
+- all dependency exceptions have explicit expiry and review;
+- tenant/workflow integration evidence is revalidated on the combined branch;
+- authenticated business-workflow performance evidence is added (read-only k6 is not enough);
+- PR inventory and merge order are refreshed;
+- final full regression is green on the integrated commit.
+
+No PR is merged by this audit. Main remains untouched.
