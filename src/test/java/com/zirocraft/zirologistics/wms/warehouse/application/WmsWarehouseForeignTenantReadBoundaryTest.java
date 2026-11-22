@@ -29,7 +29,8 @@ class WmsWarehouseForeignTenantReadBoundaryTest {
         when(jdbc.queryForList(contains("WHERE tenant_id = ? AND public_id = ?"),
                 eq(10L), eq("foreign-warehouse"))).thenReturn(List.of());
 
-        assertThrows(RuntimeException.class, () -> service.getWarehouse(principal, "foreign-warehouse"));
+        assertThrows(WmsWarehouseNotFoundException.class,
+                () -> service.getWarehouse(principal, "foreign-warehouse"));
 
         verify(jdbc).queryForList(contains("WHERE tenant_id = ? AND public_id = ?"),
                 eq(10L), eq("foreign-warehouse"));
