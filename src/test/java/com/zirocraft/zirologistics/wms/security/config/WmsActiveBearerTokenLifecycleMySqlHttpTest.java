@@ -176,10 +176,10 @@ class WmsActiveBearerTokenLifecycleMySqlHttpTest {
     }
 
     private static String toPem(String label, byte[] encodedKey) {
-        String body = Base64.getMimeEncoder(64, new byte[] {'\\n'})
+        String body = Base64.getMimeEncoder(64, new byte[] {'\n'})
                 .encodeToString(encodedKey);
-        return "-----BEGIN " + label + "-----\\n" + body
-                + "\\n-----END " + label + "-----";
+        return "-----BEGIN " + label + "-----\n" + body
+                + "\n-----END " + label + "-----";
     }
 
     private void stubAccessToken(String token, String userPublicId, String membershipPublicId) {
