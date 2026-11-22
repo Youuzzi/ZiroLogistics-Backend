@@ -1,0 +1,193 @@
+name: WMS Authenticated k6 Read-only Baseline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "qa/stage-16-a7-k6-authenticated-*"
+
+permissions:
+  contents: read
+
+jobs:
+  k6-read-only:
+    name: Disposable authenticated WMS read-only load smoke (k6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Generate disposable RSA JWT key pair
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/wms-k6-private.pem
+          openssl pkey -in /tmp/wms-k6-private.pem -pubout -out /tmp/wms-k6-public.pem
+
+      - name: Write disposable Compose environment and JWT override
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/wms-k6-compose.yml <<'YAML'
+          services:
+            backend:
+              environment:
+                WMS_JWT_PUBLIC_KEY_PEM: ${WMS_JWT_PUBLIC_KEY_PEM}
+                WMS_JWT_PRIVATE_KEY_PEM: ${WMS_JWT_PRIVATE_KEY_PEM}
+                WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_ENABLED: "true"
+                WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_CURRENT_KEY_VERSION: "1"
+                WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_KEYS_1: ${WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_KEYS_1}
+          YAML
+          {
+            printf '%s\n' "WMS_DB_USERNAME=wmsk6" \
+              "WMS_DB_PASSWORD=wmsk6-password" \
+              "MYSQL_ROOT_PASSWORD=wmsk6-root-password" \
+              "WMS_FLYWAY_ENABLED=true" \
+              "WMS_JWT_ENABLED=true" \
+              "WMS_SECURITY_HTTP_AUTH_ENDPOINTS_ENABLED=false" \
+              "WMS_JWT_ISSUER=https://zirologistics.local" \
+              "WMS_JWT_SELECTION_AUDIENCE=zirologistics-wms-selection" \
+              "WMS_JWT_ACCESS_AUDIENCE=zirologistics-wms-access" \
+              "WMS_JWT_KEY_ID=wms-k6-key"
+            printf "WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_ENABLED=true\n"
+            printf "WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_CURRENT_KEY_VERSION=1\n"
+            printf "WMS_IDENTITY_EMAIL_OUTBOX_ENCRYPTION_KEYS_1=%s\n" "$(openssl rand -base64 32)"
+            printf "WMS_JWT_PUBLIC_KEY_PEM='%s'\n" "$(cat /tmp/wms-k6-public.pem)"
+            printf "WMS_JWT_PRIVATE_KEY_PEM='%s'\n" "$(cat /tmp/wms-k6-private.pem)"
+          } > /tmp/wms-k6.env
+          chmod 600 /tmp/wms-k6.env
+
+      - name: Start disposable WMS runtime and MySQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="wms-k6-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file /tmp/wms-k6.env -f compose.yml -f /tmp/wms-k6-compose.yml up --build -d
+          url="http://127.0.0.1:8081/api/wms/v1/tenants/current/profile"
+          for attempt in $(seq 1 150); do
+            status="$(curl --silent --show-error --max-time 2 --output /tmp/wms-k6-response --write-out '%{http_code}' "$url" 2>/dev/null || true)"
+            if [[ "$status" == "401" ]]; then
+              exit 0
+            fi
+            if [[ "$status" != "000" && "$status" != "502" && "$status" != "503" ]]; then
+              echo "Unexpected HTTP status while waiting for WMS: $status"
+              cat /tmp/wms-k6-response || true
+              exit 1
+            fi
+            sleep 2
+          done
+          docker compose --project-name "$project" --env-file /tmp/wms-k6.env -f compose.yml -f /tmp/wms-k6-compose.yml logs --tail 200 mysql backend
+          exit 1
+
+      - name: Seed disposable read-only tenant fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="wms-k6-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file /tmp/wms-k6.env -f compose.yml -f /tmp/wms-k6-compose.yml exec -T mysql \
+            mysql --user=root --password=wmsk6-root-password zirologistics_wms <<'SQL'
+          INSERT INTO users (public_id, email, username, password_hash, full_name, status)
+          VALUES ('d0a57000-0000-4000-8000-000000000011', 'wms-k6@example.invalid',
+                  'wms-k6', 'not-used-for-bearer-auth', 'Disposable WMS k6 User', 'ACTIVE');
+
+          INSERT INTO tenants (public_id, tenant_code, legal_name, display_name, status, timezone, default_currency)
+          VALUES ('d0a57000-0000-4000-8000-000000000012', 'K6-TENANT',
+                  'Disposable WMS k6 Tenant', 'WMS k6 Tenant', 'ACTIVE', 'Asia/Jakarta', 'IDR');
+
+          INSERT INTO tenant_memberships (public_id, tenant_id, user_id, status, joined_at)
+          SELECT 'd0a57000-0000-4000-8000-000000000013', t.id, u.id, 'ACTIVE', UTC_TIMESTAMP(6)
+          FROM tenants t CROSS JOIN users u
+          WHERE t.tenant_code = 'K6-TENANT' AND u.email = 'wms-k6@example.invalid';
+
+          INSERT IGNORE INTO permissions (permission_code, module, description)
+          VALUES ('WMS_TENANT_PROFILE_READ', 'TENANT', 'Read tenant profile for k6'),
+                 ('WMS_WAREHOUSE_READ', 'WAREHOUSE', 'Read tenant warehouses for k6');
+
+          INSERT INTO roles (public_id, tenant_id, role_code, role_name, is_system_role, status)
+          SELECT 'd0a57000-0000-4000-8000-000000000014', id, 'K6_READ_ONLY',
+                 'Disposable k6 Read Only', 0, 'ACTIVE'
+          FROM tenants WHERE tenant_code = 'K6-TENANT';
+
+          INSERT INTO membership_roles (tenant_id, membership_id, role_id)
+          SELECT t.id, m.id, r.id
+          FROM tenants t
+          JOIN tenant_memberships m ON m.tenant_id = t.id
+          JOIN roles r ON r.tenant_id = t.id AND r.role_code = 'K6_READ_ONLY'
+          WHERE t.tenant_code = 'K6-TENANT';
+
+          INSERT INTO role_permissions (role_id, permission_id)
+          SELECT r.id, p.id
+          FROM roles r
+          JOIN tenants t ON t.id = r.tenant_id
+          JOIN permissions p ON p.permission_code IN ('WMS_TENANT_PROFILE_READ', 'WMS_WAREHOUSE_READ')
+          WHERE t.tenant_code = 'K6-TENANT' AND r.role_code = 'K6_READ_ONLY';
+
+          INSERT INTO warehouses (public_id, tenant_id, warehouse_code, warehouse_name, country_code, timezone, status)
+          SELECT 'd0a57000-0000-4000-8000-000000000015', id, 'K6-WH-01',
+                 'Disposable k6 Warehouse', 'ID', 'Asia/Jakarta', 'ACTIVE'
+          FROM tenants WHERE tenant_code = 'K6-TENANT';
+          SQL
+
+      - name: Create disposable signed access token and verify route auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          now="$(date +%s)"
+          header="$(printf '%s' '{"alg":"RS256","kid":"wms-k6-key","typ":"JWT"}' | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          payload="$(printf '{"iss":"https://zirologistics.local","aud":["zirologistics-wms-access"],"sub":"d0a57000-0000-4000-8000-000000000011","mid":"d0a57000-0000-4000-8000-000000000013","token_use":"access","cv":0,"iat":%s,"exp":%s,"jti":"wms-k6-%s"}' "$now" "$((now + 3600))" "$now" | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          signing_input="$header.$payload"
+          signature="$(printf '%s' "$signing_input" | openssl dgst -sha256 -sign /tmp/wms-k6-private.pem | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          token="$signing_input.$signature"
+          echo "::add-mask::Bearer $token"
+          echo "WMS_K6_TOKEN=Bearer $token" >> "$GITHUB_ENV"
+          echo "WMS_K6_WAREHOUSE_PUBLIC_ID=d0a57000-0000-4000-8000-000000000015" >> "$GITHUB_ENV"
+
+          paths=(
+            "/api/wms/v1/tenants/current/profile"
+            "/api/wms/v1/tenants/current/warehouses"
+            "/api/wms/v1/tenants/current/warehouses/d0a57000-0000-4000-8000-000000000015"
+          )
+          for path in "${paths[@]}"; do
+            unauthenticated="$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:8081${path}")"
+            test "$unauthenticated" = "401"
+            curl --fail --silent --show-error -H "Authorization: Bearer $token" \
+              "http://127.0.0.1:8081${path}" -o /dev/null
+          done
+          curl --fail --silent --show-error -H "Authorization: Bearer $token" \
+            http://127.0.0.1:8081/api/wms/v1/tenants/current/profile > /tmp/wms-k6-profile.json
+          curl --fail --silent --show-error -H "Authorization: Bearer $token" \
+            http://127.0.0.1:8081/api/wms/v1/tenants/current/warehouses > /tmp/wms-k6-warehouses.json
+          grep -q "K6-TENANT" /tmp/wms-k6-profile.json
+          grep -q "K6-WH-01" /tmp/wms-k6-warehouses.json
+
+      - name: Run k6 authenticated read-only baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/wms-k6
+          chmod 777 target/wms-k6
+          docker run --rm --network host -v "$PWD:/work:rw" -w /work \
+            -e BASE_URL=http://127.0.0.1:8081 \
+            -e WMS_TOKEN="$WMS_K6_TOKEN" \
+            -e WMS_WAREHOUSE_PUBLIC_ID="$WMS_K6_WAREHOUSE_PUBLIC_ID" \
+            grafana/k6:0.55.0 run \
+            --summary-export target/wms-k6/summary.json \
+            tests/performance/wms-read-only.js
+
+      - name: Upload k6 performance summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wms-k6-read-only-baseline
+          path: target/wms-k6/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Dispose disposable WMS runtime
+        if: always()
+        shell: bash
+        run: |
+          project="wms-k6-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker compose --project-name "$project" --env-file /tmp/wms-k6.env -f compose.yml -f /tmp/wms-k6-compose.yml down --volumes --remove-orphans || true
+          rm -f /tmp/wms-k6.env /tmp/wms-k6-compose.yml /tmp/wms-k6-private.pem /tmp/wms-k6-public.pem
