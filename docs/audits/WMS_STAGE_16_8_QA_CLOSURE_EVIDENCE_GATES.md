@@ -2,6 +2,19 @@
 
 **Status: Stage 16 remains OPEN / NOT READY.** Updated 2026-11-22 from current PR heads, GitHub Actions runs, and retained artifacts. This is evidence tracking, not a production-readiness declaration.
 
+## Current PR/CI snapshot
+
+- #175 closure evidence: Backend CI #994 and CodeQL #305 succeeded.
+- #237 dependency remediation/CI scope fix: Backend CI #966 and CodeQL #277 succeeded on head **42233c8**.
+- #256 read-only k6: Backend CI #967, CodeQL #278, and k6 run #8 succeeded on head **ef8d6c0**.
+- #234 credential invalidation: Backend CI #991 is in progress on head **5dd3d01**; CodeQL #302 succeeded. Older attempts failed from transient Maven distribution download and stale test signatures/imports, corrected on the latest head.
+- #245 authenticated DAST: Backend CI #993 is in progress on head **65205ee**; CodeQL #304 succeeded; authenticated ZAP run #28 succeeded on the current head.
+- #257 MySQL outbound/picking/packing/replenishment tenant isolation: Backend CI #998 and CodeQL #309 are in progress on head **b7d877e**. The earlier #990 compile failure from a missing exception import was corrected; a replenishment read-permission fixture mismatch was also corrected on this head.
+- #202 mock replenishment tenant boundary: Backend CI #997 and CodeQL #308 are in progress on head **3b7ecf6**; the earlier failing permission fixture has been corrected. Its test is now redundant with the stronger #257 coverage and should be closed after #257 CI is green.
+- #235 baseline ZAP: Backend CI #921, CodeQL #233, and baseline scan #8 succeeded.
+- #230 public auth route/method boundary tests are green.
+- #200 transfer and #203 adjustment/shipping tenant-boundary tests were reopened after audit; their Backend CI and CodeQL were green. They are mock-JDBC supplemental evidence, not MySQL integration.
+
 ## 1. Current verified evidence
 
 | Area | Evidence | Current assessment |
@@ -81,12 +94,16 @@ The original CSRF findings were confirmed in PR #237 CodeQL SARIF (2 findings at
 
 ## 7. Dependency scan disposition
 
-Earlier PR #237 strict OSV scan succeeded on head **7a41eb3**. The scan was blocking (`fail-on-vuln: true`) and its log explicitly filtered two accepted Spring advisories:
+PR #237 strict OSV scan succeeded on head **42233c8** (latest CI #966). The scan was blocking (`fail-on-vuln: true`) and its log explicitly filtered two accepted Spring advisories:
 
 - `CVE-2026-47890`
 - `CVE-2026-47884`
 
 The exceptions are based on source/config reachability review for the current REST-only runtime; they are **accepted as conditionally unreachable, not fixed vulnerabilities**. The SARIF output was empty only after those suppressions.
+
+Reachability review: the Maven tree resolves Spring Framework **6.2.19**, which is in the affected range for both advisories. I inspected all 21 WMS controller files; each is a `@RestController`, and none contains `SseEmitter`, `ServerSentEvent`, `text/event-stream`, `XsltView`, or `ModelAndView`. The WMS runtime/security configuration also has no view-controller/SSE references. The specific vendor prerequisites therefore were not found in this runtime. Spring's vendor advisory rates CVE-2026-47890 LOW and CVE-2026-47884 MEDIUM, while GitHub Advisory Database rates both CRITICAL; record the rating mismatch, do not treat the suppressions as remediation.
+
+Official vendor details: [CVE-2026-47890](https://spring.io/security/cve-2026-47890/) requires SSE with view fragments; [CVE-2026-47884](https://spring.io/security/cve-2026-47884/) requires XsltView and a catch-all view-rendering mapping. The vendor lists Spring Framework 6.2.20 as Enterprise Support only and 7.0.9 as OSS fixed. The 6.2.19 dependency remains affected at framework level; the temporary exception is a residual risk.
 
 A new commit on #237 adds `effectiveUntil = 2026-12-31` to both exceptions. Current #237 Backend CI #966 and CodeQL #277 both succeeded on head **42233c8**. The exceptions remain a residual risk and must be reassessed before expiry or if view/SSE features are introduced.
 
@@ -98,8 +115,8 @@ Run profile and results:
 - 5 virtual users, 20 seconds, 150 iterations.
 - 450 HTTP requests across tenant profile, warehouse list, and warehouse detail.
 - 150/150 checks passed for each endpoint; 450 checks passed; 0 failed HTTP requests.
-- Average response duration: **9.20 ms**; p95: **17.98 ms**; maximum: **38.20 ms**.
-- Observed request rate: **14.57 requests/second** on the GitHub Actions runner.
+- Average response duration: **5.95 ms**; p95: **10.99 ms**; maximum: **24.61 ms**.
+- Observed request rate: **14.72 requests/second** on the GitHub Actions runner (latest k6 run #8).
 
 This is a disposable, authenticated, read-only baseline. It is **not** representative of receiving, putaway, picking, packing, inventory posting, replenishment, transfer, stock count, or shipment release throughput, and it is not a production-capacity claim.
 
@@ -112,14 +129,14 @@ This is a disposable, authenticated, read-only baseline. It is **not** represent
 - #197 putaway read isolation.
 - #198 stock count/count-line isolation.
 - #205 operational reporting tenant isolation.
-- #257 replenishment-task detail tenant isolation and packing-session detail tenant isolation, both with MySQL A/B state assertions.
+- #257 MySQL A/B detail-read isolation for outbound shipments, picking tasks, packing sessions, and manual replenishment tasks; ownership/persistence assertions remain under Tenant A.
 
 ### Supplementary service/mock-JDBC coverage
 - #176 warehouse/location boundary.
 - #200 transfer.
 - #201 picking/packing.
-- #202 replenishment.
-- #203 adjustment/shipping.
+- #202 replenishment (mock test; superseded by #257 MySQL coverage).
+- #203 adjustment/shipping (reopened, mock-JDBC supplemental test).
 - #201 picking/packing (the new #257 MySQL integration adds packing-session detail coverage, but not the picking-task read path).
 - These are useful focused checks, but they are not equivalent to real MySQL tenant A/B integration tests.
 
@@ -136,7 +153,7 @@ This is a disposable, authenticated, read-only baseline. It is **not** represent
 
 1. Authenticated DAST covers only 3 read routes; WMS write endpoints and workflow state transitions are not scanned.
 2. k6 covers read-only endpoints only. A representative authenticated business workflow benchmark remains unimplemented.
-3. MySQL tenant A/B coverage is stronger after #257, but still uneven. Picking-task detail, transfers, adjustment/shipping, and some warehouse/location mutations rely on focused mocks or HTTP boundary tests rather than end-to-end MySQL ownership/unchanged-state assertions.
+3. MySQL tenant A/B coverage is stronger after #257, but still uneven. Transfer cross-tenant resources, adjustment/shipping write paths, and warehouse/location mutations rely on focused mocks or HTTP boundary tests rather than end-to-end MySQL ownership/unchanged-state assertions.
 4. The new security/dependency changes have not been integrated together on one branch and rerun against current main.
 5. CI scope fix, dependency exception expiry, credential-version invalidation, and current main regression must all complete on their latest SHAs.
 6. Obsolete audit/spec/matrix PRs #174, #177, #178, #210, and #213 have been closed as superseded. #175 now holds refreshed closure evidence; #214 remains closed.
@@ -150,7 +167,7 @@ This is a disposable, authenticated, read-only baseline. It is **not** represent
 5. Integrate #230 route/method/content-type HTTP tests.
 6. Integrate #235 baseline scan automation if retained.
 7. Integrate #256 authenticated read-only k6 baseline (k6 workflow green; backend CI blocked by shared fixture on main).
-8. Integrate tenant/workflow test PRs #179, #182, #183, #197, #198, #205, #257 and supplementary #176/#200–#203/#204/#207–#208. Revalidate each on the latest base.
+8. Integrate tenant/workflow MySQL PRs #179, #182, #183, #197, #198, #205, and #257; retain #176/#200/#201/#203 as supplemental mocks, and close #202 after #257 CI is green. Revalidate each on the latest base.
 9. Run full CI, CodeQL, strict OSV, DAST and relevant k6 workloads on the combined integration commit.
 
 ## 12. Closure decision
