@@ -3,6 +3,7 @@ package com.zirocraft.zirologistics.wms.security.config;
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.identity.domain.MembershipStatus;
 import com.zirocraft.zirologistics.wms.identity.application.WmsEmailOutboxEncryptionService;
+import com.zirocraft.zirologistics.wms.identity.application.WmsPasswordManagementService;
 import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.TenantMembershipEntity;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.TenantMembershipRepository;
@@ -15,6 +16,7 @@ import com.zirocraft.zirologistics.wms.tenancy.infrastructure.persistence.Tenant
 import com.zirocraft.zirologistics.wms.tenancy.infrastructure.persistence.TenantRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -95,6 +97,10 @@ class WmsActiveBearerTokenLifecycleMySqlHttpTest {
     @Autowired private TenantMembershipRepository membershipRepository;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private WmsTenantLifecycleService lifecycleService;
+    @Autowired private WmsPasswordManagementService passwordManagementService;
+    @Autowired private WmsJwtTokenService jwtTokenService;
+    @Autowired @Qualifier("wmsTenantSelectionJwtDecoder")
+    private JwtDecoder tenantSelectionJwtDecoder;
 
     @MockBean(name = "wmsAccessJwtDecoder")
     private JwtDecoder accessJwtDecoder;
@@ -102,6 +108,33 @@ class WmsActiveBearerTokenLifecycleMySqlHttpTest {
 
     @MockBean
     private WmsEmailOutboxEncryptionService emailOutboxEncryptionService;
+
+    @Test
+    void staleTenantSelectionTokenCannotMintAccessTokenAfterPasswordChange() {
+        UserEntity user = createUser();
+        TenantEntity tenant = createTenant("SELECTION_VERSION");
+        TenantMembershipEntity membership = createMembership(user, tenant);
+        Long credentialVersion = user.getCredentialVersion();
+
+        String selectionToken = jwtTokenService.issueTenantSelectionToken(
+                user.getPublicId(), credentialVersion);
+        Jwt decodedSelection = tenantSelectionJwtDecoder.decode(selectionToken);
+        assertEquals("tenant_selection", decodedSelection.getClaim("token_use"));
+        assertEquals(credentialVersion, WmsCredentialVersionClaim.parse(
+                decodedSelection.getClaims().get("cv")));
+
+        assertNotNull(jwtTokenService.issueAccessToken(
+                user.getPublicId(), membership.getPublicId(), credentialVersion));
+
+        passwordManagementService.changePassword(
+                user.getPublicId(), "TestPassword123", "TestPassword456");
+        assertEquals(credentialVersion + 1L, jdbc.queryForObject(
+                "SELECT credential_version FROM users WHERE id = ?", Long.class, user.getId()));
+
+        assertThrows(WmsCredentialAuthenticationException.class, () -> jwtTokenService.issueAccessToken(
+                decodedSelection.getSubject(), membership.getPublicId(),
+                WmsCredentialVersionClaim.parse(decodedSelection.getClaims().get("cv"))));
+    }
 
     @Test
     void existingBearerTokenIsDeniedImmediatelyAfterItsTenantIsClosed() throws Exception {
