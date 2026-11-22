@@ -269,3 +269,41 @@ The following 21 PRs remain drafts and currently report a dirty/non-mergeable re
 They are not considered release-ready. Their unique tests must either be integrated into a green current-base PR or the draft branch must be rebased and validated before it is promoted. This is separate from the already-green consolidated PRs above. Do not close these drafts automatically; first compare their unique coverage against the consolidated branches.
 
 #205's earlier cancelled run was on an older head and is not counted as current-head evidence. Its new Backend CI run must finish successfully before reporting tenant-isolation coverage can be marked validated.
+
+
+## 15. Draft coverage consolidated into active PRs — 2026-11-23
+
+The unique test changes from the draft branches have now been copied into current-base integration PRs. The original draft PRs remain open; none has been closed or merged.
+
+| Source draft PR(s) | Consolidation target | Coverage retained |
+|---|---|---|
+| #219, #217, #216, #212, #209, #192 | #234 | Active membership suspension, JWT issuer/expiry, error redaction, same-password rejection, CORS origin normalization, invitation HTTP auth |
+| #195 | #248 | Role-management HTTP authentication boundaries |
+| #194 | #200 | Transfer HTTP authentication boundaries |
+| #188 | #203 | Adjustment/shipping HTTP authentication boundaries |
+| #180 | #244 | Warehouse-controller HTTP authentication; profile response/auth tests were already integrated |
+| #207, #201, #198, #197, #193, #191, #190, #189, #187, #186, #182, #179 | #257 | Quantity precision, picking/packing, stock count, putaway, inbound, inventory, reporting, replenishment, and module HTTP auth boundaries |
+
+The previous consolidations remain in place: #234 also includes #176/#184/#185/#196/#211; #257 also includes #183/#204/#208 and #202; #248 includes #181; #244 includes #228/#236; #259 contains the recovered #232 token-consumption race.
+
+### Latest heads after the expanded consolidation
+
+| PR | Current head | Backend CI | CodeQL |
+|---|---|---|---|
+| #234 | 3480671b | In progress | In progress |
+| #257 | 8ca1583c | In progress | In progress |
+| #244 | 7c341dc5 | In progress | In progress |
+| #248 | c3d7867e | In progress | In progress |
+| #200 | d05868e6 | In progress | In progress |
+| #203 | 23430ac3 | In progress | In progress |
+| #205 | 6f6ea4f3 | Success | Success |
+| #259 | 6aeac271 | Success | Success |
+| #237 | 42233c83 | Success | Success |
+| #245 | ccc94a4c | Success | Success |
+| #256 | ef8d6c04 | Success | Success |
+
+Older green runs for #234/#257/#244/#248/#200/#203 do not validate the newly added test files. Their latest runs must finish successfully before those consolidated branches are considered green.
+
+### Draft PR cleanup decision
+
+The remaining draft branches are now coverage sources rather than unique blockers: their unique tests are represented in the targets above. They remain open because closing them is a separate repository-maintenance decision and has not been authorized. Before Gate 1 closes, review the source-to-target mapping once more, then ask for approval to close the superseded draft PRs or leave them as historical references.
