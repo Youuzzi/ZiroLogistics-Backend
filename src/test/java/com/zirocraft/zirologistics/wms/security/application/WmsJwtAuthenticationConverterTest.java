@@ -14,9 +14,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import import static org.mockito.Mockito.verify;
-import import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class WmsJwtAuthenticationConverterTest {
 
@@ -80,7 +78,7 @@ class WmsJwtAuthenticationConverterTest {
         assertThatThrownBy(() -> converter.convert(tenantSelection)).isInstanceOf(OAuth2AuthenticationException.class);
         assertThatThrownBy(() -> converter.convert(passwordReset)).isInstanceOf(OAuth2AuthenticationException.class);
         assertThatThrownBy(() -> converter.convert(invitation)).isInstanceOf(OAuth2AuthenticationException.class);
-        org.mockito.Mockito.verifyNoInteractions(membershipAccessService);
+        verifyNoInteractions(membershipAccessService);
     }
 
     @Test
@@ -90,7 +88,7 @@ class WmsJwtAuthenticationConverterTest {
                 .subject("user-public-id").issuedAt(now).expiresAt(now.plusSeconds(600))
                 .claim("mid", "membership-public-id").build();
         assertThatThrownBy(() -> converter.convert(missingPurpose)).isInstanceOf(OAuth2AuthenticationException.class);
-        org.mockito.Mockito.verifyNoInteractions(membershipAccessService);
+        verifyNoInteractions(membershipAccessService);
     }
 
     @Test
@@ -114,7 +112,7 @@ class WmsJwtAuthenticationConverterTest {
                 .isInstanceOf(OAuth2AuthenticationException.class);
         assertThatThrownBy(() -> converter.convert(negativeVersion))
                 .isInstanceOf(OAuth2AuthenticationException.class);
-        org.mockito.Mockito.verifyNoInteractions(membershipAccessService);
+        verifyNoInteractions(membershipAccessService);
     }
 
     @Test
