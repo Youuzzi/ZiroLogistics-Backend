@@ -15,8 +15,8 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import import static org.mockito.Mockito.verify;
+import import static org.mockito.Mockito.when;
 
 class WmsJwtAuthenticationConverterTest {
 
@@ -106,6 +106,18 @@ class WmsJwtAuthenticationConverterTest {
     }
 
     @Test
+    void rejectsFractionalAndNegativeCredentialVersionClaimsBeforeMembershipLookup() {
+        Jwt fractionalVersion = tokenWithCredentialVersion(0.5d);
+        Jwt negativeVersion = tokenWithCredentialVersion(-1L);
+
+        assertThatThrownBy(() -> converter.convert(fractionalVersion))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        assertThatThrownBy(() -> converter.convert(negativeVersion))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        org.mockito.Mockito.verifyNoInteractions(membershipAccessService);
+    }
+
+    @Test
     void rejectsMembershipThatIsNoLongerActiveOrDoesNotBelongToUser() {
         when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
                 .thenThrow(new WmsMembershipAccessDeniedException());
@@ -126,6 +138,19 @@ class WmsJwtAuthenticationConverterTest {
         assertThatThrownBy(() -> converter.convert(accessToken(
                 "user-public-id", "membership-public-id")))
                 .isInstanceOf(OAuth2AuthenticationException.class);
+    }
+
+    private static Jwt tokenWithCredentialVersion(Object version) {
+        Instant now = Instant.now();
+        return Jwt.withTokenValue("test-token")
+                .header("alg", "RS256")
+                .subject("user-public-id")
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(600))
+                .claim("token_use", "access")
+                .claim("mid", "membership-public-id")
+                .claim("cv", version)
+                .build();
     }
 
     private static Jwt accessToken(String subject, String membershipId) {
