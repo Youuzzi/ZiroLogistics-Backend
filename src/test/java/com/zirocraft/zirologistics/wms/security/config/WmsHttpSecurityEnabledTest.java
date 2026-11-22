@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = WmsHttpSecurityEnabledTest.ProbeController.class)
@@ -49,9 +50,10 @@ class WmsHttpSecurityEnabledTest {
     private WmsJwtAuthenticationConverter authenticationConverter;
 
     @Test
-    void rejectsRequestsWithoutBearerToken() throws Exception {
-        mockMvc.perform(get("/wms/security-probe"))
-                .andExpect(status().isUnauthorized());
+    void rejectsRequestsWithoutBearerTokenAndIncludesCorpHeader() throws Exception {
+        mockMvc.perform(get("/api/wms/v1/security-probe"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("Cross-Origin-Resource-Policy", "same-origin"));
     }
 
     @Test
@@ -74,7 +76,7 @@ class WmsHttpSecurityEnabledTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isOk());
-
+        
         mockMvc.perform(post("/api/wms/v1/invitations/existing-account-acceptances")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
@@ -82,7 +84,7 @@ class WmsHttpSecurityEnabledTest {
     }
 
     @Test
-    void acceptsOnlyBearerTokensResolvedByWmsAuthenticationConverter() throws Exception {
+    void acceptsOnlyBearerTokensResolvedByWmsAuthenticationConverterAndIncludesCorpHeader() throws Exception {
         Instant now = Instant.now();
         Jwt jwt = Jwt.withTokenValue("valid-test-token")
                 .header("alg", "RS256")
@@ -101,11 +103,12 @@ class WmsHttpSecurityEnabledTest {
         when(accessJwtDecoder.decode("valid-test-token")).thenReturn(jwt);
         when(authenticationConverter.convert(jwt)).thenReturn(authentication);
 
-        mockMvc.perform(get("/wms/security-probe")
+        mockMvc.perform(get("/api/wms/v1/security-probe")
                         .header("Authorization", "Bearer valid-test-token")
                         .accept(MediaType.TEXT_PLAIN))
                 .andExpect(status().isOk())
-                .andExpect(content().string("wms-protected"));
+                .andExpect(content().string("wms-protected"))
+                .andExpect(header().string("Cross-Origin-Resource-Policy", "same-origin"));
     }
 
     @RestController
@@ -125,7 +128,7 @@ class WmsHttpSecurityEnabledTest {
             return "wms-not-public-get";
         }
 
-        @GetMapping(value = "/wms/security-probe", produces = MediaType.TEXT_PLAIN_VALUE)
+        @GetMapping(value = "/api/wms/v1/security-probe", produces = MediaType.TEXT_PLAIN_VALUE)
         String probe() {
             return "wms-protected";
         }
