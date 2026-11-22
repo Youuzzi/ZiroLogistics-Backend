@@ -33,8 +33,10 @@ public class WmsJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
     public AbstractAuthenticationToken convert(Jwt jwt) {
         String userPublicId = jwt.getSubject();
         String membershipPublicId = jwt.getClaimAsString("mid");
+        String tokenUse = jwt.getClaimAsString("token_use");
 
-        if (userPublicId == null || userPublicId.isBlank()
+        if (!"access".equals(tokenUse)
+                || userPublicId == null || userPublicId.isBlank()
                 || membershipPublicId == null || membershipPublicId.isBlank()) {
             throw invalidToken();
         }

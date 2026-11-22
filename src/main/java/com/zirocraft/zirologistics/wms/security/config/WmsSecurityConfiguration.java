@@ -14,6 +14,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfigurationSource;
 
@@ -62,7 +63,10 @@ public class WmsSecurityConfiguration {
                     }
                     authorize.anyRequest().authenticated();
                 })
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(new BearerTokenAuthenticationEntryPoint()))
                 .oauth2ResourceServer(resourceServer -> resourceServer
+                        .authenticationEntryPoint(new BearerTokenAuthenticationEntryPoint())
                         .jwt(jwt -> jwt
                                 .decoder(accessJwtDecoder)
                                 .jwtAuthenticationConverter(authenticationConverter)));
