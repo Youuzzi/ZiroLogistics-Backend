@@ -63,6 +63,7 @@ class WmsActiveBearerTokenLifecycleMySqlHttpTest {
     private static final String ROUTE = "/api/wms/v1/security-probe";
     private static final KeyPair TEST_RSA_KEY_PAIR = generateTestRsaKeyPair();
 
+    // MySQL user names are limited to 32 characters; keep this fixture within that limit.
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
             .withDatabaseName("zirowms_token_lifecycle")
