@@ -43,4 +43,5 @@ export default function () {
     "warehouse_detail",
     `/api/wms/v1/tenants/current/warehouses/${warehousePublicId}`,
   );
+  sleep(1);
 }
