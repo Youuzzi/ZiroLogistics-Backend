@@ -406,6 +406,9 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 new WmsPickingManagementService.CreatePickingCommand(shipmentId,
                         "PICK-" + UUID.randomUUID().toString().substring(0, 8), "NORMAL", null))
                 .get("public_id");
+        pickingService.assign(fixture.principal(), taskId,
+                new WmsPickingManagementService.AssignPickingCommand(fixture.membershipPublicId()));
+        pickingService.start(fixture.principal(), taskId);
         String staging = UUID.randomUUID().toString();
         long warehouseId = jdbc.queryForObject("SELECT id FROM warehouses WHERE tenant_id=? AND public_id=?",
                 Long.class, fixture.tenantId(), fixture.warehousePublicId());
