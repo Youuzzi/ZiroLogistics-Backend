@@ -2,12 +2,9 @@
 FROM maven:3.9.14-eclipse-temurin-21 AS build
 WORKDIR /workspace
 
-COPY .mvn/ .mvn/
-COPY mvnw pom.xml ./
-RUN chmod +x mvnw
-
+COPY pom.xml ./
 COPY src/main/ src/main/
-RUN ./mvnw --batch-mode --no-transfer-progress -Pwms-runtime -Dmaven.test.skip=true package
+RUN mvn --batch-mode --no-transfer-progress -Pwms-runtime -Dmaven.test.skip=true package
 
 # Minimal non-root Java 21 runtime.
 FROM eclipse-temurin:21-jre
