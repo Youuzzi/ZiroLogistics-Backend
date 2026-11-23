@@ -2,9 +2,10 @@
 FROM maven:3.9.14-eclipse-temurin-21 AS build
 WORKDIR /workspace
 
+COPY docker-maven-settings.xml /root/.m2/settings.xml
 COPY pom.xml ./
 COPY src/main/ src/main/
-RUN mvn --batch-mode --no-transfer-progress -Pwms-runtime -Dmaven.test.skip=true package
+RUN mvn --batch-mode --no-transfer-progress -s /root/.m2/settings.xml -Pwms-runtime -Dmaven.test.skip=true package
 
 # Minimal non-root Java 21 runtime.
 FROM eclipse-temurin:21-jre
