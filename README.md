@@ -72,7 +72,7 @@ Replace the example database and root passwords with unique local values. Never 
 ### 2. Build and start
 
 ```powershell
-docker compose config
+docker compose config --quiet
 docker compose up --build -d
 ```
 
@@ -97,6 +97,8 @@ To permanently delete the disposable WMS Compose database volume and its data:
 ```powershell
 docker compose down -v
 ```
+
+This deletes only the `zirologistics-wms` project volume. Do not use `-v` if you need to preserve local WMS data. It does not delete volumes belonging to the older `backend-wms` project.
 
 ### CORS configuration
 
