@@ -31,7 +31,13 @@ docker compose up --build -d
 docker compose ps
 ```
 
-Verify that the Compose project is `zirologistics-wms`, the backend is configured for `zirologistics_wms`, and the MySQL volume belongs to this project. Do not attach the old `backend-wms_zirologistics_mysql_data` volume or point Flyway at its legacy `zirologistics` database.
+Before starting WMS, the older `backend-wms` backend may still own host port 8081. Stop only that legacy backend container (do not remove it or its MySQL service/volume):
+
+```powershell
+docker compose -p backend-wms stop backend
+```
+
+Then start the WMS project. Verify that the Compose project is `zirologistics-wms`, the backend is configured for `zirologistics_wms`, and the MySQL volume belongs to this project. Do not attach the old `backend-wms_zirologistics_mysql_data` volume or point Flyway at its legacy `zirologistics` database.
 
 Inspect logs:
 
