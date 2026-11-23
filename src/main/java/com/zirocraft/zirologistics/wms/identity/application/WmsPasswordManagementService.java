@@ -131,6 +131,7 @@ public class WmsPasswordManagementService {
 
             Instant now = clock.instant();
             locked.setPasswordHash(newHash);
+            locked.setCredentialVersion(Math.addExact(locked.getCredentialVersion(), 1L));
             userRepository.saveAndFlush(locked);
             tokenStorage.revokeOutstandingForUser(
                     locked.getId(), WmsIdentityActionTokenPurpose.PASSWORD_RESET, now);
@@ -244,6 +245,7 @@ public class WmsPasswordManagementService {
             }
 
             user.setPasswordHash(newHash);
+            user.setCredentialVersion(Math.addExact(user.getCredentialVersion(), 1L));
             userRepository.saveAndFlush(user);
             if (tokenStorage.markConsumed(token.id(), now) != 1) {
                 throw new WmsIdentityActionTokenRejectedException();

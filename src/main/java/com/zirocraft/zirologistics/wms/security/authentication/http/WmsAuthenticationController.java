@@ -8,6 +8,8 @@ import com.zirocraft.zirologistics.wms.identity.application.WmsPasswordManagemen
 import com.zirocraft.zirologistics.wms.identity.application.PasswordResetRequestResult;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtTokenService;
+import com.zirocraft.zirologistics.wms.security.application.WmsCredentialVersionClaim;
+import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationException;
 import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationResult;
 import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -70,7 +72,14 @@ public class WmsAuthenticationController {
     @PostMapping("/tenant-selection")
     public AccessTokenResponse selectTenant(@Valid @RequestBody TenantSelectionRequest request) {
         Jwt selection = tenantSelectionDecoder.decode(request.tenantSelectionToken());
-        String accessToken = jwtTokenService.issueAccessToken(selection.getSubject(), request.membershipPublicId());
+        String subject = selection.getSubject();
+        Long credentialVersion = WmsCredentialVersionClaim.parse(selection.getClaims().get("cv"));
+        if (!"tenant_selection".equals(selection.getClaims().get("token_use"))
+                || subject == null || subject.isBlank() || credentialVersion == null) {
+            throw new WmsCredentialAuthenticationException();
+        }
+        String accessToken = jwtTokenService.issueAccessToken(
+                subject, request.membershipPublicId(), credentialVersion);
         return new AccessTokenResponse(accessToken, "Bearer");
     }
 
