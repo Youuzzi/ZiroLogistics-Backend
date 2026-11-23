@@ -55,6 +55,7 @@ public class WmsMembershipAccessService {
                 first.getTenantPublicId(),
                 first.getMembershipId(),
                 first.getMembershipPublicId(),
+                first.getCredentialVersion(),
                 permissions);
     }
 }
