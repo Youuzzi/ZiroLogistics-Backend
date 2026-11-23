@@ -50,6 +50,42 @@ class WmsJwtConfigurationTest {
     }
 
     @Test
+    void rejectsAccessTokenFromUnexpectedIssuer() throws Exception {
+        KeyPair pair = generateKeyPair();
+        WmsJwtProperties properties = properties(pair);
+        WmsRsaKeyMaterial material = WmsRsaKeyMaterial.fromPem(
+                properties.getPublicKeyPem(), properties.getPrivateKeyPem());
+        JwtEncoder encoder = new WmsJwtConfiguration().wmsJwtEncoder(properties, material);
+        JwtDecoder accessDecoder = new WmsJwtConfiguration().wmsAccessJwtDecoder(properties, material);
+
+        String token = encodeWithOverrides(encoder, properties, "access",
+                properties.getAccessAudience(), "membership-public-id",
+                "https://attacker.example", Instant.now().minusSeconds(30),
+                Instant.now().plusSeconds(60), properties.getKeyId());
+
+        assertThatThrownBy(() -> accessDecoder.decode(token))
+                .isInstanceOf(JwtException.class);
+    }
+
+    @Test
+    void rejectsExpiredAccessToken() throws Exception {
+        KeyPair pair = generateKeyPair();
+        WmsJwtProperties properties = properties(pair);
+        WmsRsaKeyMaterial material = WmsRsaKeyMaterial.fromPem(
+                properties.getPublicKeyPem(), properties.getPrivateKeyPem());
+        JwtEncoder encoder = new WmsJwtConfiguration().wmsJwtEncoder(properties, material);
+        JwtDecoder accessDecoder = new WmsJwtConfiguration().wmsAccessJwtDecoder(properties, material);
+
+        Instant expiredAt = Instant.now().minusSeconds(300);
+        String token = encodeWithOverrides(encoder, properties, "access",
+                properties.getAccessAudience(), "membership-public-id",
+                properties.getIssuer(), expiredAt.minusSeconds(60), expiredAt, properties.getKeyId());
+
+        assertThatThrownBy(() -> accessDecoder.decode(token))
+                .isInstanceOf(JwtException.class);
+    }
+
+    @Test
     void acceptsOnlyTheMatchingTokenProfileAndAudience() throws Exception {
         KeyPair pair = generateKeyPair();
         WmsJwtProperties properties = properties(pair);
@@ -77,6 +113,35 @@ class WmsJwtConfigurationTest {
                 .isInstanceOf(JwtException.class);
         assertThatThrownBy(() -> selectionDecoder.decode(accessToken))
                 .isInstanceOf(JwtException.class);
+    }
+
+    private static String encodeWithOverrides(
+            JwtEncoder encoder,
+            WmsJwtProperties properties,
+            String tokenUse,
+            String audience,
+            String membershipId,
+            String issuer,
+            Instant issuedAt,
+            Instant expiresAt,
+            String keyId) {
+
+        JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
+                .issuer(issuer)
+                .subject("user-public-id")
+                .audience(List.of(audience))
+                .issuedAt(issuedAt)
+                .notBefore(issuedAt)
+                .expiresAt(expiresAt)
+                .id(UUID.randomUUID().toString())
+                .claim("token_use", tokenUse);
+        if (membershipId != null) {
+            claims.claim("mid", membershipId);
+        }
+        JwsHeader headers = JwsHeader.with(SignatureAlgorithm.RS256)
+                .keyId(keyId)
+                .build();
+        return encoder.encode(JwtEncoderParameters.from(headers, claims.build())).getTokenValue();
     }
 
     private static WmsJwtProperties properties(KeyPair pair) {
