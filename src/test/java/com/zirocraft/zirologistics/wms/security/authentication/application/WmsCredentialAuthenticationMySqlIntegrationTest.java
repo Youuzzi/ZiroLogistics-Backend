@@ -111,7 +111,7 @@ class WmsCredentialAuthenticationMySqlIntegrationTest {
         throttleService = new WmsLoginThrottleService(
                 keyHasher, addressResolver, storage, policy, Clock.systemUTC());
         tokenService = mock(WmsJwtTokenService.class);
-        when(tokenService.issueTenantSelectionToken(anyString()))
+        when(tokenService.issueTenantSelectionToken(anyString(), anyLong()))
                 .thenReturn("test-tenant-selection-token");
     }
 
@@ -170,7 +170,7 @@ class WmsCredentialAuthenticationMySqlIntegrationTest {
         assertNotNull(authenticatedUser.getLastLoginAt(),
                 "successful active-user authentication must persist last_login_at");
 
-        verify(tokenService).issueTenantSelectionToken(user.getPublicId());
+        verify(tokenService).issueTenantSelectionToken(user.getPublicId(), user.getCredentialVersion());
     }
 
     @Test

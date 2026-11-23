@@ -94,9 +94,10 @@ class WmsAuthenticationControllerHttpTest {
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(300))
                 .claim("token_use", "tenant_selection")
+                .claim("cv", 0L)
                 .build();
         when(tenantSelectionDecoder.decode("selection-token")).thenReturn(selection);
-        when(jwtTokenService.issueAccessToken("user-public-id", "membership-public-id"))
+        when(jwtTokenService.issueAccessToken("user-public-id", "membership-public-id", 0L))
                 .thenReturn("access-token");
 
         mockMvc.perform(post("/api/wms/v1/auth/tenant-selection")

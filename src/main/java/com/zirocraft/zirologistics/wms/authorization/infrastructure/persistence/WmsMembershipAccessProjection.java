@@ -10,5 +10,6 @@ public interface WmsMembershipAccessProjection {
     String getMembershipPublicId();
     String getTenantPublicId();
     String getUserPublicId();
+    Long getCredentialVersion();
     String getPermissionCode();
 }

@@ -14,9 +14,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class WmsJwtAuthenticationConverterTest {
 
@@ -33,7 +31,7 @@ class WmsJwtAuthenticationConverterTest {
     void resolvesTenantAndCurrentPermissionsFromDatabase() {
         WmsMembershipAccess access = new WmsMembershipAccess(
                 11L, "user-public-id", 22L, "tenant-public-id",
-                33L, "membership-public-id",
+                33L, "membership-public-id", 0L,
                 Set.of("inventory.balance.read", "outbound.shipment.create"));
         when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
                 .thenReturn(access);
@@ -61,6 +59,31 @@ class WmsJwtAuthenticationConverterTest {
     }
 
     @Test
+    void reflectsPermissionRevocationOnNextAuthenticationConversion() {
+        Jwt token = accessToken("user-public-id", "membership-public-id");
+        WmsMembershipAccess beforeRevocation = new WmsMembershipAccess(
+                11L, "user-public-id", 22L, "tenant-public-id",
+                33L, "membership-public-id", 0L, Set.of("inventory.balance.read"));
+        WmsMembershipAccess afterRevocation = new WmsMembershipAccess(
+                11L, "user-public-id", 22L, "tenant-public-id",
+                33L, "membership-public-id", 0L, Set.of());
+
+        when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
+                .thenReturn(beforeRevocation)
+                .thenReturn(afterRevocation);
+
+        Authentication before = converter.convert(token);
+        Authentication after = converter.convert(token);
+
+        assertThat(before.getAuthorities())
+                .extracting("authority")
+                .containsExactly("PERM_inventory.balance.read");
+        assertThat(after.getAuthorities()).isEmpty();
+        verify(membershipAccessService, times(2))
+                .resolve("user-public-id", "membership-public-id");
+    }
+
+    @Test
     void rejectsAccessTokenWithoutSubjectOrMembershipClaim() {
         Jwt missingSubject = accessToken(null, "membership-public-id");
         Jwt missingMembership = accessToken("user-public-id", null);
@@ -80,7 +103,7 @@ class WmsJwtAuthenticationConverterTest {
         assertThatThrownBy(() -> converter.convert(tenantSelection)).isInstanceOf(OAuth2AuthenticationException.class);
         assertThatThrownBy(() -> converter.convert(passwordReset)).isInstanceOf(OAuth2AuthenticationException.class);
         assertThatThrownBy(() -> converter.convert(invitation)).isInstanceOf(OAuth2AuthenticationException.class);
-        org.mockito.Mockito.verifyNoInteractions(membershipAccessService);
+        verifyNoInteractions(membershipAccessService);
     }
 
     @Test
@@ -90,7 +113,31 @@ class WmsJwtAuthenticationConverterTest {
                 .subject("user-public-id").issuedAt(now).expiresAt(now.plusSeconds(600))
                 .claim("mid", "membership-public-id").build();
         assertThatThrownBy(() -> converter.convert(missingPurpose)).isInstanceOf(OAuth2AuthenticationException.class);
-        org.mockito.Mockito.verifyNoInteractions(membershipAccessService);
+        verifyNoInteractions(membershipAccessService);
+    }
+
+    @Test
+    void rejectsAccessTokenIssuedBeforeCredentialVersionWasIncremented() {
+        when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
+                .thenReturn(new WmsMembershipAccess(
+                        11L, "user-public-id", 22L, "tenant-public-id",
+                        33L, "membership-public-id", 1L, Set.of()));
+
+        assertThatThrownBy(() -> converter.convert(accessToken(
+                "user-public-id", "membership-public-id")))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+    }
+
+    @Test
+    void rejectsFractionalAndNegativeCredentialVersionClaimsBeforeMembershipLookup() {
+        Jwt fractionalVersion = tokenWithCredentialVersion(0.5d);
+        Jwt negativeVersion = tokenWithCredentialVersion(-1L);
+
+        assertThatThrownBy(() -> converter.convert(fractionalVersion))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        assertThatThrownBy(() -> converter.convert(negativeVersion))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        verifyNoInteractions(membershipAccessService);
     }
 
     @Test
@@ -109,7 +156,7 @@ class WmsJwtAuthenticationConverterTest {
         when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
                 .thenReturn(new WmsMembershipAccess(
                         11L, "different-user", 22L, "tenant-public-id",
-                        33L, "different-membership", Set.of()));
+                        33L, "different-membership", 0L, Set.of()));
 
         assertThatThrownBy(() -> converter.convert(accessToken(
                 "user-public-id", "membership-public-id")))
@@ -117,7 +164,7 @@ class WmsJwtAuthenticationConverterTest {
     }
 
     @Test
-    void rejectsNullMembershipResolution() {
+    void rejectsNullMembershipResolutionAsInvalidBearerToken() {
         when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
                 .thenReturn(null);
 
@@ -127,7 +174,6 @@ class WmsJwtAuthenticationConverterTest {
                 .hasMessageContaining("Invalid bearer token");
         verify(membershipAccessService).resolve("user-public-id", "membership-public-id");
     }
-
 
     @Test
     void rejectsNonStringMembershipAndPurposeClaimsBeforeResolvingMembership() {
@@ -148,6 +194,19 @@ class WmsJwtAuthenticationConverterTest {
         org.mockito.Mockito.verifyNoInteractions(membershipAccessService);
     }
 
+    private static Jwt tokenWithCredentialVersion(Object version) {
+        Instant now = Instant.now();
+        return Jwt.withTokenValue("test-token")
+                .header("alg", "RS256")
+                .subject("user-public-id")
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(600))
+                .claim("token_use", "access")
+                .claim("mid", "membership-public-id")
+                .claim("cv", version)
+                .build();
+    }
+
     private static Jwt accessToken(String subject, String membershipId) {
         return accessToken(subject, membershipId, "access");
     }
@@ -158,7 +217,8 @@ class WmsJwtAuthenticationConverterTest {
                 .header("alg", "RS256")
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(600))
-                .claim("token_use", tokenUse);
+                .claim("token_use", tokenUse)
+                .claim("cv", 0L);
         if (subject != null) {
             builder.subject(subject);
         }
