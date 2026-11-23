@@ -23,6 +23,7 @@ public interface WmsMembershipAccessRepository extends Repository<TenantMembersh
                 m.public_id AS membershipPublicId,
                 t.public_id AS tenantPublicId,
                 u.public_id AS userPublicId,
+                u.credential_version AS credentialVersion,
                 p.permission_code AS permissionCode
             FROM tenant_memberships m
             INNER JOIN users u

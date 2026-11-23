@@ -31,15 +31,15 @@ public class WmsJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
 
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
-        String userPublicId = jwt.getSubject();
+        Object subjectClaim = jwt.getClaims().get("sub");
         Object membershipClaim = jwt.getClaims().get("mid");
         Object tokenUseClaim = jwt.getClaims().get("token_use");
-        String membershipPublicId = membershipClaim instanceof String value ? value : null;
-        String tokenUse = tokenUseClaim instanceof String value ? value : null;
+        Long tokenCredentialVersion = WmsCredentialVersionClaim.parse(jwt.getClaims().get("cv"));
 
-        if (!"access".equals(tokenUse)
-                || userPublicId == null || userPublicId.isBlank()
-                || membershipPublicId == null || membershipPublicId.isBlank()) {
+        if (!(subjectClaim instanceof String userPublicId) || userPublicId.isBlank()
+                || !(membershipClaim instanceof String membershipPublicId) || membershipPublicId.isBlank()
+                || !(tokenUseClaim instanceof String tokenUse) || !"access".equals(tokenUse)
+                || tokenCredentialVersion == null) {
             throw invalidToken();
         }
 
@@ -52,7 +52,8 @@ public class WmsJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
 
         if (access == null
                 || !userPublicId.equals(access.userPublicId())
-                || !membershipPublicId.equals(access.membershipPublicId())) {
+                || !membershipPublicId.equals(access.membershipPublicId())
+                || tokenCredentialVersion.longValue() != access.credentialVersion()) {
             throw invalidToken();
         }
 

@@ -99,7 +99,7 @@ public final class WmsCredentialAuthenticationService {
                         .map(WmsCredentialAuthenticationService::toSelectableMembership)
                         .toList();
 
-        String selectionToken = tokenService.issueTenantSelectionToken(user.getPublicId());
+        String selectionToken = tokenService.issueTenantSelectionToken(user.getPublicId(), user.getCredentialVersion());
         return new WmsCredentialAuthenticationResult(selectionToken, memberships);
     }
 

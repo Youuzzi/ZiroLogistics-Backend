@@ -3,6 +3,7 @@ package com.zirocraft.zirologistics.wms.security.application;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.security.config.WmsJwtProperties;
+import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -18,6 +19,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import org.mockito.ArgumentCaptor;
 
 class WmsJwtTokenServiceTest {
@@ -47,7 +49,7 @@ class WmsJwtTokenServiceTest {
 
     @Test
     void issuesShortLivedTenantSelectionTokenWithoutMembershipOrPermissionClaims() {
-        String token = tokenService.issueTenantSelectionToken("user-public-id");
+        String token = tokenService.issueTenantSelectionToken("user-public-id", 4L);
 
         assertThat(token).isEqualTo("signed.jwt.token");
         verify(jwtEncoder).encode(parametersCaptor.capture());
@@ -61,6 +63,7 @@ class WmsJwtTokenServiceTest {
         assertThat(claims.getSubject()).isEqualTo("user-public-id");
         assertThat(claims.getAudience()).containsExactly("zirologistics-wms-selection");
         assertThat(claims.getClaimAsString("token_use")).isEqualTo("tenant_selection");
+        assertThat(claims.getClaims()).containsEntry("cv", 4L);
         assertThat(claims.getId()).isNotBlank();
         assertThat(claims.getIssuedAt()).isNotNull();
         assertThat(claims.getNotBefore()).isNotNull();
@@ -73,12 +76,12 @@ class WmsJwtTokenServiceTest {
     void issuesTenantBoundAccessTokenFromResolvedMembershipWithoutEmbeddingPermissions() {
         WmsMembershipAccess access = new WmsMembershipAccess(
                 10L, "user-public-id", 20L, "tenant-public-id",
-                30L, "membership-public-id", Set.of("inventory.balance.read"));
+                30L, "membership-public-id", 4L, Set.of("inventory.balance.read"));
 
         when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
                 .thenReturn(access);
 
-        String token = tokenService.issueAccessToken("user-public-id", "membership-public-id");
+        String token = tokenService.issueAccessToken("user-public-id", "membership-public-id", 4L);
         verify(membershipAccessService).resolve("user-public-id", "membership-public-id");
 
         assertThat(token).isEqualTo("signed.jwt.token");
@@ -91,6 +94,7 @@ class WmsJwtTokenServiceTest {
         assertThat(claims.getAudience()).containsExactly("zirologistics-wms-api");
         assertThat(claims.getClaimAsString("token_use")).isEqualTo("access");
         assertThat(claims.getClaimAsString("mid")).isEqualTo("membership-public-id");
+        assertThat(claims.getClaims()).containsEntry("cv", 4L);
         assertThat(claims.getId()).isNotBlank();
         assertThat(Duration.between(claims.getIssuedAt(), claims.getExpiresAt()))
                 .isEqualTo(Duration.ofMinutes(10));
@@ -98,10 +102,26 @@ class WmsJwtTokenServiceTest {
     }
 
     @Test
+    void rejectsStaleTenantSelectionCredentialVersionBeforeEncodingAccessToken() {
+        WmsMembershipAccess currentAccess = new WmsMembershipAccess(
+                10L, "user-public-id", 20L, "tenant-public-id",
+                30L, "membership-public-id", 5L, Set.of("inventory.balance.read"));
+        when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
+                .thenReturn(currentAccess);
+
+        assertThatThrownBy(() -> tokenService.issueAccessToken(
+                "user-public-id", "membership-public-id", 4L))
+                .isInstanceOf(WmsCredentialAuthenticationException.class);
+
+        verify(membershipAccessService).resolve("user-public-id", "membership-public-id");
+        verify(jwtEncoder, never()).encode(any());
+    }
+
+    @Test
     void rejectsBlankUserAndMissingResolvedMembership() {
-        assertThatThrownBy(() -> tokenService.issueTenantSelectionToken(" "))
+        assertThatThrownBy(() -> tokenService.issueTenantSelectionToken(" ", 0L))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> tokenService.issueAccessToken("user-public-id", " "))
+        assertThatThrownBy(() -> tokenService.issueAccessToken("user-public-id", " ", 0L))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

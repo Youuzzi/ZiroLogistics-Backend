@@ -115,7 +115,7 @@ class WmsCredentialAuthenticationServiceTest {
         when(membership.getTenantPublicId()).thenReturn("tenant-public-id");
         when(membership.getTenantCode()).thenReturn("tenant-code");
         when(membership.getTenantDisplayName()).thenReturn("Tenant Display");
-        when(tokenService.issueTenantSelectionToken("user-public-id")).thenReturn("selection-token");
+        when(tokenService.issueTenantSelectionToken("user-public-id", 0L)).thenReturn("selection-token");
 
         WmsCredentialAuthenticationResult result = authenticate("correct-password");
 
@@ -130,7 +130,7 @@ class WmsCredentialAuthenticationServiceTest {
         order.verify(throttleService).recordSuccessfulActiveUserAuthentication(attempt);
         order.verify(userLookupService).recordSuccessfulLogin(17L);
         order.verify(membershipRepository).findSelectableMemberships(17L);
-        order.verify(tokenService).issueTenantSelectionToken("user-public-id");
+        order.verify(tokenService).issueTenantSelectionToken("user-public-id", 0L);
         verify(throttleService, never()).recordFailedCredential(any());
         verifyNoInteractions(dummyVerifier);
     }
