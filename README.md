@@ -76,7 +76,7 @@ docker compose config --quiet
 docker compose up --build -d
 ```
 
-The API is exposed at `http://localhost:8081`. MySQL is available only on the WMS Compose network and is not published to the host. The explicit project name creates separate WMS containers, network, and volume; it prevents Compose from adopting/recreating containers belonging to an older project named `backend-wms`.
+The API is exposed at `http://localhost:8081`. MySQL is available only on the WMS Compose network and is not published to the host. The explicit project name creates separate WMS containers, network, and volume; it prevents Compose from adopting/recreating containers belonging to an older project named `backend-wms`. If that older backend still occupies port 8081, stop only its backend service before starting WMS: `docker compose -p backend-wms stop backend`. This leaves its MySQL container and data volume intact.
 
 ### 3. Inspect services
 
