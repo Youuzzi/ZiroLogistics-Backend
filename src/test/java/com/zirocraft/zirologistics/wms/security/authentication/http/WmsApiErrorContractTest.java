@@ -17,6 +17,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class WmsApiErrorContractTest {
@@ -78,7 +79,11 @@ class WmsApiErrorContractTest {
         mockMvc.perform(get("/wms-probe/unexpected"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
-                .andExpect(jsonPath("$.message", not(containsString("private_db"))));
+                .andExpect(jsonPath("$.message", not(containsString("private_db"))))
+                .andExpect(content().string(not(containsString("jdbc:mysql://internal"))))
+                .andExpect(content().string(not(containsString("stackTrace"))))
+                .andExpect(content().string(not(containsString("RuntimeException"))))
+                .andExpect(content().string(not(containsString("private_db"))));
     }
 
     @RestController
