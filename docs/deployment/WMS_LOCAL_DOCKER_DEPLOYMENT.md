@@ -4,7 +4,9 @@
 
 This guide runs the tenant-based WMS runtime using the root `Dockerfile` and `compose.yml`. It does not deploy the transitional legacy application.
 
-The Compose project creates MySQL 8.4, a dedicated `zirologistics_wms` database, a named local volume, and a WMS Spring Boot artifact packaged with Maven profile `wms-runtime`. MySQL is not published to the host; the API is published on host port 8081.
+The Compose project has the explicit name `zirologistics-wms`. It creates separate MySQL 8.4 and WMS backend containers, a dedicated `zirologistics_wms` database, a project-scoped named volume, and a WMS Spring Boot artifact packaged with Maven profile `wms-runtime`. MySQL is not published to the host; the API is published on host port 8081.
+
+The explicit project name is a data-safety boundary. It keeps this supported WMS stack separate from older local Compose projects such as `backend-wms`. It must not reuse an older project's MySQL volume, even if the old volume has a similar name. Existing containers and volumes from the old project are not automatically deleted or migrated.
 
 ## Prerequisites
 
@@ -24,10 +26,18 @@ Replace both password placeholders. Required values are `WMS_DB_USERNAME`, `WMS_
 ## Validate and start
 
 ```powershell
-docker compose --env-file .env config
+docker compose --env-file .env config --quiet
 docker compose up --build -d
 docker compose ps
 ```
+
+Before starting WMS, the older `backend-wms` backend may still own host port 8081. Stop only that legacy backend container (do not remove it or its MySQL service/volume):
+
+```powershell
+docker compose -p backend-wms stop backend
+```
+
+Then start the WMS project. Verify that the Compose project is `zirologistics-wms`, the backend is configured for `zirologistics_wms`, and the MySQL volume belongs to this project. Do not attach the old `backend-wms_zirologistics_mysql_data` volume or point Flyway at its legacy `zirologistics` database.
 
 Inspect logs:
 
@@ -58,10 +68,10 @@ Delete the local Compose database volume only when intentionally resetting this 
 docker compose down -v
 ```
 
-That command permanently deletes this Compose MySQL data and does not affect databases outside this Compose project.
+That command permanently deletes only the `zirologistics-wms` project's MySQL volume and data. It does not affect the older `backend-wms` project's volume or databases outside this Compose project.
 
 ## Safety boundaries
 
-Never point WMS Flyway at `zirologistics_db` or `zirowms_v1`; use legacy `DB_URL` variables for WMS; enable Hibernate schema auto-update; commit `.env` or private secrets; or expose the local MySQL service publicly.
+Never point WMS Flyway at `zirologistics_db`, the old Compose database `zirologistics`, or `zirowms_v1`; reuse an old Compose volume; use legacy `DB_URL` variables for WMS; enable Hibernate schema auto-update; commit `.env` or private secrets; or expose the local MySQL service publicly.
 
 See [WMS Runtime Boundary](../runtime/WMS_RUNTIME_BOUNDARY.md) and [Authentication HTTP Contract](../architecture/WMS_AUTHENTICATION_HTTP_API_CONTRACT.md).
