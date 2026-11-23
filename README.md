@@ -1,6 +1,6 @@
 # ZiroLogistics WMS Backend
 
-Tenant-aware Warehouse Management System backend built with Java 21, Spring Boot 3.5.13, MySQL 8.4, and Flyway.
+Tenant-aware Warehouse Management System backend built with Java 21, Spring Boot 3.5.16, MySQL 8.4, and Flyway.
 
 > **Status:** Active development. This repository is not yet declared production-ready. Backend structural cleanup is merged; QA/security, deployment hardening, and production-readiness gates remain.
 
@@ -28,7 +28,7 @@ See [WMS v1 API Reference](docs/api/WMS_V1_API_REFERENCE_STAGE_13.md). Route exi
 | Area | Technology |
 |---|---|
 | Language/runtime | Java 21 |
-| Framework | Spring Boot 3.5.13 |
+| Framework | Spring Boot 3.5.16 |
 | Security | Spring Security, OAuth2 Resource Server, RSA JWT |
 | Persistence | Spring Data JPA / Hibernate |
 | Database | MySQL 8.4 |
