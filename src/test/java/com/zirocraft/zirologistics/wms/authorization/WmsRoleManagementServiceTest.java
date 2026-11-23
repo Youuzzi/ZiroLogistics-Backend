@@ -12,6 +12,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -126,6 +127,33 @@ class WmsRoleManagementServiceTest {
     }
 
     @Test
+    void deniesEachRoleAdministrationOperationWithoutItsDedicatedPermissionBeforeDatabaseMutation() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_READ")));
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.createRole(principal, "CUSTOM_ROLE", "Custom Role", null));
+        assertThrows(AccessDeniedException.class,
+                () -> service.updateRole(principal, "role-public", "Updated", null, 0));
+        assertThrows(AccessDeniedException.class,
+                () -> service.deactivateRole(principal, "role-public", 0));
+        assertThrows(AccessDeniedException.class,
+                () -> service.permissionCatalogue(principal));
+        assertThrows(AccessDeniedException.class,
+                () -> service.replaceRolePermissions(principal, "role-public", List.of("WMS_ITEM_READ"), 0));
+        assertThrows(AccessDeniedException.class,
+                () -> service.membershipRoles(principal, "target-membership"));
+        assertThrows(AccessDeniedException.class,
+                () -> service.assignRole(principal, "target-membership", "role-public"));
+        assertThrows(AccessDeniedException.class,
+                () -> service.removeRole(principal, "target-membership", "role-public"));
+
+        verify(accessService, times(8)).resolve("user-public", "membership-public");
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
     void re_resolvesEffectivePermissionsForEveryRequestSoRevocationAppliesToAnExistingPrincipal() {
         WmsAuthenticatedPrincipal principal = principal();
         when(accessService.resolve("user-public", "membership-public"))
@@ -184,6 +212,25 @@ class WmsRoleManagementServiceTest {
 
         verify(jdbc, never()).update(contains("UPDATE roles SET role_name"), any(), any(),
                 anyLong(), anyString(), anyLong());
+    }
+
+    @Test
+    void cannotDelegateInventoryPostingPermissionEvenWhenActorCurrentlyHasIt() {
+        WmsAuthenticatedPrincipal principal = principal();
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_PERMISSION_MANAGE", "WMS_INVENTORY_POST")));
+        when(jdbc.queryForList(contains("SELECT id FROM tenants"), eq(Long.class), eq(10L)))
+                .thenReturn(List.of(10L));
+        when(jdbc.queryForList(contains("SELECT id, public_id, role_code"), eq(10L), eq("custom-role")))
+                .thenReturn(List.of(Map.of("id", 99L, "public_id", "custom-role",
+                        "role_code", "CUSTOM", "is_system_role", 0, "version", 0L)));
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.replaceRolePermissions(principal, "custom-role",
+                        List.of("WMS_INVENTORY_POST"), 0));
+
+        verify(jdbc, never()).update(contains("DELETE FROM role_permissions"), anyLong());
+        verify(jdbc, never()).update(contains("INSERT INTO role_permissions"), any(Object[].class));
     }
 
     private static WmsAuthenticatedPrincipal principal() {
