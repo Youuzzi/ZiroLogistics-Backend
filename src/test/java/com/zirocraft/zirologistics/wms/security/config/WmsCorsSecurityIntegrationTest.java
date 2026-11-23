@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -84,4 +86,28 @@ class WmsCorsSecurityIntegrationTest {
             return "must-remain-authenticated";
         }
     }
+    @Test
+    void configuredOriginsAreTrimmedAndDeduplicatedWithoutExpandingTrust() {
+        var source = new WmsCorsConfiguration().wmsCorsConfigurationSource(
+                " http://localhost:5173,https://trusted.example,http://localhost:5173 ");
+        var request = new org.springframework.mock.web.MockHttpServletRequest();
+        request.setRequestURI("/api/wms/v1/warehouses");
+        var cors = source.getCorsConfiguration(request);
+
+        assertEquals(java.util.List.of("http://localhost:5173", "https://trusted.example"),
+                cors.getAllowedOrigins());
+        assertEquals(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"),
+                cors.getAllowedMethods());
+        assertTrue(cors.getAllowCredentials());
+    }
+
+    @Test
+    void blankOriginConfigurationDoesNotGrantAnyBrowserOrigin() {
+        var source = new WmsCorsConfiguration().wmsCorsConfigurationSource(" ,  ");
+        var request = new org.springframework.mock.web.MockHttpServletRequest();
+        request.setRequestURI("/api/wms/v1/warehouses");
+
+        assertTrue(source.getCorsConfiguration(request).getAllowedOrigins().isEmpty());
+    }
+
 }

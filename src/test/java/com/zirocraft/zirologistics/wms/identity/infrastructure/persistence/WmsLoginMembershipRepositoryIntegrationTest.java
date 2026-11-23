@@ -1,6 +1,9 @@
 package com.zirocraft.zirologistics.wms.identity.infrastructure.persistence;
 
 import com.zirocraft.zirologistics.wms.identity.domain.MembershipStatus;
+import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessDeniedException;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.TenantMembershipEntity;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.TenantMembershipRepository;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.UserEntity;
@@ -11,6 +14,7 @@ import com.zirocraft.zirologistics.wms.tenancy.infrastructure.persistence.Tenant
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
@@ -26,6 +30,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(
@@ -63,6 +68,12 @@ class WmsLoginMembershipRepositoryIntegrationTest {
 
     @Autowired
     private WmsLoginMembershipRepository loginMembershipRepository;
+
+    @Autowired
+    private WmsMembershipAccessService membershipAccessService;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void returnsOnlyActiveMembershipsForActiveTenantsUsingSafePublicProjection() {
@@ -113,6 +124,42 @@ class WmsLoginMembershipRepositoryIntegrationTest {
         assertFalse(result.stream().anyMatch(item ->
                 item.getTenantPublicId().equals(suspendedTenantPublicId)));
         assertNotNull(result.get(0).getMembershipPublicId());
+    }
+
+    @Test
+    void activeAccessResolutionFailsAfterTenantOrMembershipIsSuspended() {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        UserEntity user = new UserEntity();
+        user.setEmail("access-lifecycle-" + suffix + "@example.test");
+        user.setUsername("access-lifecycle-" + suffix);
+        user.setPasswordHash("test-only-placeholder-hash");
+        user.setFullName("Access Lifecycle Test User");
+        user.setStatus(UserStatus.ACTIVE);
+        user = userRepository.saveAndFlush(user);
+
+        TenantEntity tenant = tenant("ACCESS-LIFECYCLE-" + suffix,
+                "Access Lifecycle Tenant", TenantStatus.ACTIVE);
+        tenant = tenantRepository.saveAndFlush(tenant);
+        TenantMembershipEntity membership = membership(
+                tenant.getId(), user.getId(), MembershipStatus.ACTIVE);
+        membership = tenantMembershipRepository.saveAndFlush(membership);
+
+        String userPublicId = user.getPublicId();
+        String membershipPublicId = membership.getPublicId();
+        Long tenantId = tenant.getId();
+        Long membershipId = membership.getId();
+
+        assertEquals(userPublicId, membershipAccessService.resolve(
+                userPublicId, membershipPublicId).userPublicId());
+
+        jdbc.update("UPDATE tenants SET status = 'SUSPENDED' WHERE id = ?", tenantId);
+        assertThrows(WmsMembershipAccessDeniedException.class, () ->
+                membershipAccessService.resolve(userPublicId, membershipPublicId));
+
+        jdbc.update("UPDATE tenants SET status = 'ACTIVE' WHERE id = ?", tenantId);
+        jdbc.update("UPDATE tenant_memberships SET status = 'SUSPENDED' WHERE id = ?", membershipId);
+        assertThrows(WmsMembershipAccessDeniedException.class, () ->
+                membershipAccessService.resolve(userPublicId, membershipPublicId));
     }
 
     private static TenantEntity tenant(String code, String displayName, TenantStatus status) {

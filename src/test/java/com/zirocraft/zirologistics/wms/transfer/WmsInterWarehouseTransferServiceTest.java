@@ -9,6 +9,7 @@ import com.zirocraft.zirologistics.wms.transfer.application.WmsInterWarehouseTra
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.util.Set;
 
@@ -71,6 +72,40 @@ class WmsInterWarehouseTransferServiceTest {
         verifyNoInteractions(jdbc);
     }
 
+    @Test
+    void rejectsResolvedMembershipFromAnotherTenantBeforeExecutingTransferQuery() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(new WmsMembershipAccess(
+                        1L, "user-public", 10L, "other-tenant-public", 99L, "membership-public",
+                        Set.of("WMS_TRANSFER_READ")));
+
+        assertThrows(AccessDeniedException.class, () -> service.list(principal()));
+
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void rejectsResolvedMembershipWithDifferentMembershipIdentity() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(new WmsMembershipAccess(
+                        2L, "user-public", 10L, "tenant-public", 30L, "other-membership-public",
+                        Set.of("WMS_TRANSFER_READ")));
+
+        assertThrows(AccessDeniedException.class, () -> service.list(principal()));
+
+        verifyNoInteractions(jdbc);
+    }
+
+    @Test
+    void rejectsMissingTransferReadPermissionBeforeExecutingQuery() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of()));
+
+        assertThrows(AccessDeniedException.class, () -> service.list(principal()));
+
+        verifyNoInteractions(jdbc);
+    }
+
     private static WmsAuthenticatedPrincipal principal() {
         return new WmsAuthenticatedPrincipal(
                 "user-public", 10L, "tenant-public", 30L, "membership-public",
@@ -79,6 +114,6 @@ class WmsInterWarehouseTransferServiceTest {
 
     private static WmsMembershipAccess access(Set<String> permissions) {
         return new WmsMembershipAccess(
-                1L, "user-public", 10L, "tenant-public", 30L, "membership-public", permissions);
+                1L, "user-public", 10L, "tenant-public", 30L, "membership-public", 0L, permissions);
     }
 }
