@@ -368,3 +368,41 @@ The merge includes the prior Stage 16 security and tenant-isolation work represe
 - Stage 16: **OPEN** until both post-merge checks are green and remaining risks are accepted/documented as explicit scope limitations.
 
 No claim of production readiness is made by this evidence update.
+
+
+## 17. Final post-merge validation — 2026-11-23
+
+This update supersedes the pending post-merge status recorded in section 16.
+
+### Exact-main validation
+
+The documentation refresh PR #272 was merged into `main` as commit **806f9df2f099fc992b094eacd210c5ee6adbf896**. The exact resulting main commit completed these checks:
+
+| Check | Run | Result |
+|---|---:|---|
+| Backend CI — Java 21 full regression, package verification and Docker image build | #45180209757 | SUCCESS |
+| CodeQL Security Analysis | #45180209797 | SUCCESS |
+| Dependency vulnerability scan (OSV) / osv-scanner | included in #45180209757 | SUCCESS |
+
+The preceding post-#271 main validation also completed successfully: Backend CI #45178544988 and CodeQL #45178544731 both passed on **78fafd80e10dbbb10ca7d6859b8ff04db848705b**. The later #272 merge commit was then independently validated by the runs above.
+
+### PR inventory and integration state
+
+- #271: merged; its nine consolidated regression test files are on main.
+- #272: merged; this evidence refresh is on main.
+- Open pull requests at the final inventory check: **0**.
+- Current main SHA at the final check: **806f9df2f099fc992b094eacd210c5ee6adbf896**.
+
+### Final QA gate disposition
+
+- Post-merge Backend CI: **PASS**.
+- Post-merge CodeQL: **PASS**.
+- Strict OSV scan: **PASS**, with the two time-limited Spring advisory exceptions described in section 7 still present and expiring **2026-12-31**.
+- Consolidated tenant/security regression suite: **integrated and CI-validated** on main.
+- Authenticated DAST: **limited to three protected read routes**; no claim of comprehensive write/workflow DAST.
+- Authenticated k6: **read-only baseline only**; no business-workflow throughput or production-capacity claim.
+- Deep MySQL A/B tenant assertions: **not uniform across all transfer, adjustment, shipping, warehouse mutation, and location mutation paths**.
+
+The backend QA integration and current-main CI gates are green. The remaining items above are explicit scope limitations / follow-up hardening, not failures hidden by this closure record. They remain prerequisites for any broader production-readiness claim and must be addressed or formally risk-accepted before production deployment. The temporary Spring advisory exceptions must be reviewed before their expiry, and earlier if affected SSE/view-rendering features are introduced.
+
+**Stage 16 disposition: QA integration and current-main validation COMPLETE. Production readiness is NOT asserted.**
