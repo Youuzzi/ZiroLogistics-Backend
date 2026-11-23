@@ -194,6 +194,20 @@ class WmsHttpSecurityEnabledTest {
                 .andExpect(content().string("wms-protected"));
     }
 
+    @Test
+    void rejectsBearerTokenWhenJwtDecoderCannotValidateIt() throws Exception {
+        when(accessJwtDecoder.decode("invalid-test-token"))
+                .thenThrow(new org.springframework.security.oauth2.jwt.BadJwtException("invalid token"));
+
+        mockMvc.perform(get("/wms/security-probe")
+                        .header("Authorization", "Bearer invalid-test-token")
+                        .accept(MediaType.TEXT_PLAIN))
+                .andExpect(status().isUnauthorized());
+
+        org.mockito.Mockito.verify(accessJwtDecoder).decode("invalid-test-token");
+        org.mockito.Mockito.verifyNoInteractions(authenticationConverter);
+    }
+
     @RestController
     static class ProbeController {
         @PostMapping(value = {
