@@ -116,6 +116,38 @@ class WmsJwtAuthenticationConverterTest {
                 .isInstanceOf(OAuth2AuthenticationException.class);
     }
 
+    @Test
+    void rejectsNullMembershipResolution() {
+        when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
+                .thenReturn(null);
+
+        assertThatThrownBy(() -> converter.convert(accessToken(
+                "user-public-id", "membership-public-id")))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .hasMessageContaining("Invalid bearer token");
+        verify(membershipAccessService).resolve("user-public-id", "membership-public-id");
+    }
+
+
+    @Test
+    void rejectsNonStringMembershipAndPurposeClaimsBeforeResolvingMembership() {
+        Instant now = Instant.now();
+        Jwt malformedMembership = Jwt.withTokenValue("malformed-membership")
+                .header("alg", "RS256").subject("user-public-id")
+                .issuedAt(now).expiresAt(now.plusSeconds(600))
+                .claim("token_use", "access").claim("mid", 42L).build();
+        Jwt malformedPurpose = Jwt.withTokenValue("malformed-purpose")
+                .header("alg", "RS256").subject("user-public-id")
+                .issuedAt(now).expiresAt(now.plusSeconds(600))
+                .claim("token_use", 42L).claim("mid", "membership-public-id").build();
+
+        assertThatThrownBy(() -> converter.convert(malformedMembership))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        assertThatThrownBy(() -> converter.convert(malformedPurpose))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        org.mockito.Mockito.verifyNoInteractions(membershipAccessService);
+    }
+
     private static Jwt accessToken(String subject, String membershipId) {
         return accessToken(subject, membershipId, "access");
     }
