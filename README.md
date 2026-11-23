@@ -58,7 +58,7 @@ WMS migrations are under `classpath:db/wms-migration`. Frozen migrations V1–V2
 
 ## Run WMS with Docker Compose
 
-The Compose stack creates a dedicated local MySQL 8.4 database named `zirologistics_wms` and a named volume. It does not use the historical `zirologistics_db` database or frozen source/reference database `zirowms_v1`.
+The Compose stack uses the explicit project name `zirologistics-wms` and creates a dedicated local MySQL 8.4 database named `zirologistics_wms` in its own named volume. This project boundary intentionally isolates the supported WMS runtime from older Compose projects and their containers/volumes (including a previous `backend-wms` project). It does not adopt, rename, mount, or migrate data from those volumes, the historical `zirologistics` database, `zirologistics_db`, or frozen source/reference database `zirowms_v1`. Existing containers and volumes from another project are left untouched.
 
 ### 1. Prepare environment
 
@@ -76,7 +76,7 @@ docker compose config
 docker compose up --build -d
 ```
 
-The API is exposed at `http://localhost:8081`. MySQL is available only on the Compose network and is not published to the host.
+The API is exposed at `http://localhost:8081`. MySQL is available only on the WMS Compose network and is not published to the host. The explicit project name creates separate WMS containers, network, and volume; it prevents Compose from adopting/recreating containers belonging to an older project named `backend-wms`.
 
 ### 3. Inspect services
 
@@ -92,7 +92,7 @@ docker compose logs --tail 150 backend
 docker compose down
 ```
 
-To permanently delete the disposable local Compose database volume and its data:
+To permanently delete the disposable WMS Compose database volume and its data:
 
 ```powershell
 docker compose down -v
