@@ -2,7 +2,7 @@
 
 ## Scope
 
-This guide runs the tenant-based WMS runtime using the root `Dockerfile` and `compose.yml`. It does not deploy the transitional legacy application.
+This guide runs the repository's sole supported application runtime: the tenant-based WMS, packaged by the root `Dockerfile` and started by `compose.yml`.
 
 The Compose project has the explicit name `zirologistics-wms`. It creates separate MySQL 8.4 and WMS backend containers, a dedicated `zirologistics_wms` database, a project-scoped named volume, and a WMS Spring Boot artifact packaged with Maven profile `wms-runtime`. MySQL is not published to the host; the API is published on host port 8081.
 
