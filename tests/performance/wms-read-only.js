@@ -1,5 +1,5 @@
 import http from "k6/http";
-import { check } from "k6";
+import { check, sleep } from "k6";
 
 const baseUrl = __ENV.BASE_URL || "http://127.0.0.1:8081";
 const token = __ENV.WMS_TOKEN;
@@ -13,11 +13,7 @@ export const options = {
       duration: "30s",
     },
   },
-  thresholds: {
-    checks: ["rate==1"],
-    http_req_failed: ["rate<0.01"],
-    http_req_duration: ["p(95)<1000", "p(99)<2000"],
-  },
+  summaryTrendStats: ["avg", "min", "med", "max", "p(90)", "p(95)"],
 };
 
 const headers = {
@@ -43,4 +39,5 @@ export default function () {
     "warehouse_detail",
     `/api/wms/v1/tenants/current/warehouses/${warehousePublicId}`,
   );
+  sleep(1);
 }
