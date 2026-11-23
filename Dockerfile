@@ -1,4 +1,4 @@
-# Build the WMS runtime artifact, not the transitional legacy entry point.
+# Build the sole supported WMS runtime artifact.
 FROM maven:3.9.14-eclipse-temurin-21 AS build
 WORKDIR /workspace
 
