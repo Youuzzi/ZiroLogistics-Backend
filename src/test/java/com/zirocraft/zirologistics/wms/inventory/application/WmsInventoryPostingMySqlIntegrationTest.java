@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.wms.inventory.application;
 
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
+import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import com.zirocraft.zirologistics.wms.reporting.application.WmsOperationalReportingService;
 import com.zirocraft.zirologistics.wms.transfer.application.WmsInterWarehouseTransferService;
@@ -63,6 +64,126 @@ class WmsInventoryPostingMySqlIntegrationTest {
     @BeforeEach
     void setUp() {
         fixture = fixture("NONE");
+    }
+
+    @Test
+    void crossTenantInventoryPostingRejectsForeignAndMixedOwnershipReferencesWithoutSideEffects() {
+        Fixture tenantB = fixture("NONE");
+        long ledgerBeforeA = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId());
+        long ledgerBeforeB = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantB.tenantId());
+        long auditBeforeA = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", fixture.tenantId());
+        long auditBeforeB = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId());
+
+        WmsInventoryPostingService.PostingLeg foreignAll = leg(tenantB, null, null, "AVAILABLE", "1.0000");
+        WmsInventoryPostingService.PostingLeg mixedForeignItem = new WmsInventoryPostingService.PostingLeg(
+                fixture.warehousePublicId(), fixture.locationPublicId(), tenantB.itemPublicId(),
+                null, null, null, "AVAILABLE", new BigDecimal("1.0000"));
+        WmsInventoryPostingService.PostingLeg mixedForeignLocation = new WmsInventoryPostingService.PostingLeg(
+                fixture.warehousePublicId(), tenantB.locationPublicId(), fixture.itemPublicId(),
+                null, null, null, "AVAILABLE", new BigDecimal("1.0000"));
+
+        assertThrows(WmsResourceNotFoundException.class, () -> post(fixture, UUID.randomUUID(), "RECEIPT", foreignAll),
+                "Tenant A principal must not post using Tenant B warehouse, location, and item");
+        assertThrows(WmsResourceNotFoundException.class, () -> post(fixture, UUID.randomUUID(), "RECEIPT", mixedForeignItem),
+                "Tenant A principal must not post using Tenant B item");
+        assertThrows(WmsResourceNotFoundException.class, () -> post(fixture, UUID.randomUUID(), "RECEIPT", mixedForeignLocation),
+                "Tenant A principal must not post using Tenant B location");
+
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(fixture), "Tenant A stock must remain unchanged after cross-tenant rejection");
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(tenantB), "Tenant B stock must remain unchanged after cross-tenant rejection");
+        assertEquals(ledgerBeforeA, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()),
+                "Tenant A ledger must not record rejected cross-tenant attempts");
+        assertEquals(ledgerBeforeB, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantB.tenantId()),
+                "Tenant B ledger must not record rejected cross-tenant attempts");
+        assertEquals(auditBeforeA, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", fixture.tenantId()),
+                "Tenant A audit must not record rejected cross-tenant attempts");
+        assertEquals(auditBeforeB, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId()),
+                "Tenant B audit must not record rejected cross-tenant attempts");
+
+        // Positive control: security rejection must not poison the legitimate same-tenant workflow.
+        post(fixture, UUID.randomUUID(), "RECEIPT", leg(fixture, null, null, "AVAILABLE", "2.0000"));
+        assertEquals(new BigDecimal("2.0000"), balance(fixture),
+                "Tenant A must still be able to post its own inventory after rejected foreign references");
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(tenantB),
+                "Tenant B inventory must remain isolated after Tenant A's valid posting");
+        assertEquals(ledgerBeforeA + 1, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals(ledgerBeforeB, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantB.tenantId()));
+        assertEquals(auditBeforeA + 1, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", fixture.tenantId()));
+        assertEquals(auditBeforeB, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId()));
+    }
+
+    @Test
+    void crossTenantSerialReferenceIsRejectedWithoutChangingForeignSerialOrInventory() {
+        Fixture tenantA = fixture("SERIAL");
+        Fixture tenantB = fixture("SERIAL");
+        String serialNumber = "SN-CROSS-TENANT-" + UUID.randomUUID();
+
+        post(tenantB, UUID.randomUUID(), "RECEIPT",
+                leg(tenantB, null, serialNumber, "AVAILABLE", "1.0000"));
+        String foreignSerialPublicId = jdbc.queryForObject(
+                "SELECT public_id FROM inventory_serials WHERE tenant_id = ? AND serial_number = ?",
+                String.class, tenantB.tenantId(), serialNumber);
+
+        long ledgerBeforeA = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantA.tenantId());
+        long ledgerBeforeB = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantB.tenantId());
+        long auditBeforeA = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantA.tenantId());
+        long auditBeforeB = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId());
+
+        WmsInventoryPostingService.PostingLeg foreignSerial = new WmsInventoryPostingService.PostingLeg(
+                tenantA.warehousePublicId(), tenantA.locationPublicId(), tenantA.itemPublicId(),
+                null, foreignSerialPublicId, null, "AVAILABLE", new BigDecimal("1.0000"));
+
+        assertThrows(WmsResourceNotFoundException.class,
+                () -> post(tenantA, UUID.randomUUID(), "ISSUE", foreignSerial),
+                "Tenant A must not reference Tenant B serial by public ID");
+
+        assertEquals("AVAILABLE", serialStatus(tenantB, foreignSerialPublicId),
+                "Rejected Tenant A request must not transition Tenant B serial");
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(tenantA),
+                "Tenant A inventory must remain unchanged");
+        assertEquals(BigDecimal.ONE.setScale(4), balance(tenantB),
+                "Tenant B inventory must remain unchanged");
+        assertEquals(ledgerBeforeA, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantA.tenantId()));
+        assertEquals(ledgerBeforeB, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantB.tenantId()));
+        assertEquals(auditBeforeA, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantA.tenantId()));
+        assertEquals(auditBeforeB, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId()));
+    }
+
+    @Test
+    void crossTenantLotReferenceIsRejectedWithoutChangingEitherTenantInventory() {
+        Fixture tenantA = fixture("LOT");
+        Fixture tenantB = fixture("LOT");
+        String foreignLotPublicId = UUID.randomUUID().toString();
+        long tenantBItemId = jdbc.queryForObject(
+                "SELECT id FROM items WHERE tenant_id = ? AND public_id = ?",
+                Long.class, tenantB.tenantId(), tenantB.itemPublicId());
+        jdbc.update("""
+                INSERT INTO inventory_lots (public_id, tenant_id, item_id, lot_number, status)
+                VALUES (?, ?, ?, ?, 'ACTIVE')
+                """, foreignLotPublicId, tenantB.tenantId(), tenantBItemId,
+                "LOT-CROSS-TENANT-" + UUID.randomUUID());
+
+        long ledgerBeforeA = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantA.tenantId());
+        long ledgerBeforeB = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantB.tenantId());
+        long auditBeforeA = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantA.tenantId());
+        long auditBeforeB = count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId());
+
+        WmsInventoryPostingService.PostingLeg foreignLot = new WmsInventoryPostingService.PostingLeg(
+                tenantA.warehousePublicId(), tenantA.locationPublicId(), tenantA.itemPublicId(),
+                foreignLotPublicId, null, null, "AVAILABLE", new BigDecimal("1.0000"));
+
+        assertThrows(WmsResourceNotFoundException.class,
+                () -> post(tenantA, UUID.randomUUID(), "RECEIPT", foreignLot),
+                "Tenant A must not reference Tenant B lot by public ID");
+
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(tenantA),
+                "Tenant A inventory must remain unchanged");
+        assertEquals(BigDecimal.ZERO.setScale(4), balance(tenantB),
+                "Tenant B inventory must remain unchanged");
+        assertEquals(ledgerBeforeA, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantA.tenantId()));
+        assertEquals(ledgerBeforeB, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", tenantB.tenantId()));
+        assertEquals(auditBeforeA, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantA.tenantId()));
+        assertEquals(auditBeforeB, count("SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ? AND event_type = 'INVENTORY_MOVEMENT_POSTED'", tenantB.tenantId()));
     }
 
     @Test
