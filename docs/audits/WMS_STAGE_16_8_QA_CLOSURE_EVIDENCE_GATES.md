@@ -368,3 +368,29 @@ The merge includes the prior Stage 16 security and tenant-isolation work represe
 - Stage 16: **OPEN** until both post-merge checks are green and remaining risks are accepted/documented as explicit scope limitations.
 
 No claim of production readiness is made by this evidence update.
+
+
+## 17. Final post-merge validation — 2026-11-23
+
+**Verification outcome: all required repository checks are green on the final integrated main commit.**
+
+- Final documentation integration PR #272 was squash-merged as **806f9df2f099fc992b094eacd210c5ee6adbf896**, parent **78fafd80e10dbbb10ca7d6859b8ff04db848705b**.
+- Backend CI run **#45180209757** on 806f9df: **SUCCESS**. The Java 21 full regression and packaging job completed successfully; strict dependency scan completed successfully.
+- CodeQL run **#45180209797** on 806f9df: **SUCCESS** (Analyze Java).
+- The preceding post-#271 Backend CI run **#45178544988** on 78fafd8 also completed **SUCCESS**, including Java 21 full regression and OSV.
+- PR #272 checks on its exact head **f69e6e200b05cb3a62682ec488cd671ca8d592af** all completed successfully: Java 21 regression, CodeQL, osv-scanner, dependency vulnerability scan, Analyze Java, and authenticated WMS API ZAP.
+- GitHub open-PR inventory was **empty** at final verification.
+
+### Final Stage 16 assessment
+
+The post-merge validation gate is **PASS**. The consolidated Stage 16 security/QA changes are integrated, and the final main CI plus CodeQL checks are green.
+
+Stage 16 can be considered **closed for the backend engineering baseline / transition to frontend development**, with the following explicit limitations carried forward as tracked hardening work—not represented as completed or as proof of production readiness:
+
+1. Authenticated ZAP still covers only three protected read routes; write endpoints and state-changing workflows are outside the current DAST scope.
+2. Authenticated k6 remains a read-only three-route baseline; business-workflow throughput and production capacity are not established.
+3. MySQL tenant A/B integration depth remains uneven for selected transfer, adjustment, shipping, warehouse mutation, and location mutation paths; focused mocks/HTTP tests are supplementary.
+4. The two Spring Framework advisory exceptions remain reachability-based temporary exceptions through **2026-12-31**, not fixed dependencies. Reassess before expiry and immediately if SSE/view-rendering capabilities are introduced.
+5. Production deployment, monitoring, backup/restore, incident response, and production load readiness have not been established by CI.
+
+These limitations must remain visible in the Stage 17+ hardening backlog and before any production-readiness declaration. Do not interpret Stage 16 closure as a security certification or production launch approval.
