@@ -29,8 +29,8 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           # Main pushes and manual runs always execute the full regression suite.
           if [[ "$EVENT_NAME" != "pull_request" ]]; then
@@ -38,12 +38,28 @@ jobs:
             exit 0
           fi
 
-          changed_files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          # The PR event base SHA can be stale while the synthetic merge ref is current.
+          # Compare the PR head against the current base's merge-base, not github.sha,
+          # so base-branch commits do not make documentation-only PRs run full Maven.
+          if ! git fetch --no-tags origin "$BASE_REF"; then
+            echo "Could not fetch current base ref; defaulting to full backend validation."
+            echo "run_backend_tests=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! merge_base="$(git merge-base FETCH_HEAD "$PR_HEAD_SHA")"; then
+            echo "Could not find merge-base; defaulting to full backend validation."
+            echo "run_backend_tests=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$merge_base" "$PR_HEAD_SHA")"
           if [[ -z "$changed_files" ]]; then
             echo "No changed files detected; defaulting to full backend validation."
             echo "run_backend_tests=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "diff_base=$merge_base" >> "$GITHUB_OUTPUT"
+          echo "diff_head=$PR_HEAD_SHA" >> "$GITHUB_OUTPUT"
 
           docs_only=true
           while IFS= read -r file; do
@@ -66,9 +82,9 @@ jobs:
       - name: Validate documentation diff
         if: steps.scope.outputs.run_backend_tests == 'false'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.sha }}
-        run: git diff --check "$BASE_SHA" "$HEAD_SHA"
+          DIFF_BASE: ${{ steps.scope.outputs.diff_base }}
+          DIFF_HEAD: ${{ steps.scope.outputs.diff_head }}
+        run: git diff --check "$DIFF_BASE" "$DIFF_HEAD"
 
       - name: Set up Java
         if: steps.scope.outputs.run_backend_tests == 'true'
@@ -86,9 +102,22 @@ jobs:
         if: steps.scope.outputs.run_backend_tests == 'true'
         run: docker compose --env-file .env.example -f compose.yml config --quiet
 
+      - name: Capture resolved Maven dependency tree
+        if: steps.scope.outputs.run_backend_tests == 'true'
+        run: ./mvnw --batch-mode --no-transfer-progress dependency:tree -Dverbose -DoutputFile=dependency-tree.txt
+
       - name: Run full regression and package WMS runtime
         if: steps.scope.outputs.run_backend_tests == 'true'
         run: ./mvnw --batch-mode --no-transfer-progress -Pwms-runtime clean verify
+
+      - name: Upload resolved dependency tree
+        if: always() && steps.scope.outputs.run_backend_tests == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wms-maven-dependency-tree
+          path: dependency-tree.txt
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload JaCoCo coverage report
         if: always() && steps.scope.outputs.run_backend_tests == 'true'
@@ -117,7 +146,7 @@ jobs:
       scan-args: |-
         --recursive
         ./
-      fail-on-vuln: false
+      fail-on-vuln: true
     permissions:
       actions: read
       contents: read
