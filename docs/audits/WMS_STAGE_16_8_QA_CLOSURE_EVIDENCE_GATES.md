@@ -307,3 +307,64 @@ Older green runs for #234/#257/#244/#248/#200/#203 do not validate the newly add
 ### Draft PR cleanup decision
 
 The remaining draft branches are now coverage sources rather than unique blockers: their unique tests are represented in the targets above. They remain open because closing them is a separate repository-maintenance decision and has not been authorized. Before Gate 1 closes, review the source-to-target mapping once more, then ask for approval to close the superseded draft PRs or leave them as historical references.
+
+
+## 16. Gate 1 integration update — 2026-11-23
+
+**Stage 16 remains OPEN pending post-merge main validation and explicit residual-risk disposition.** This section supersedes earlier PR inventory and merge-status statements above where they conflict.
+
+### Consolidated integration merged
+
+PR #271 was merged into `main` as commit **78fafd80e10dbbb10ca7d6859b8ff04db848705b** after its refreshed integration head **8adc9422bd985d0cde062d74d08b6ebc39c1e9a6** passed all checks:
+
+| Check | Result |
+|---|---|
+| Backend CI — Java 21 full regression | SUCCESS |
+| CodeQL | SUCCESS |
+| Analyze Java | SUCCESS |
+| Dependency vulnerability scan (OSV) | SUCCESS |
+| osv-scanner | SUCCESS |
+| Authenticated WMS API scan (ZAP) | SUCCESS |
+
+The refreshed PR head was based on main **df66e454c29e2d695399432f0591a0690571ad57** and retained the nine consolidated test files. It was refreshed by preserving the current main tree and applying the PR test-file versions, then validated on the resulting integration commit before merge.
+
+The consolidation contains the unique residual regressions previously tracked in source PRs #176, #184, #192, #196, #209, #216, #217, and #219, including warehouse tenant boundaries, invalid bearer handling, invitation HTTP auth, transfer membership authorization, CORS normalization/deny-by-default, error redaction, JWT issuer/expiry, and membership suspension.
+
+Those eight source PRs were closed only after #271 was merged. Their branches and discussion history remain in GitHub; their code is represented by the merged test suite. No source PR was merged independently.
+
+### Main post-merge validation
+
+- Main now points to **78fafd80e10dbbb10ca7d6859b8ff04db848705b**.
+- Post-merge Backend CI run **#45178544988** started on this exact main SHA.
+- Its strict OSV scan completed successfully.
+- At the time of this update, the Java 21 full regression job was still running. CodeQL run **#45178544731** was also triggered for this merge commit; verify its final conclusion before declaring the post-merge baseline green.
+
+A successful PR integration run is not a substitute for the post-merge main run. Do not mark Stage 16 closed until both post-merge Backend CI and CodeQL are confirmed successful.
+
+### Current integrated security/QA scope
+
+The merge includes the prior Stage 16 security and tenant-isolation work represented by #265–#270, together with the final regression consolidation:
+
+- Credential-version claim and server-side version checks invalidate access tokens after credential changes; migration `V27__add_wms_user_credential_version.sql` is included.
+- CSRF protection remains enabled outside stateless WMS API routes; CORP response-header hardening is included.
+- Authenticated ZAP automation and the disposable unauthenticated baseline remain limited-scope security evidence.
+- Authenticated k6 evidence remains a read-only three-route baseline, not a production capacity or business-workflow benchmark.
+- Tenant isolation coverage includes MySQL/Testcontainers tests across inbound, outbound, inventory posting, putaway, stock count, replenishment, reporting, warehouse, and selected transfer/adjustment/shipping boundaries, plus focused HTTP/service tests.
+
+### Residual risks — not represented as completed
+
+1. Authenticated DAST remains limited to three protected read routes; write endpoints and state-changing business workflows are not comprehensively scanned.
+2. k6 remains read-only; representative receiving-to-shipment business-workflow performance and production capacity are not established.
+3. MySQL A/B tenant-isolation assertions are not equally deep for every transfer, adjustment, shipping, warehouse mutation, and location mutation path. Focused mock/HTTP tests are supplementary, not equivalent to end-to-end MySQL ownership and unchanged-state assertions.
+4. The two documented Spring Framework advisory exceptions remain temporary, reachability-based exceptions rather than fixed dependencies. Their expiry is **2026-12-31**; re-evaluate before expiry and immediately if SSE/view-rendering features or affected code paths are introduced.
+5. A green CI run proves repository checks passed on the tested commit; it does not establish production deployment readiness, operational monitoring, backup/restore readiness, or a production load envelope.
+
+### Gate 1 disposition
+
+- Consolidation PR #271: **MERGED**.
+- Its eight residual source PRs: **CLOSED AS SUPERSEDED AFTER MERGE**.
+- Post-merge main Backend CI: **PENDING at document update time**.
+- Post-merge main CodeQL: **PENDING at document update time**.
+- Stage 16: **OPEN** until both post-merge checks are green and remaining risks are accepted/documented as explicit scope limitations.
+
+No claim of production readiness is made by this evidence update.
