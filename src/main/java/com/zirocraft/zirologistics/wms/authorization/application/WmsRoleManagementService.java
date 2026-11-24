@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.wms.authorization.application;
 
 import com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException;
+import com.zirocraft.zirologistics.wms.authorization.domain.WmsTenantPermissionPolicy;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
@@ -10,6 +11,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -23,15 +25,6 @@ import java.util.regex.Pattern;
 @Profile("wms")
 public class WmsRoleManagementService {
     private static final Pattern ROLE_CODE = Pattern.compile("[A-Z][A-Z0-9_]{1,79}");
-    private static final Set<String> DELEGABLE_PERMISSIONS = Set.of(
-            "WMS_ROLE_READ", "WMS_ROLE_CREATE", "WMS_ROLE_UPDATE",
-            "WMS_ROLE_DEACTIVATE", "WMS_PERMISSION_CATALOG_READ",
-            "WMS_MEMBERSHIP_ROLE_READ",
-            "WMS_WAREHOUSE_READ", "WMS_WAREHOUSE_CREATE", "WMS_WAREHOUSE_UPDATE",
-            "WMS_LOCATION_READ", "WMS_LOCATION_CREATE", "WMS_LOCATION_UPDATE",
-            "WMS_ITEM_READ", "WMS_ITEM_CREATE", "WMS_ITEM_UPDATE",
-            "WMS_ITEM_CATEGORY_READ", "WMS_ITEM_CATEGORY_MANAGE",
-            "WMS_UOM_CATALOG_READ", "WMS_INVENTORY_READ", "WMS_INVENTORY_LEDGER_READ");
     private static final Map<String, String> AUDIT_TYPES = Map.of(
             "CREATE", "ROLE_CREATED",
             "UPDATE", "ROLE_UPDATED",
@@ -142,20 +135,14 @@ public class WmsRoleManagementService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> permissionCatalogue(WmsAuthenticatedPrincipal principal) {
-        Access access = access(principal, "WMS_PERMISSION_CATALOG_READ");
+        access(principal, "WMS_PERMISSION_CATALOG_READ");
+        List<String> visibleCodes = WmsTenantPermissionPolicy.catalogueVisiblePermissionCodes()
+                .stream().sorted().toList();
+        String placeholders = String.join(",", Collections.nCopies(visibleCodes.size(), "?"));
         return jdbc.queryForList("""
                 SELECT permission_code, module, description
-                FROM permissions WHERE permission_code IN (
-                  'WMS_ROLE_READ', 'WMS_ROLE_CREATE', 'WMS_ROLE_UPDATE',
-                  'WMS_ROLE_DEACTIVATE', 'WMS_PERMISSION_CATALOG_READ',
-                  'WMS_MEMBERSHIP_ROLE_READ',
-                  'WMS_WAREHOUSE_READ', 'WMS_WAREHOUSE_CREATE', 'WMS_WAREHOUSE_UPDATE',
-                  'WMS_LOCATION_READ', 'WMS_LOCATION_CREATE', 'WMS_LOCATION_UPDATE',
-                  'WMS_ITEM_READ', 'WMS_ITEM_CREATE', 'WMS_ITEM_UPDATE',
-                  'WMS_ITEM_CATEGORY_READ', 'WMS_ITEM_CATEGORY_MANAGE',
-                  'WMS_UOM_CATALOG_READ', 'WMS_INVENTORY_READ', 'WMS_INVENTORY_LEDGER_READ'
-                ) ORDER BY module, permission_code
-                """);
+                FROM permissions WHERE permission_code IN (""" + placeholders + ") ORDER BY module, permission_code",
+                visibleCodes.toArray());
     }
 
     @Transactional
@@ -177,7 +164,7 @@ public class WmsRoleManagementService {
                 .map(code -> code.trim().toUpperCase(Locale.ROOT))
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
         if (requested.size() != requestedCodes.size()) throw new IllegalArgumentException("Duplicate permission code");
-        if (!DELEGABLE_PERMISSIONS.containsAll(requested)
+        if (!WmsTenantPermissionPolicy.delegablePermissionCodes().containsAll(requested)
                 || !access.permissions().containsAll(requested)) {
             throw new AccessDeniedException("Requested permissions are not delegable");
         }
