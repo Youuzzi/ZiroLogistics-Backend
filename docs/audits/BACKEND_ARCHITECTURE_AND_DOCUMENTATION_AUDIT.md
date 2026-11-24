@@ -1,9 +1,9 @@
 # Backend Architecture and Documentation Audit
 
-**Status:** Initial repository baseline completed; domain-by-domain verification remains in progress.  
-**Audited branch:** `main`  
-**Audited commit:** `90bc354c91c273a416a95352c3c242548a0c817e`  
-**Audit date:** 2026-11-25  
+**Status:** Initial repository baseline completed; domain-by-domain verification remains in progress.
+**Audited branch:** `main`
+**Audited commit:** `90bc354c91c273a416a95352c3c242548a0c817e`
+**Audit date:** 2026-11-25
 **Scope:** Repository inventory, documentation naming and status, WMS migrations, authorization/tenant administration entry points, test inventory, and CI baseline.
 
 ## 1. Executive summary
