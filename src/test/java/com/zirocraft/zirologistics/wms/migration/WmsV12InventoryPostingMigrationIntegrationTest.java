@@ -74,6 +74,15 @@ class WmsV12InventoryPostingMigrationIntegrationTest {
                 role.setString(2, tenantPublicId);
                 assertEquals(1, role.executeUpdate());
             }
+            try (PreparedStatement grant = connection.prepareStatement("""
+                    INSERT INTO role_permissions (role_id, permission_id)
+                    SELECT r.id, p.id FROM roles r
+                    JOIN permissions p ON p.permission_code = 'WMS_ITEM_READ'
+                    WHERE r.public_id = ?
+                    """)) {
+                grant.setString(1, customRolePublicId);
+                assertEquals(1, grant.executeUpdate());
+            }
         }
 
         Flyway.configure().dataSource(upgradeUrl, UPGRADE_MYSQL.getUsername(), UPGRADE_MYSQL.getPassword())
@@ -118,6 +127,13 @@ class WmsV12InventoryPostingMigrationIntegrationTest {
                     JOIN roles r ON r.id = rp.role_id
                     WHERE r.public_id = '""" + ownerRolePublicId + """
                     '
+                    """));
+            assertEquals(1, scalar(statement, """
+                    SELECT COUNT(*) FROM role_permissions rp
+                    JOIN roles r ON r.id = rp.role_id
+                    JOIN permissions p ON p.id = rp.permission_id
+                    WHERE r.public_id = '""" + customRolePublicId + """
+                    ' AND p.permission_code = 'WMS_ITEM_READ'
                     """));
             String checkClause = text(statement, """
                     SELECT check_clause FROM information_schema.check_constraints
