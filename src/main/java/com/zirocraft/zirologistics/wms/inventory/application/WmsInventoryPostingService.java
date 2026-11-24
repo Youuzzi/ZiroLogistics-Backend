@@ -72,7 +72,8 @@ public class WmsInventoryPostingService {
                 "WMS_PUTAWAY_CONFIRM", Set.of("TRANSFER"),
                 "WMS_PICKING_CONFIRM", Set.of("TRANSFER"),
                 "WMS_SHIPPING_SHIP", Set.of("ISSUE"),
-                "WMS_REPLENISHMENT_TASK_CONFIRM", Set.of("TRANSFER"));
+                "WMS_REPLENISHMENT_TASK_CONFIRM", Set.of("TRANSFER"),
+                "WMS_REPLENISHMENT_CONFIRMATION_REVERSE", Set.of("TRANSFER"));
         if (command == null || !allowedMovements.getOrDefault(workflowPermission, Set.of())
                 .contains(command.movementType() == null ? "" : command.movementType().toUpperCase(Locale.ROOT))) {
             throw new AccessDeniedException("Workflow posting permission does not match the movement");
