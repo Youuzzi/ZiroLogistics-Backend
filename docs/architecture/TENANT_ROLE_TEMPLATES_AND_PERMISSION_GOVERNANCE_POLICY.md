@@ -195,21 +195,21 @@ The audit role must not imply access to platform-wide logs or another tenant's d
 
 The matrix below is the initial default policy proposal. A check mark means the role template may include the permission; it does not mean the permission is currently granted in the repository.
 
-| Permission family | Owner | Tenant Admin | Warehouse Supervisor | Inbound Operator | Inbound Controller | Outbound Controller | Outbound Operator | Shipping Clerk | Inventory Controller | Inventory Approver | Transfer Dispatcher | Transfer Receiver | Replenishment Operator | Auditor |
-| --- | ---: | ---: | ---: | ---: | ---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Permission family | Owner | Tenant Admin | Warehouse Supervisor | Inbound Operator | Inbound Controller | Outbound Operator | Outbound Controller | Shipping Clerk | Inventory Controller | Inventory Approver | Transfer Dispatcher | Transfer Receiver | Replenishment Operator | Auditor |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Tenant profile / invite | ✓ | delegated | — | — | — | — | — | — | — | — | — | — | — | — |
 | Role and membership governance | ✓ | restricted | — | — | — | — | — | — | — | — | — | — | — | — |
-| Warehouse/location master data | ✓* | ✓ | read | read | read | — | read | read | read | read | read | read | read | read |
-| Item/category/UOM master data | ✓* | ✓ | read | read | read | — | read | read | read | read | read | read | read | read |
-| Lot/serial management | ✓* | restricted | read | read | read | — | read | — | manage | read | read | read | read | read |
-| Inventory/ledger read | ✓ | ✓ | ✓ | read | ✓ | — | ✓ | read | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Warehouse/location master data | ✓* | ✓ | read | read | read | read | — | read | read | read | read | read | read | read |
+| Item/category/UOM master data | ✓* | ✓ | read | read | read | read | — | read | read | read | read | read | read | read |
+| Lot/serial management | ✓* | restricted | read | read | read | read | — | — | manage | read | read | read | read | read |
+| Inventory/ledger read | ✓ | ✓ | ✓ | read | ✓ | ✓ | — | read | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Inbound receipt create/update | — | — | — | ✓ | — | — | — | — | — | — | — | — | — | — |
 | Inbound receipt post | — | — | — | — | ✓ | — | — | — | — | — | — | — | — | — |
 | Putaway create/start/confirm | — | — | assign | ✓ | — | — | — | — | — | — | — | — | — | — |
-| Outbound shipment create/update/allocate | — | — | — | — | — | — | ✓ | — | — | — | — | — | — | — |
-| Inventory reserve | — | — | — | — | — | — | ✓ | — | — | — | — | — | — | — |
-| Picking / packing execution | — | — | assign | — | — | — | ✓ | read | — | — | — | — | — | — |
-| Shipment release | — | — | — | — | — | ✓ | — | Outbound Controller | — | — | — | — | — | — |
+| Outbound shipment create/update/allocate | — | — | — | — | — | ✓ | — | — | — | — | — | — | — | — |
+| Inventory reserve | — | — | — | — | — | ✓ | — | — | — | — | — | — | — | — |
+| Picking / packing execution | — | — | assign | — | — | ✓ | — | read | — | — | — | — | — | — |
+| Shipment release | — | — | — | — | — | — | ✓ | — | — | — | — | — | — | — |
 | Shipping commit | — | — | — | — | — | — | — | ✓ | — | — | — | — | — | — |
 | Stock count prepare/record/submit | — | — | read/assign | — | — | — | — | — | ✓ | — | — | — | — | — |
 | Stock count approve | — | — | — | — | — | — | — | — | — | ✓ | — | — | — | — |
@@ -219,7 +219,7 @@ The matrix below is the initial default policy proposal. A check mark means the 
 | Transfer receive | — | — | read/assign | — | — | — | — | — | — | — | — | ✓ | — | — |
 | Replenishment execution | — | — | assign | — | — | — | — | — | ✓ | — | — | — | ✓ | — |
 | Replenishment reversal | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| Operational reporting | ✓ | ✓ | ✓ | scoped | scoped | — | scoped | scoped | ✓ | ✓ | scoped | scoped | scoped | ✓ |
+| Operational reporting | ✓ | ✓ | ✓ | scoped | scoped | scoped | — | scoped | ✓ | ✓ | scoped | scoped | scoped | ✓ |
 
 `✓*` means tenant governance may include master-data administration if the owner is intended to maintain the tenant's operating model; a stricter owner template can be read-only. `restricted` means only the exact permissions in the approved delegable set, never all G1 or M1 permissions by role name. `scoped` means the read permission may be included only when needed for the role's workflow.
 
