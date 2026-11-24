@@ -5,8 +5,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import com.zirocraft.zirologistics.wms.authorization.domain.WmsTenantPermissionPolicy;
+import com.zirocraft.zirologistics.wms.tenancy.domain.WmsTenantLocalePolicy;
 
-import java.time.ZoneId;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -148,10 +148,8 @@ public final class WmsPlatformBootstrapService {
         }
         String legalName = bounded(p.getTenantLegalName(), "tenant legal name", 2, 200);
         String displayName = bounded(p.getTenantDisplayName(), "tenant display name", 2, 150);
-        String timezone = bounded(p.getTimezone(), "timezone", 1, 60);
-        ZoneId.of(timezone);
-        String currency = required(p.getCurrency(), "currency").toUpperCase(Locale.ROOT);
-        if (!currency.matches("[A-Z]{3}")) throw new IllegalArgumentException("Invalid ISO currency code");
+        String timezone = WmsTenantLocalePolicy.normalizeTimezone(p.getTimezone());
+        String currency = WmsTenantLocalePolicy.normalizeCurrency(p.getCurrency());
         String email = required(p.getOperatorEmail(), "operator email").toLowerCase(Locale.ROOT);
         if (email.length() > 254 || !EMAIL.matcher(email).matches()) {
             throw new IllegalArgumentException("Invalid operator email");
