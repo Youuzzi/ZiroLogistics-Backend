@@ -189,7 +189,7 @@ class WmsRoleManagementServiceTest {
         assertThrows(IllegalArgumentException.class,
                 () -> service.createRole(principal(), "SYS_INBOUND_OPERATOR", "Spoofed System Role", null));
 
-        verify(jdbc, never()).update(contains("INSERT INTO roles"), any(), any(), any(), any(), any());
+        verify(jdbc, never()).update(contains("INSERT INTO roles"), any(Object[].class));
     }
 
     @Test
