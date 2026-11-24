@@ -3,6 +3,7 @@ package com.zirocraft.zirologistics.wms.tenancy.application;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.identity.application.WmsEmailNormalizer;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsTenantRoleTemplateProvisioner;
 import com.zirocraft.zirologistics.wms.authorization.domain.WmsTenantPermissionPolicy;
 import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
 import com.zirocraft.zirologistics.wms.tenancy.infrastructure.config.WmsTenantProvisioningProperties;
@@ -115,7 +116,9 @@ public class WmsTenantProvisioningService {
                     roleId, permissionId);
         }
 
-        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        WmsTenantRoleTemplateProvisioner.provision(jdbc, tenantId);
+
+        Map<String, Object> auditPayload = new LinkedHashMap<>();        Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("tenantCode", input.tenantCode());
         auditPayload.put("ownerUserPublicId", owner.publicId());
         auditPayload.put("ownerRolePublicId", rolePublicId);
