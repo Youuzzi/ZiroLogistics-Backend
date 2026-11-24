@@ -67,6 +67,15 @@ public final class WmsTenantPermissionPolicy {
             "WMS_INVENTORY_LEDGER_READ"
     );
 
+    private static final Set<String> SELF_ASSIGNMENT_RESTRICTED_SYSTEM_ROLES = Set.of(
+            "SYS_INBOUND_CONTROLLER",
+            "SYS_OUTBOUND_CONTROLLER",
+            "SYS_SHIPPING_CLERK",
+            "SYS_INVENTORY_APPROVER",
+            "SYS_TRANSFER_DISPATCHER",
+            "SYS_TRANSFER_RECEIVER"
+    );
+
     private static final Set<String> DELEGABLE_TO_CUSTOM_ROLES = Set.of(
             "WMS_ROLE_READ",
             "WMS_ROLE_CREATE",
@@ -223,6 +232,11 @@ public final class WmsTenantPermissionPolicy {
     public static Set<String> reservedSystemRoleCodes() {
         return SYSTEM_ROLE_TEMPLATES.stream().map(RoleTemplate::code)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
+    /** High-risk templates that a member cannot assign to their own membership. */
+    public static Set<String> selfAssignmentRestrictedSystemRoleCodes() {
+        return SELF_ASSIGNMENT_RESTRICTED_SYSTEM_ROLES;
     }
 
     /** Codes that a tenant role manager may expose in the delegable permission catalogue. */
