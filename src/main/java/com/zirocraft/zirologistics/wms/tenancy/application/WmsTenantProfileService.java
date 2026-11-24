@@ -16,13 +16,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.ZoneId;
-import java.util.Currency;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import com.zirocraft.zirologistics.wms.tenancy.domain.WmsTenantLocalePolicy;
 
 @Service
 @Profile("wms")
@@ -72,8 +70,8 @@ public class WmsTenantProfileService {
 
         String legalName = bounded(update.legalName(), "legal name", 2, 200);
         String displayName = bounded(update.displayName(), "display name", 2, 150);
-        String timezone = validateTimezone(update.timezone());
-        String currency = validateCurrency(update.defaultCurrency());
+        String timezone = WmsTenantLocalePolicy.normalizeTimezone(update.timezone());
+        String currency = WmsTenantLocalePolicy.normalizeCurrency(update.defaultCurrency());
 
         Map<String, Object> before = profileFields(tenant);
         boolean changed = !Objects.equals(tenant.getLegalName(), legalName)
@@ -181,28 +179,5 @@ public class WmsTenantProfileService {
         return normalized;
     }
 
-    private static String validateTimezone(String value) {
-        String timezone = bounded(value, "timezone", 1, 60);
-        try {
-            if (!ZoneId.getAvailableZoneIds().contains(timezone) && !"UTC".equals(timezone)) {
-                throw new IllegalArgumentException();
-            }
-            return timezone;
-        } catch (RuntimeException invalid) {
-            throw new IllegalArgumentException("Timezone is invalid");
-        }
-    }
 
-    private static String validateCurrency(String value) {
-        String code = bounded(value, "default currency", 3, 3).toUpperCase(Locale.ROOT);
-        try {
-            Currency currency = Currency.getInstance(code);
-            if (!currency.getCurrencyCode().equals(code)) {
-                throw new IllegalArgumentException("Currency is invalid");
-            }
-            return code;
-        } catch (RuntimeException invalid) {
-            throw new IllegalArgumentException("Default currency is invalid");
-        }
-    }
 }
