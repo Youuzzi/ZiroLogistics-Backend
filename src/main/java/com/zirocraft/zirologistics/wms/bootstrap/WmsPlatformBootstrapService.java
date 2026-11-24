@@ -4,6 +4,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsTenantRoleTemplateProvisioner;
 import com.zirocraft.zirologistics.wms.authorization.domain.WmsTenantPermissionPolicy;
 
 import java.time.ZoneId;
@@ -104,7 +105,9 @@ public final class WmsPlatformBootstrapService {
                         """, roleId, permissionId);
             }
 
-            int completed = jdbc.update("""
+            WmsTenantRoleTemplateProvisioner.provision(jdbc, tenantId);
+
+            int completed = jdbc.update("""            int completed = jdbc.update("""
                     UPDATE wms_platform_bootstrap_state
                     SET status = 'COMPLETED', operation_ref = ?, completed_at = UTC_TIMESTAMP(6)
                     WHERE id = 1 AND status = 'NOT_COMPLETED'
