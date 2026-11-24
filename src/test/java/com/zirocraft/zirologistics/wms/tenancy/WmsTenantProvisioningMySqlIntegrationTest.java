@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.wms.tenancy;
 
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
+import com.zirocraft.zirologistics.wms.authorization.domain.WmsTenantPermissionPolicy;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessDeniedException;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
@@ -79,68 +80,20 @@ class WmsTenantProvisioningMySqlIntegrationTest {
                 SELECT COUNT(*) FROM tenant_memberships
                 WHERE public_id = ? AND status = 'ACTIVE'
                 """, Integer.class, result.ownerMembershipPublicId()));
-        assertEquals(2, jdbc.queryForObject("""
-                SELECT COUNT(*)
+        java.util.List<String> actualOwnerPermissions = jdbc.queryForList("""
+                SELECT p.permission_code
                 FROM membership_roles mr
-                JOIN role_permissions rp ON rp.role_id = mr.role_id
+                JOIN roles r ON r.id = mr.role_id AND r.tenant_id = mr.tenant_id
+                JOIN role_permissions rp ON rp.role_id = r.id
                 JOIN permissions p ON p.id = rp.permission_id
                 WHERE mr.membership_id = (
                   SELECT id FROM tenant_memberships WHERE public_id = ?
                 )
-                AND p.permission_code IN (
-                  'WMS_IDENTITY_MEMBERSHIP_INVITE',
-                  'WMS_TENANT_PROFILE_UPDATE'
-                )
-                """, Integer.class, result.ownerMembershipPublicId()));
-        assertEquals(8, jdbc.queryForObject("""
-                SELECT COUNT(*)
-                FROM membership_roles mr
-                JOIN role_permissions rp ON rp.role_id = mr.role_id
-                JOIN permissions p ON p.id = rp.permission_id
-                WHERE mr.membership_id = (
-                  SELECT id FROM tenant_memberships WHERE public_id = ?
-                )
-                AND p.permission_code IN (
-                  'WMS_ROLE_READ', 'WMS_ROLE_CREATE', 'WMS_ROLE_UPDATE',
-                  'WMS_ROLE_DEACTIVATE', 'WMS_PERMISSION_CATALOG_READ',
-                  'WMS_ROLE_PERMISSION_MANAGE', 'WMS_MEMBERSHIP_ROLE_READ',
-                  'WMS_MEMBERSHIP_ROLE_MANAGE'
-                )
-                """, Integer.class, result.ownerMembershipPublicId()));
-        assertEquals(8, jdbc.queryForObject("""
-                SELECT COUNT(*)
-                FROM membership_roles mr
-                JOIN role_permissions rp ON rp.role_id = mr.role_id
-                JOIN permissions p ON p.id = rp.permission_id
-                WHERE mr.membership_id = (
-                  SELECT id FROM tenant_memberships WHERE public_id = ?
-                )
-                AND p.permission_code IN (
-                  'WMS_WAREHOUSE_READ', 'WMS_WAREHOUSE_CREATE', 'WMS_WAREHOUSE_UPDATE',
-                  'WMS_WAREHOUSE_STATUS_MANAGE', 'WMS_LOCATION_READ', 'WMS_LOCATION_CREATE',
-                  'WMS_LOCATION_UPDATE', 'WMS_LOCATION_STATUS_MANAGE'
-                )
-                """, Integer.class, result.ownerMembershipPublicId()));
-        assertEquals(1, jdbc.queryForObject("""
-                SELECT COUNT(*)
-                FROM membership_roles mr
-                JOIN role_permissions rp ON rp.role_id = mr.role_id
-                JOIN permissions p ON p.id = rp.permission_id
-                WHERE mr.membership_id = (
-                  SELECT id FROM tenant_memberships WHERE public_id = ?
-                )
-                AND p.permission_code = 'WMS_INVENTORY_POST'
-                """, Integer.class, result.ownerMembershipPublicId()));
-        assertEquals(1, jdbc.queryForObject("""
-                SELECT COUNT(*)
-                FROM membership_roles mr
-                JOIN role_permissions rp ON rp.role_id = mr.role_id
-                JOIN permissions p ON p.id = rp.permission_id
-                WHERE mr.membership_id = (
-                  SELECT id FROM tenant_memberships WHERE public_id = ?
-                )
-                AND p.permission_code = 'WMS_OPERATIONAL_REPORT_READ'
-                """, Integer.class, result.ownerMembershipPublicId()));
+                ORDER BY p.permission_code
+                """, String.class, result.ownerMembershipPublicId());
+        assertEquals(WmsTenantPermissionPolicy.tenantOwnerTemplate().stream().sorted().toList(),
+                actualOwnerPermissions);
+        assertFalse(actualOwnerPermissions.contains("WMS_INVENTORY_POST"));
         assertEquals(1, jdbc.queryForObject("""
                 SELECT COUNT(*) FROM tenant_audit_events
                 WHERE operation_ref = ? AND event_type = 'TENANT_PROVISIONED'
