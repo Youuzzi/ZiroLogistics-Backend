@@ -1,8 +1,8 @@
 # Tenant Locale, Timezone, Currency, and Temporal Data Policy Audit
 
-**Status:** Source audit and policy baseline; implementation reconciliation remains open.  
-**Reviewed commit:** `bcd21a8efee2bf44d529c3cec8334b39e8477c28`  
-**Scope:** Tenant timezone/currency validation, WMS temporal API fields, persistence mappings, SQL timestamp generation, and quantity precision visible in representative workflows.  
+**Status:** Source audit and policy baseline; implementation reconciliation remains open.
+**Reviewed commit:** `bcd21a8efee2bf44d529c3cec8334b39e8477c28`
+**Scope:** Tenant timezone/currency validation, WMS temporal API fields, persistence mappings, SQL timestamp generation, and quantity precision visible in representative workflows.
 **Assurance:** This is a targeted source audit, not a complete database-wide temporal or financial certification.
 
 ## 1. Executive findings
