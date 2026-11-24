@@ -116,7 +116,16 @@ Proposed grants:
 - Required item, inventory, warehouse/location, lot and serial reads.
 - No `WMS_OUTBOUND_SHIPMENT_RELEASE` or `WMS_SHIPPING_SHIP` by default.
 
-### 4.7 Shipping Clerk
+### 4.7 Outbound Controller
+
+**Purpose:** Independently release allocated outbound shipments before picking and final shipping.
+
+Proposed grants:
+- Outbound shipment read and release.
+- Packing read and inventory/ledger read for release validation.
+- No shipment preparation, inventory reserve, picking, packing mutation, or final shipping commit.
+
+### 4.8 Shipping Clerk
 
 **Purpose:** Perform the final shipping handoff after packing is complete.
 
@@ -125,7 +134,7 @@ Proposed grants:
 - Outbound shipment read and packing read as needed for dispatch validation.
 - No shipment creation, allocation, inventory adjustment, or posting rights.
 
-### 4.8 Inventory Controller
+### 4.9 Inventory Controller
 
 **Purpose:** Control stock integrity, stock counts, and adjustment submissions.
 
@@ -136,7 +145,7 @@ Proposed grants:
 - Replenishment read, rule management, task create/release/assign/start/confirm/cancel.
 - No stock-count approve, adjustment approve/reject/post, or replenishment confirmation reverse by default.
 
-### 4.9 Inventory Approver
+### 4.10 Inventory Approver
 
 **Purpose:** Independently review and decide inventory variance and adjustment requests.
 
@@ -147,7 +156,7 @@ Proposed grants:
 - Replenishment read only unless a separately reviewed approval workflow is added.
 - Cannot approve, reject, or post an operation submitted by the same actor. The check must use persisted actor membership/user identity, not a client-supplied reference.
 
-### 4.10 Transfer Dispatcher and Transfer Receiver
+### 4.11 Transfer Dispatcher and Transfer Receiver
 
 Split transfer duties into two templates where tenant size and operating model justify it.
 
@@ -163,7 +172,7 @@ Split transfer duties into two templates where tenant size and operating model j
 
 If a small tenant intentionally combines dispatch and receive duties, that must be an explicit tenant policy decision and remain visible in audit evidence; it must not happen because the default role grants both sides automatically.
 
-### 4.11 Replenishment Operator
+### 4.12 Replenishment Operator
 
 **Purpose:** Execute replenishment work without controlling reversal of completed inventory movement.
 
@@ -172,7 +181,7 @@ Proposed grants:
 - Inventory, warehouse/location, item and lot/serial reads as required.
 - No `WMS_REPLENISHMENT_CONFIRMATION_REVERSE` by default.
 
-### 4.12 Reporting / Auditor
+### 4.13 Reporting / Auditor
 
 **Purpose:** Read operational performance and permitted evidence without mutation rights.
 
@@ -200,7 +209,7 @@ The matrix below is the initial default policy proposal. A check mark means the 
 | Outbound shipment create/update/allocate | — | — | — | — | — | ✓ | — | — | — | — | — | — | — |
 | Inventory reserve | — | — | — | — | — | ✓ | — | — | — | — | — | — | — |
 | Picking / packing execution | — | — | assign | — | — | ✓ | read | — | — | — | — | — | — |
-| Shipment release | — | — | policy-specific | — | — | — | — | — | — | — | — | — | — |
+| Shipment release | — | — | — | — | — | — | Outbound Controller | — | — | — | — | — | — |
 | Shipping commit | — | — | — | — | — | — | ✓ | — | — | — | — | — | — |
 | Stock count prepare/record/submit | — | — | read/assign | — | — | — | — | ✓ | — | — | — | — | — |
 | Stock count approve | — | — | — | — | — | — | — | — | ✓ | — | — | — | — |
@@ -214,7 +223,7 @@ The matrix below is the initial default policy proposal. A check mark means the 
 
 `✓*` means tenant governance may include master-data administration if the owner is intended to maintain the tenant's operating model; a stricter owner template can be read-only. `restricted` means only the exact permissions in the approved delegable set, never all G1 or M1 permissions by role name. `scoped` means the read permission may be included only when needed for the role's workflow.
 
-The matrix is intentionally conservative for C1 and A1. Shipment release and other operational commitment actions must receive a dedicated policy review before default grants are finalized.
+The matrix is intentionally conservative for C1 and A1. Shipment release is assigned to the separate Outbound Controller template. The shared `WMS_INVENTORY_POST` permission is a technical posting gate used by multiple workflow services; it is assigned only to operational templates that must commit inventory movements and is always paired with the workflow-specific permission. It is not granted to Tenant Owner, Tenant Administrator, Warehouse Supervisor, or Reporting Auditor.
 
 ## 6. Canonical policy and delegation contract
 
@@ -265,7 +274,7 @@ A permission split alone is not sufficient. The service must compare the persist
 
 ## 8. Bootstrap and provisioning parity
 
-The exact same canonical policy must supply role grants for:
+The exact same canonical policy must supply role grants and protected role-template definitions for:
 - first-install bootstrap;
 - repeatable tenant provisioning;
 - any future tenant migration/provisioning repair command;
@@ -284,7 +293,7 @@ Bootstrap and provisioning must produce the same initial owner role permissions 
 - No platform-only permission is exposed by tenant WMS APIs.
 
 ### Provisioning parity tests
-- Fresh-install bootstrap and repeatable provisioning produce identical owner grant sets.
+- Fresh-install bootstrap and repeatable provisioning produce identical Owner grant sets and exact protected system role templates.
 - Provisioning a tenant after all migrations have run still assigns the complete approved role template.
 - Re-running provisioning is idempotent and does not widen or erase customized tenant roles.
 
@@ -293,7 +302,7 @@ Bootstrap and provisioning must produce the same initial owner role permissions 
 - A caller cannot grant a non-delegable permission to a custom role.
 - A tenant cannot assign another tenant's role or membership.
 - Inactive users, memberships, tenants, and roles deny access.
-- Protected system roles cannot be modified through custom-role APIs.
+- Protected system roles cannot be created under reserved custom role codes or modified through custom-role APIs.
 - Last-owner removal, self-escalation, and self-approval are denied atomically.
 
 ### Workflow tests
