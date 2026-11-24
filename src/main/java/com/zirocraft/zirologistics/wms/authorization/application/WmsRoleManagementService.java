@@ -72,6 +72,9 @@ public class WmsRoleManagementService {
         Access access = access(principal, "WMS_ROLE_CREATE");
         lockTenant(access.tenantId());
         String normalizedCode = normalizeCode(code);
+        if (WmsTenantPermissionPolicy.reservedSystemRoleCodes().contains(normalizedCode)) {
+            throw new IllegalArgumentException("Role code is reserved for a system role template");
+        }
         String normalizedName = bounded(name, "role name", 2, 120);
         String normalizedDescription = description == null ? null : bounded(description, "description", 0, 255);
         if (jdbc.queryForObject("SELECT COUNT(*) FROM roles WHERE tenant_id = ? AND role_code = ?",
