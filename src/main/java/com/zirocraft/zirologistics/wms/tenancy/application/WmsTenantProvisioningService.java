@@ -118,7 +118,7 @@ public class WmsTenantProvisioningService {
 
         WmsTenantRoleTemplateProvisioner.provision(jdbc, tenantId);
 
-        Map<String, Object> auditPayload = new LinkedHashMap<>();        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("tenantCode", input.tenantCode());
         auditPayload.put("ownerUserPublicId", owner.publicId());
         auditPayload.put("ownerRolePublicId", rolePublicId);
