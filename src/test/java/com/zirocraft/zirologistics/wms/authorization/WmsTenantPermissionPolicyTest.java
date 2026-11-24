@@ -50,6 +50,7 @@ class WmsTenantPermissionPolicyTest {
         assertTrue(WmsTenantPermissionPolicy.reservedSystemRoleCodes().contains("SYS_INVENTORY_APPROVER"));
         assertFalse(WmsTenantPermissionPolicy.reservedSystemRoleCodes().contains("TENANT_OWNER"));
         assertTrue(templates.stream().allMatch(template -> !template.permissionCodes().isEmpty()));
+        assertTrue(templates.stream().noneMatch(template -> template.permissionCodes().contains("WMS_INVENTORY_POST")));
     }
 
     @Test
