@@ -7,7 +7,7 @@
 
 ## 1. Executive findings
 
-1. Tenant profile update and repeatable tenant provisioning both restrict timezone values to Java's available zone IDs (with explicit `UTC`) and validate currency through `java.util.Currency`.
+1. Tenant profile update and repeatable tenant provisioning both restrict timezone values to Java's available `ZoneId` IDs (with explicit `UTC`) and validate currency through `java.util.Currency`.
 2. First-install platform bootstrap follows a weaker validation path: `ZoneId.of()` accepts fixed offsets such as `+07:00`, which are outside the region-ID policy used by the other tenant entry points; currency is checked only for three uppercase letters, not for a valid ISO-4217 code.
 3. WMS business scheduling fields such as inbound `expectedAt`, outbound `scheduledAt`, and inter-warehouse transfer `scheduledAt` are represented as `LocalDateTime`. This type contains neither an offset nor a timezone. The API reference itself records that business-local interpretation remains unresolved.
 4. The WMS schema uses MySQL `DATETIME(6)` for timestamps. Source code writes some lifecycle timestamps using `UTC_TIMESTAMP(6)`, while V1 defaults many `created_at` / `updated_at` fields with `CURRENT_TIMESTAMP(6)`. Hibernate is configured with `hibernate.jdbc.time_zone=UTC`, but that property alone does not prove every SQL session's MySQL timezone or every direct SQL timestamp expression is UTC.
@@ -30,7 +30,8 @@
 - `WmsOperationalReportingService`: report generation timestamp is selected with `UTC_TIMESTAMP(6)` and exposed as `generatedAtUtc`.
 
 ### Persistence and runtime
-- `application-wms.properties`: Hibernate JDBC timezone is configured as UTC.
+- `application-wms.properties`: Hibernate JDBC timezone is configured as UTC; its datasource URL is supplied through `WMS_DB_URL`.
+- `compose.yml`: the current WMS JDBC URL is `jdbc:mysql://mysql:3306/zirologistics_wms` and does not explicitly set a MySQL connection/session timezone parameter. No MySQL server timezone override is declared in the reviewed Compose service.
 - `V1__create_tenant_wms_schema.sql`: numerous temporal columns use `DATETIME(6)`; many creation/update columns default to `CURRENT_TIMESTAMP(6)`; business dates such as lot manufacture/received/expiry use SQL `DATE`.
 - Operational services use explicit `UTC_TIMESTAMP(6)` for selected lifecycle timestamps, including inbound receipt completion/posting and transfer dispatch/receipt.
 
@@ -44,7 +45,7 @@
 These are recommendations for a consistent contract. They are not claims that every rule is already implemented.
 
 ### 3.1 Tenant timezone
-- Persist a canonical IANA region identifier (for example `Asia/Jakarta`) for tenant business timezone.
+- Persist a canonical canonical IANA/TZDB region identifier (for example `Asia/Jakarta`) for tenant business timezone.
 - Permit the explicit `UTC` identifier as a universal special case.
 - Reject fixed offsets (`+07:00`), abbreviations, and ambiguous short names as tenant timezone configuration.
 - Apply the same validator to bootstrap, provisioning, and tenant profile update. Do not allow entry-point-specific timezone semantics.
@@ -66,7 +67,7 @@ Do not treat an unqualified `LocalDateTime` as a globally comparable instant. AP
 
 ### 3.3 UTC persistence contract
 - UTC is the canonical storage/comparison basis for all event instants.
-- Configure and verify MySQL session timezone as UTC for every runtime connection and migration/test environment; do not rely solely on Hibernate's JDBC timezone property.
+- Configure and verify MySQL session timezone as UTC for every runtime connection and migration/test environment; the reviewed Compose JDBC URL has no explicit connection-timezone option, so do not rely solely on Hibernate's JDBC timezone property.
 - Prefer explicit UTC timestamp expressions or application-supplied UTC instants consistently. Avoid mixing session-dependent `CURRENT_TIMESTAMP` defaults with explicit `UTC_TIMESTAMP` unless the session timezone is guaranteed and tested as UTC.
 - Keep microsecond precision (`DATETIME(6)`) consistent across JDBC mappings, JSON serialization, and tests.
 - Add integration tests that insert/read timestamps through Hibernate, JdbcTemplate, database defaults, and direct SQL, asserting the same UTC instant.
@@ -117,8 +118,8 @@ Do not treat an unqualified `LocalDateTime` as a globally comparable instant. AP
 
 | Area | Status |
 |---|---|
-| Tenant profile timezone validation | Verified: IANA region IDs plus UTC |
-| Tenant provisioning timezone validation | Verified: IANA region IDs plus UTC |
+| Tenant profile timezone validation | Verified: Java `ZoneId` available IDs plus UTC |
+| Tenant provisioning timezone validation | Verified: Java `ZoneId` available IDs plus UTC |
 | Bootstrap timezone parity | Gap identified |
 | Tenant profile/provisioning currency validation | Verified via Java Currency |
 | Bootstrap currency parity | Gap identified |
