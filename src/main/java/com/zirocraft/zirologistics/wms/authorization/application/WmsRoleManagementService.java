@@ -221,6 +221,18 @@ public class WmsRoleManagementService {
         Long membershipId = activeMembership(access.tenantId(), membershipPublicId);
         Map<String, Object> role = requireRole(access.tenantId(), rolePublicId);
         if (!"ACTIVE".equals(role.get("status"))) throw new IllegalArgumentException("Role is not active");
+        String roleCode = String.valueOf(role.get("role_code"));
+        if (WmsTenantPermissionPolicy.selfAssignmentRestrictedSystemRoleCodes().contains(roleCode)) {
+            String targetUserPublicId = jdbc.queryForObject("""
+                    SELECT u.public_id
+                    FROM tenant_memberships m
+                    JOIN users u ON u.id = m.user_id AND u.status = 'ACTIVE'
+                    WHERE m.id = ? AND m.tenant_id = ? AND m.status = 'ACTIVE'
+                    """, String.class, membershipId, access.tenantId());
+            if (Objects.equals(principal.userPublicId(), targetUserPublicId)) {
+                throw new AccessDeniedException("High-risk system roles cannot be assigned to the acting member");
+            }
+        }
         Integer existing = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM membership_roles
                 WHERE tenant_id = ? AND membership_id = ? AND role_id = ?
