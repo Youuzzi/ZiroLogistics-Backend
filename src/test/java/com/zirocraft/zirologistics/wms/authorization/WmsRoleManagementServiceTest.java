@@ -180,6 +180,19 @@ class WmsRoleManagementServiceTest {
     }
 
     @Test
+    void rejectsReservedSystemRoleCodesWhenCreatingCustomRoles() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_ROLE_CREATE")));
+        when(jdbc.queryForList(contains("SELECT id FROM tenants"), eq(Long.class), eq(10L)))
+                .thenReturn(List.of(10L));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.createRole(principal(), "SYS_INBOUND_OPERATOR", "Spoofed System Role", null));
+
+        verify(jdbc, never()).update(contains("INSERT INTO roles"), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void cannotDelegatePermissionThatCurrentActorDoesNotPossess() {
         when(accessService.resolve("user-public", "membership-public"))
                 .thenReturn(access(Set.of("WMS_ROLE_PERMISSION_MANAGE", "WMS_ROLE_READ")));
