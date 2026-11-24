@@ -321,7 +321,8 @@ class WmsReplenishmentConcurrencyMySqlIntegrationTest {
                 INSERT INTO role_permissions (role_id, permission_id)
                 SELECT ?, id FROM permissions
                 WHERE permission_code IN (
-                  'WMS_INVENTORY_POST',\n                  'WMS_REPLENISHMENT_TASK_CREATE',
+                  'WMS_INVENTORY_POST',
+                  'WMS_REPLENISHMENT_TASK_CREATE',
                   'WMS_REPLENISHMENT_TASK_RELEASE','WMS_REPLENISHMENT_TASK_ASSIGN',
                   'WMS_REPLENISHMENT_TASK_START','WMS_REPLENISHMENT_TASK_CONFIRM',
                   'WMS_REPLENISHMENT_CONFIRMATION_REVERSE'
