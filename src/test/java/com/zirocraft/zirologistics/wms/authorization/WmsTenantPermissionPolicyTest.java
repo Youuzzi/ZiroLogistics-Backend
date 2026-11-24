@@ -54,6 +54,20 @@ class WmsTenantPermissionPolicyTest {
     }
 
     @Test
+    void restrictsSelfAssignmentForIndependentCommitAndApprovalRoles() {
+        var restricted = WmsTenantPermissionPolicy.selfAssignmentRestrictedSystemRoleCodes();
+
+        assertTrue(restricted.contains("SYS_INBOUND_CONTROLLER"));
+        assertTrue(restricted.contains("SYS_OUTBOUND_CONTROLLER"));
+        assertTrue(restricted.contains("SYS_SHIPPING_CLERK"));
+        assertTrue(restricted.contains("SYS_INVENTORY_APPROVER"));
+        assertTrue(restricted.contains("SYS_TRANSFER_DISPATCHER"));
+        assertTrue(restricted.contains("SYS_TRANSFER_RECEIVER"));
+        assertFalse(restricted.contains("SYS_INBOUND_OPERATOR"));
+        assertFalse(restricted.contains("SYS_REPORTING_AUDITOR"));
+    }
+
+    @Test
     void policyCollectionsCannotBeMutatedByCallers() {
         assertThrows(UnsupportedOperationException.class,
                 () -> WmsTenantPermissionPolicy.tenantOwnerTemplate().add("WMS_INVENTORY_POST"));
