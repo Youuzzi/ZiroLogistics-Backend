@@ -202,7 +202,7 @@ class WmsRoleManagementServiceTest {
                 eq(10L), eq("membership-public"))).thenReturn(List.of(30L));
         when(jdbc.queryForList(contains("SELECT id, public_id, role_code"), eq(10L), eq("role-public")))
                 .thenReturn(List.of(Map.of("id", 55L, "role_code", "SYS_INVENTORY_APPROVER", "status", "ACTIVE")));
-        when(jdbc.queryForObject(contains("SELECT u.public_id FROM tenant_memberships"), eq(String.class),
+        when(jdbc.queryForObject(contains("SELECT u.public_id"), eq(String.class),
                 eq(30L), eq(10L))).thenReturn("user-public");
 
         assertThrows(AccessDeniedException.class,
