@@ -70,7 +70,7 @@ The current `WmsPlatformBootstrapService` creates:
 
 It does not create a separate platform-administrator identity, platform role, platform permission catalogue, or platform authentication boundary. Its class documentation explicitly states that it creates a tenant owner, not a global superuser.
 
-The tenant lifecycle and provisioning flows can record an actor type of `PLATFORM_OPERATOR` and an `operator_reference` string in tenant audit events. This is audit attribution, not proof of an authenticated platform-operator identity or authorization model.
+The tenant lifecycle and provisioning flows can record an actor type of `PLATFORM_OPERATOR` and an `operator_reference` string in tenant audit events. Tenant lifecycle transitions are currently exposed through an explicitly enabled non-web command runner, not a public HTTP endpoint. This is a useful operational boundary, but the operator reference remains a supplied audit label rather than a verified platform-operator identity with persisted roles, authentication, and authorization.
 
 The bootstrap documentation currently says the operation atomically creates a "platform operator" as well as the tenant owner. That statement does not match the inspected bootstrap implementation and must be corrected or the implementation must be deliberately extended after the platform-operator architecture is approved.
 
@@ -94,11 +94,11 @@ Therefore the owner permission set must be defined once as an explicit, reviewed
 - existing-tenant upgrade/backfill behavior where required;
 - the documented role-permission matrix and tests.
 
-The current divergence is a high-priority correctness gap to resolve before first-tenant bootstrap. Do not simply copy the provisioning list into bootstrap: the final list must first be reviewed for operational risk and separation of duties.
+The current divergence is a high-priority correctness gap to resolve before first-tenant bootstrap. Do not simply copy the provisioning list into bootstrap: the final list must first be reviewed for operational risk and separation of duties. In addition, the provisioning allowlist does not include most workflow-specific permissions introduced by later migrations (for example inbound, putaway, outbound, picking, packing, shipping, transfer, stock count, adjustment, and replenishment actions). Those migration backfills apply only to owner roles already present when the migration runs; newly provisioned tenant roles are created after migrations have completed.
 
 ### 4.4 Role management has a narrower delegation allowlist
 
-`WmsRoleManagementService` has a server-side `DELEGABLE_PERMISSIONS` set. It is narrower than the total permission catalogue and excludes sensitive operational actions. This is directionally appropriate for preventing privilege escalation, but the delegation policy needs to be documented and tested against the final role matrix.
+`WmsRoleManagementService` has a server-side `DELEGABLE_PERMISSIONS` set. It is narrower than the total permission catalogue and excludes sensitive operational actions. This is directionally appropriate for preventing privilege escalation, but the delegation policy needs to be documented and tested against the final role matrix. The current permission-catalogue query and delegable set expose only a small subset of the complete WMS permission catalogue. Consequently, a newly provisioned tenant cannot currently use the role-management API to delegate many operational workflow permissions to custom roles. This is a functional RBAC gap, not merely a documentation mismatch.
 
 The design document `WMS_ROLE_PERMISSION_MANAGEMENT_DESIGN.md` still labels several role-management permission codes as proposals that are not yet seeded. Migrations and source code show that role-management permissions and management service functionality have since been implemented. The document status and sections need to be updated to distinguish implemented behavior from remaining policy decisions.
 
@@ -144,7 +144,8 @@ This confirms the recorded workflow run for that commit. It does not certify cha
 | Priority | Finding | Required action |
 |---|---|---|
 | Critical before bootstrap | No distinct authenticated platform-administrator identity is created by bootstrap; operator references are audit labels | Design control-plane identity, authentication, permissions, break-glass, and audit boundary |
-| Critical before bootstrap | Bootstrap owner gets two permissions while repeatable provisioning gets a different larger set | Approve a canonical owner baseline and apply it consistently with additive migration/tests |
+| Critical before bootstrap | Bootstrap owner gets two permissions while repeatable provisioning gets a different larger set; new tenant roles also miss many workflow permissions added by migrations | Approve a canonical owner baseline and operational role model, then apply it consistently with additive migration/tests |
+| Critical for tenant operations | Role catalogue/delegation API exposes only a subset of WMS permissions, preventing tenants from assigning many workflow capabilities to custom roles | Complete permission catalogue and delegation policy, including risk tiers and separation-of-duties rules |
 | High | Tenant organization and bootstrap docs conflict with current provisioning/bootstrap behavior | Correct status and claims after implementation contract is approved |
 | High | Role-management design still describes implemented permissions as proposals | Update design status, actual API/permission contracts, delegation policy, and test evidence |
 | High | Tenant isolation is covered in several tests but not yet exhaustively certified across all modules | Perform controller-to-query and negative cross-tenant audit |
@@ -168,6 +169,7 @@ Primary repository evidence:
 - `src/main/java/com/zirocraft/zirologistics/wms/tenancy/application/WmsTenantProvisioningService.java`
 - `src/main/java/com/zirocraft/zirologistics/wms/tenancy/application/WmsTenantProfileService.java`
 - `src/main/java/com/zirocraft/zirologistics/wms/tenancy/application/WmsTenantLifecycleService.java`
+- `src/main/java/com/zirocraft/zirologistics/wms/tenancy/infrastructure/config/WmsTenantLifecycleCommandRunner.java`
 - `src/main/java/com/zirocraft/zirologistics/wms/authorization/application/WmsMembershipAccessService.java`
 - `src/main/java/com/zirocraft/zirologistics/wms/authorization/application/WmsRoleManagementService.java`
 - `src/main/resources/db/wms-migration/V1__create_tenant_wms_schema.sql`
