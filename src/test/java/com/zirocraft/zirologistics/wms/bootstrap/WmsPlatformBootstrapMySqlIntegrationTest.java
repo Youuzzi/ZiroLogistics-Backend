@@ -187,6 +187,19 @@ class WmsPlatformBootstrapMySqlIntegrationTest {
                 "SELECT status FROM wms_platform_bootstrap_state WHERE id=1", String.class));
     }
 
+    @Test
+    void rejectsFixedOffsetTimezoneAndUnknownCurrencyBeforeAnyDatabaseWrite() {
+        properties.setTimezone("+07:00");
+        assertThrows(IllegalArgumentException.class, () -> service.bootstrap(properties));
+        assertEquals(0, count("tenants"));
+
+        properties.setTimezone("Asia/Jakarta");
+        properties.setCurrency("ZZZ");
+        assertThrows(IllegalArgumentException.class, () -> service.bootstrap(properties));
+        assertEquals(0, count("users"));
+        assertEquals(0, count("tenants"));
+    }
+
     private boolean attemptAfter(CountDownLatch start) throws Exception {
         start.await();
         try {
