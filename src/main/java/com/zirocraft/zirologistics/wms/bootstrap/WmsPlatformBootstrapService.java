@@ -4,10 +4,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import com.zirocraft.zirologistics.wms.authorization.domain.WmsTenantPermissionPolicy;
 
 import java.time.ZoneId;
 import java.util.Locale;
-import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -18,10 +18,6 @@ import java.util.regex.Pattern;
 public final class WmsPlatformBootstrapService {
     private static final Pattern TENANT_CODE = Pattern.compile("[A-Z0-9][A-Z0-9_-]{2,63}");
     private static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
-    private static final List<String> OWNER_PERMISSIONS = List.of(
-            "WMS_IDENTITY_MEMBERSHIP_INVITE",
-            "WMS_TENANT_PROFILE_UPDATE");
-
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transaction;
     private final PasswordEncoder passwordEncoder;
@@ -98,7 +94,7 @@ public final class WmsPlatformBootstrapService {
                     INSERT INTO membership_roles (tenant_id, membership_id, role_id)
                     VALUES (?, ?, ?)
                     """, tenantId, membershipId, roleId);
-            for (String permissionCode : OWNER_PERMISSIONS) {
+            for (String permissionCode : WmsTenantPermissionPolicy.tenantOwnerTemplate()) {
                 Long permissionId = jdbc.queryForObject(
                         "SELECT id FROM permissions WHERE permission_code = ?",
                         Long.class, permissionCode);
