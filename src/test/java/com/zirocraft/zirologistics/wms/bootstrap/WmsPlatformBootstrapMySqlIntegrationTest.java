@@ -118,6 +118,29 @@ class WmsPlatformBootstrapMySqlIntegrationTest {
         assertEquals(WmsTenantPermissionPolicy.tenantOwnerTemplate().stream().sorted().toList(),
                 actualOwnerPermissions);
         assertFalse(actualOwnerPermissions.contains("WMS_INVENTORY_POST"));
+
+        java.util.List<String> actualSystemRoleCodes = jdbc.queryForList("""
+                SELECT role_code FROM roles
+                WHERE tenant_id = (SELECT id FROM tenants WHERE public_id = ?)
+                  AND is_system_role = 1 AND role_code <> 'TENANT_OWNER'
+                ORDER BY role_code
+                """, String.class, result.tenantPublicId());
+        assertEquals(WmsTenantPermissionPolicy.systemRoleTemplates().stream()
+                .map(WmsTenantPermissionPolicy.RoleTemplate::code).sorted().toList(), actualSystemRoleCodes);
+        for (WmsTenantPermissionPolicy.RoleTemplate template
+                : WmsTenantPermissionPolicy.systemRoleTemplates()) {
+            java.util.List<String> actualTemplatePermissions = jdbc.queryForList("""
+                    SELECT p.permission_code
+                    FROM roles r
+                    JOIN role_permissions rp ON rp.role_id = r.id
+                    JOIN permissions p ON p.id = rp.permission_id
+                    WHERE r.tenant_id = (SELECT id FROM tenants WHERE public_id = ?)
+                      AND r.role_code = ? AND r.is_system_role = 1
+                    ORDER BY p.permission_code
+                    """, String.class, result.tenantPublicId(), template.code());
+            assertEquals(template.permissionCodes().stream().sorted().toList(), actualTemplatePermissions,
+                    "Persisted grants differ for system role " + template.code());
+        }
         assertEquals(1, jdbc.queryForObject("""
                 SELECT COUNT(*) FROM users
                 WHERE public_id=? AND status='ACTIVE' AND email_verified_at IS NOT NULL
