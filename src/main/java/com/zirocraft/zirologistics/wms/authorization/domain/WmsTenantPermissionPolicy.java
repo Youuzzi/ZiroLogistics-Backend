@@ -44,6 +44,29 @@ public final class WmsTenantPermissionPolicy {
             "WMS_OPERATIONAL_REPORT_READ"
     );
 
+    private static final Set<String> CATALOGUE_VISIBLE_TO_TENANT_ROLE_MANAGERS = Set.of(
+            "WMS_ROLE_READ",
+            "WMS_ROLE_CREATE",
+            "WMS_ROLE_UPDATE",
+            "WMS_ROLE_DEACTIVATE",
+            "WMS_PERMISSION_CATALOG_READ",
+            "WMS_MEMBERSHIP_ROLE_READ",
+            "WMS_WAREHOUSE_READ",
+            "WMS_WAREHOUSE_CREATE",
+            "WMS_WAREHOUSE_UPDATE",
+            "WMS_LOCATION_READ",
+            "WMS_LOCATION_CREATE",
+            "WMS_LOCATION_UPDATE",
+            "WMS_ITEM_READ",
+            "WMS_ITEM_CREATE",
+            "WMS_ITEM_UPDATE",
+            "WMS_ITEM_CATEGORY_READ",
+            "WMS_ITEM_CATEGORY_MANAGE",
+            "WMS_UOM_CATALOG_READ",
+            "WMS_INVENTORY_READ",
+            "WMS_INVENTORY_LEDGER_READ"
+    );
+
     private static final Set<String> DELEGABLE_TO_CUSTOM_ROLES = Set.of(
             "WMS_ROLE_READ",
             "WMS_ROLE_CREATE",
@@ -77,7 +100,7 @@ public final class WmsTenantPermissionPolicy {
 
     /** Codes that a tenant role manager may expose in the delegable permission catalogue. */
     public static Set<String> catalogueVisiblePermissionCodes() {
-        return DELEGABLE_TO_CUSTOM_ROLES;
+        return CATALOGUE_VISIBLE_TO_TENANT_ROLE_MANAGERS;
     }
 
     /** Codes eligible for assignment to custom tenant roles, still bounded by caller authority. */
