@@ -78,8 +78,8 @@ CROSS JOIN (
   SELECT 'SYS_REPORTING_AUDITOR' AS role_code, 'Reporting Auditor' AS role_name, 'Read-only access to tenant operational reports and workflow evidence.' AS description
 ) templates;
 
--- The generic inventory-post capability is paired with workflow-specific permissions on
--- movement-performing roles. Approval and execution remain assigned to separate templates.
+-- Workflow services use their own persisted operation permissions for internal stock posting.
+-- The generic WMS_INVENTORY_POST permission remains reserved for direct inventory-post API access.
 INSERT IGNORE INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r
@@ -206,13 +206,9 @@ JOIN (
   UNION ALL
   SELECT 'SYS_INBOUND_OPERATOR' AS role_code, 'WMS_INVENTORY_READ' AS permission_code
   UNION ALL
-  SELECT 'SYS_INBOUND_OPERATOR' AS role_code, 'WMS_INVENTORY_POST' AS permission_code
-  UNION ALL
   SELECT 'SYS_INBOUND_CONTROLLER' AS role_code, 'WMS_INBOUND_RECEIPT_READ' AS permission_code
   UNION ALL
   SELECT 'SYS_INBOUND_CONTROLLER' AS role_code, 'WMS_INBOUND_RECEIPT_POST' AS permission_code
-  UNION ALL
-  SELECT 'SYS_INBOUND_CONTROLLER' AS role_code, 'WMS_INVENTORY_POST' AS permission_code
   UNION ALL
   SELECT 'SYS_INBOUND_CONTROLLER' AS role_code, 'WMS_INVENTORY_READ' AS permission_code
   UNION ALL
@@ -237,8 +233,6 @@ JOIN (
   SELECT 'SYS_OUTBOUND_OPERATOR' AS role_code, 'WMS_OUTBOUND_SHIPMENT_ALLOCATE' AS permission_code
   UNION ALL
   SELECT 'SYS_OUTBOUND_OPERATOR' AS role_code, 'WMS_INVENTORY_RESERVE' AS permission_code
-  UNION ALL
-  SELECT 'SYS_OUTBOUND_OPERATOR' AS role_code, 'WMS_INVENTORY_POST' AS permission_code
   UNION ALL
   SELECT 'SYS_OUTBOUND_OPERATOR' AS role_code, 'WMS_PICKING_READ' AS permission_code
   UNION ALL
@@ -292,8 +286,6 @@ JOIN (
   UNION ALL
   SELECT 'SYS_SHIPPING_CLERK' AS role_code, 'WMS_SHIPPING_SHIP' AS permission_code
   UNION ALL
-  SELECT 'SYS_SHIPPING_CLERK' AS role_code, 'WMS_INVENTORY_POST' AS permission_code
-  UNION ALL
   SELECT 'SYS_SHIPPING_CLERK' AS role_code, 'WMS_OUTBOUND_SHIPMENT_READ' AS permission_code
   UNION ALL
   SELECT 'SYS_SHIPPING_CLERK' AS role_code, 'WMS_PACKING_READ' AS permission_code
@@ -303,8 +295,6 @@ JOIN (
   SELECT 'SYS_INVENTORY_CONTROLLER' AS role_code, 'WMS_INVENTORY_READ' AS permission_code
   UNION ALL
   SELECT 'SYS_INVENTORY_CONTROLLER' AS role_code, 'WMS_INVENTORY_LEDGER_READ' AS permission_code
-  UNION ALL
-  SELECT 'SYS_INVENTORY_CONTROLLER' AS role_code, 'WMS_INVENTORY_POST' AS permission_code
   UNION ALL
   SELECT 'SYS_INVENTORY_CONTROLLER' AS role_code, 'WMS_LOT_READ' AS permission_code
   UNION ALL
@@ -372,8 +362,6 @@ JOIN (
   UNION ALL
   SELECT 'SYS_INVENTORY_APPROVER' AS role_code, 'WMS_INVENTORY_ADJUSTMENT_POST' AS permission_code
   UNION ALL
-  SELECT 'SYS_INVENTORY_APPROVER' AS role_code, 'WMS_INVENTORY_POST' AS permission_code
-  UNION ALL
   SELECT 'SYS_INVENTORY_APPROVER' AS role_code, 'WMS_INVENTORY_READ' AS permission_code
   UNION ALL
   SELECT 'SYS_INVENTORY_APPROVER' AS role_code, 'WMS_INVENTORY_LEDGER_READ' AS permission_code
@@ -385,8 +373,6 @@ JOIN (
   SELECT 'SYS_TRANSFER_DISPATCHER' AS role_code, 'WMS_TRANSFER_RELEASE' AS permission_code
   UNION ALL
   SELECT 'SYS_TRANSFER_DISPATCHER' AS role_code, 'WMS_TRANSFER_DISPATCH' AS permission_code
-  UNION ALL
-  SELECT 'SYS_TRANSFER_DISPATCHER' AS role_code, 'WMS_INVENTORY_POST' AS permission_code
   UNION ALL
   SELECT 'SYS_TRANSFER_DISPATCHER' AS role_code, 'WMS_WAREHOUSE_READ' AS permission_code
   UNION ALL
@@ -403,8 +389,6 @@ JOIN (
   SELECT 'SYS_TRANSFER_RECEIVER' AS role_code, 'WMS_TRANSFER_READ' AS permission_code
   UNION ALL
   SELECT 'SYS_TRANSFER_RECEIVER' AS role_code, 'WMS_TRANSFER_RECEIVE' AS permission_code
-  UNION ALL
-  SELECT 'SYS_TRANSFER_RECEIVER' AS role_code, 'WMS_INVENTORY_POST' AS permission_code
   UNION ALL
   SELECT 'SYS_TRANSFER_RECEIVER' AS role_code, 'WMS_WAREHOUSE_READ' AS permission_code
   UNION ALL
@@ -431,8 +415,6 @@ JOIN (
   SELECT 'SYS_REPLENISHMENT_OPERATOR' AS role_code, 'WMS_REPLENISHMENT_TASK_CONFIRM' AS permission_code
   UNION ALL
   SELECT 'SYS_REPLENISHMENT_OPERATOR' AS role_code, 'WMS_REPLENISHMENT_TASK_CANCEL' AS permission_code
-  UNION ALL
-  SELECT 'SYS_REPLENISHMENT_OPERATOR' AS role_code, 'WMS_INVENTORY_POST' AS permission_code
   UNION ALL
   SELECT 'SYS_REPLENISHMENT_OPERATOR' AS role_code, 'WMS_INVENTORY_READ' AS permission_code
   UNION ALL
