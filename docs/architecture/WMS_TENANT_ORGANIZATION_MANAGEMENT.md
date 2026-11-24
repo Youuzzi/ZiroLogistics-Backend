@@ -37,7 +37,7 @@ The API does not allow clients to change `tenantCode`, `status`, `publicId`, `cr
 
 ## 3. Authorization
 
-Migration V7 seeds the global catalogue permission `WMS_TENANT_PROFILE_UPDATE` and backfills it only to existing ACTIVE system roles with `role_code = TENANT_OWNER`. The controlled bootstrap and repeatable tenant provisioning also grant it alongside `WMS_IDENTITY_MEMBERSHIP_INVITE`; custom roles and all other roles receive no automatic grant. No wildcard or module-wide grant is introduced.
+Migration V7 seeds the global catalogue permission `WMS_TENANT_PROFILE_UPDATE` and backfills it to eligible owner roles present when that migration runs. The controlled bootstrap currently grants `WMS_IDENTITY_MEMBERSHIP_INVITE` and `WMS_TENANT_PROFILE_UPDATE`. Repeatable tenant provisioning has a wider explicit owner allowlist in the current service implementation. These two creation paths are not yet aligned to one shared policy; the exact repeatable-provisioning grants must be read from the service source and reconciled under `ROLE_BASED_ACCESS_CONTROL.md`. Migration backfills do not grant permissions to tenant roles created after migrations have completed. No wildcard or module-wide grant is introduced.
 
 Before profile access, the service re-resolves the caller's user and membership through `WmsMembershipAccessService`. It compares tenant, membership, and public identifiers with the authenticated principal and uses the persisted effective permission set, not a caller-supplied permission list.
 
@@ -92,7 +92,7 @@ Required configuration:
 - `WMS_TENANT_PROVISIONING_OPERATOR_REFERENCE`
 - `WMS_TENANT_PROVISIONING_REASON`
 
-Provisioning creates the tenant, an active membership, a tenant-scoped `TENANT_OWNER` role, and only the explicit invitation/profile-update permission allowlist. A globally existing owner must already be ACTIVE and email-verified; the existing global identity is reused and never duplicated.
+Provisioning creates the tenant, an active membership, a tenant-scoped `TENANT_OWNER` role, and the explicit owner permission allowlist defined by the current provisioning service. That allowlist is currently wider than the two grants used by first-install bootstrap and does not yet cover all workflow permissions introduced by later migrations. This mismatch is a known RBAC gap; do not treat this document as the authoritative grant list. The shared policy and exact grants must be reconciled before first-tenant bootstrap. A globally existing owner must already be ACTIVE and email-verified; the existing global identity is reused and never duplicated.
 
 For a new owner, the command creates a `PENDING_VERIFICATION` global identity with a random Argon2id hash that is never disclosed. The membership and role are prepared transactionally, but the pending global identity cannot authenticate. After the transaction commits, the command requests an email-verification message through the encrypted outbox. The owner verifies the address, then requests a password reset to establish their own password. If email encryption/outbox configuration is unavailable, the command reports failure after the tenant transaction; rerunning with the same operation reference safely reuses the tenant and retries the verification email. Queueing is not delivery: the SMTP worker remains disabled by default and must be enabled with its explicit SMTP/TLS configuration before production email is sent.
 
