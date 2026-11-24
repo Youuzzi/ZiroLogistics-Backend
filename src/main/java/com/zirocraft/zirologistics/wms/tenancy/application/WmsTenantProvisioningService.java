@@ -2,10 +2,10 @@ package com.zirocraft.zirologistics.wms.tenancy.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.zirocraft.zirologistics.wms.identity.application.WmsEmailNormalizer;
 import com.zirocraft.zirologistics.wms.authorization.domain.WmsTenantPermissionPolicy;
-import com.zirocraft.zirologistics.wms.tenancy.domain.WmsTenantLocalePolicy;
+import com.zirocraft.zirologistics.wms.identity.application.WmsEmailNormalizer;
 import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
+import com.zirocraft.zirologistics.wms.tenancy.domain.WmsTenantLocalePolicy;
 import com.zirocraft.zirologistics.wms.tenancy.infrastructure.config.WmsTenantProvisioningProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Profile;
