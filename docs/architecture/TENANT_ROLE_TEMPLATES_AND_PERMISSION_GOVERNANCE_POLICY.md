@@ -332,13 +332,13 @@ The first implementation slice is now in progress: shared Tenant Owner and deleg
 | Global WMS permission catalogue | Seeded by Flyway V5 and V7–V26 |
 | DB-backed effective permission resolution | Implemented |
 | Multiple active role permission union | Implemented in membership-access query/service |
-| Role CRUD and protected system-role handling | Partially implemented; system role grant protection remains enforced |
+| Role CRUD and protected system-role handling | Implemented for current tenant APIs; protected template codes cannot be created as custom roles and system grants remain immutable |
 | Caller-authority check for permission replacement | Implemented with canonical delegable policy and caller-effective-permission ceiling |
 | Canonical permission risk metadata | Not implemented; permission codes are centralized but risk-class metadata remains a follow-up |
-| Canonical catalogue visibility/delegation/Owner template policy | Implemented in `WmsTenantPermissionPolicy` in the current implementation PR |
-| Tenant Owner default grant template | Implemented as a governance + read-only operational baseline; other role templates remain proposed |
-| Bootstrap/provisioning grant parity | Implemented through the shared Tenant Owner template and MySQL integration assertions |
-| Cross-workflow separation-of-duties enforcement | Not certified |
-| Tenant entitlement enforcement | Separate future work; not implemented by this policy |
+| Canonical catalogue visibility/delegation/Owner/system-role template policy | Implemented in `WmsTenantPermissionPolicy` |
+| Tenant Owner default grant template | Implemented as a 30-code governance + read-only operational baseline |
+| Bootstrap/provisioning grant parity | Implemented through the shared Owner and 13 operational role templates with MySQL persisted-grant assertions |
+| Cross-workflow separation-of-duties enforcement | Partially implemented: high-risk system-role self-assignment is blocked and stock-count/adjustment actor separation exists; inbound/shipping/transfer actor separation is not universally certified |
+| Internal inventory posting authorization | Implemented with workflow-specific permission checks; generic `WMS_INVENTORY_POST` is reserved for the direct posting API |\n| High-risk system-role self-assignment | Implemented using persisted target membership user identity |\n| Tenant entitlement enforcement | Separate future work; not implemented by this policy |
 
-The implementation PR adds Flyway V28 to reconcile existing system `TENANT_OWNER` grants to the canonical template, and changes bootstrap/provisioning to use the same template. These changes do not create tenant records, change credentials, operate Docker resources, or connect to any user database. V1–V27 remain immutable.
+The implementation adds Flyway V28 to reconcile existing system `TENANT_OWNER` grants and provision 13 immutable operational role templates for existing tenants. First-install bootstrap and repeatable provisioning use the same canonical Owner and operational role definitions. Internal workflow posting is checked against its workflow permission rather than the generic direct-post permission. High-risk role self-assignment is denied. V1–V27 remain immutable. No user database, tenant bootstrap, credentials, or Docker resources were operated.
