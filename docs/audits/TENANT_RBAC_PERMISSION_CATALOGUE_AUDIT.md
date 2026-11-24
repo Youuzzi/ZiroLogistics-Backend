@@ -1,8 +1,8 @@
 # Tenant RBAC Permission Catalogue and Provisioning Audit
 
-**Status:** Source and migration audit baseline; policy reconciliation and implementation remain open.  
-**Reviewed commit:** `bcd21a8efee2bf44d529c3cec8334b39e8477c28`  
-**Scope:** WMS permission seeds in Flyway V5 and V7–V26, first-install bootstrap grants, repeatable tenant-provisioning grants, role-management catalogue/delegation policy.  
+**Status:** Source and migration audit baseline; policy reconciliation and implementation remain open.
+**Reviewed commit:** `bcd21a8efee2bf44d529c3cec8334b39e8477c28`
+**Scope:** WMS permission seeds in Flyway V5 and V7–V26, first-install bootstrap grants, repeatable tenant-provisioning grants, role-management catalogue/delegation policy.
 **Assurance:** This document inventories declared permission codes and grant-path differences. It does not certify every permission enforcement point or approve a final Tenant Owner role.
 
 ## 1. Executive findings
