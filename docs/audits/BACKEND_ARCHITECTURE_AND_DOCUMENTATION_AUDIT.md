@@ -123,9 +123,9 @@ Subscription lifecycle, invoices, payment processing, reconciliation, trial, gra
 
 ## 7. Locale and time policy: audit still required
 
-The tenant schema and tenant provisioning/profile services carry timezone and default-currency fields. The profile service validates timezone and currency using Java time/currency APIs. Bootstrap uses `ZoneId` validation and a three-letter currency format check; repeatable provisioning and profile update use stronger currency validation.
+The tenant schema and tenant provisioning/profile services carry timezone and default-currency fields. The profile service validates timezone against Java's available zone IDs (plus UTC) and validates currency using `Currency.getInstance`. Repeatable provisioning uses similar checks. Bootstrap differs: it uses `ZoneId.of` (which can accept fixed offsets outside the tenant IANA-region policy) and checks currency only for three uppercase letters rather than verifying that the code is a supported ISO-4217 currency. These validation rules should be unified.
 
-The inspected SQL uses `UTC_TIMESTAMP(6)` for several identity, membership, audit, and provisioning timestamps. This is positive evidence but not a complete audit of every timestamp source, JDBC/Hibernate conversion, report boundary, or tenant-local date calculation.
+The inspected SQL uses `UTC_TIMESTAMP(6)` for many identity, membership, audit, and operational workflow transitions, and `application-wms.properties` sets `hibernate.jdbc.time_zone=UTC`. This is positive evidence but not a complete audit of every timestamp source, JDBC/Hibernate conversion, report boundary, or tenant-local date calculation. The API reference also explicitly notes that some scheduled date-time fields use `LocalDateTime` without timezone/offset and that their business-local interpretation remains unresolved before frontend integration. This is a concrete contract gap: each date/time field must be classified as an instant, tenant-local date/time, or date-only value.
 
 A dedicated audit must establish one canonical rule: persist instants in UTC, interpret and display tenant-local business dates/times using the tenant's IANA timezone, and use ISO-4217 currency codes with explicit monetary precision/rounding rules. Validate the rule across all operational modules before claiming full compliance.
 
@@ -149,6 +149,7 @@ This confirms the recorded workflow run for that commit. It does not certify cha
 | High | Tenant organization and bootstrap docs conflict with current provisioning/bootstrap behavior | Correct status and claims after implementation contract is approved |
 | High | Role-management design still describes implemented permissions as proposals | Update design status, actual API/permission contracts, delegation policy, and test evidence |
 | High | Tenant isolation is covered in several tests but not yet exhaustively certified across all modules | Perform controller-to-query and negative cross-tenant audit |
+| High | Bootstrap, provisioning, and profile APIs apply different timezone/currency validation; API docs identify unresolved LocalDateTime business-local semantics | Unify IANA timezone and ISO-4217 validation; classify all temporal API fields and test UTC conversions |
 | Medium | Locale fields exist, but global UTC/timezone/currency policy is not proven end-to-end | Trace timestamp and money handling across schema, Java, SQL, APIs, and reports |
 | Medium | No entitlement/subscription/billing implementation was found by scoped repository search | Create architecture and lifecycle documents; defer payment integration |
 | Medium | Nineteen docs use stage-oriented filenames | Establish canonical document map and perform safe rename/reference updates |
@@ -181,5 +182,7 @@ Primary repository evidence:
 - `docs/architecture/WMS_TENANT_ORGANIZATION_MANAGEMENT.md`
 - `docs/architecture/WMS_ROLE_PERMISSION_MANAGEMENT_DESIGN.md`
 - `docs/architecture/WMS_TENANT_CONTEXT_AND_AUTHORIZATION_RESOLUTION.md`
+- `docs/api/WMS_V1_API_REFERENCE_STAGE_13.md`
+- `src/main/resources/application-wms.properties`
 
 This document is the initial baseline, not the final sign-off for the full eight-part workstream. Each subsequent audit section must be updated with exact source, migration, and test evidence as it is completed.
