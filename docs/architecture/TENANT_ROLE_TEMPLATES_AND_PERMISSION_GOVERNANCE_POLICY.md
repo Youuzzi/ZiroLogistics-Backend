@@ -1,6 +1,6 @@
 # Tenant Role Templates and Permission Governance Policy
 
-**Status:** Proposed policy baseline; not yet implemented or approved as production grant data.
+**Status:** Policy implemented in the current authorization implementation PR; role templates beyond Tenant Owner remain proposed and are not active persisted system roles.
 **Reviewed source baseline:** `cc1c489810e9551273d6c45397a3ef86150bd1b2`
 **Related evidence:** `docs/audits/TENANT_RBAC_PERMISSION_CATALOGUE_AUDIT.md`, `docs/architecture/WMS_ROLE_PERMISSION_MANAGEMENT_DESIGN.md`, `docs/security/TENANT_ISOLATION_AND_AUTHORIZATION.md`
 **Scope:** Tenant-scoped role templates, permission risk classes, delegation ceilings, separation of duties, and bootstrap/provisioning parity.
@@ -305,6 +305,8 @@ Run these suites with MySQL 8.4 Testcontainers and include HTTP authorization-bo
 
 ## 10. Implementation order
 
+The first implementation slice is now in progress: shared Tenant Owner and delegation policy, bootstrap/provisioning parity, and additive V28 reconciliation. The broader named role templates, per-permission risk metadata, and cross-workflow separation-of-duties enforcement remain subsequent work.
+
 1. Complete and merge the source permission catalogue audit.
 2. Approve this role-template matrix and risk classifications.
 3. Implement the canonical permission policy source and remove duplicated hard-coded lists.
@@ -321,13 +323,13 @@ Run these suites with MySQL 8.4 Testcontainers and include HTTP authorization-bo
 | Global WMS permission catalogue | Seeded by Flyway V5 and V7–V26 |
 | DB-backed effective permission resolution | Implemented |
 | Multiple active role permission union | Implemented in membership-access query/service |
-| Role CRUD and protected system-role handling | Partially implemented |
-| Caller-authority check for permission replacement | Implemented with a restricted hard-coded allowlist |
-| Canonical permission risk metadata | Not implemented |
-| Canonical catalogue/visible/grantable/template policy | Not implemented |
-| Reviewed default role templates | Proposed in this document only |
-| Bootstrap/provisioning grant parity | Not achieved |
+| Role CRUD and protected system-role handling | Partially implemented; system role grant protection remains enforced |
+| Caller-authority check for permission replacement | Implemented with canonical delegable policy and caller-effective-permission ceiling |
+| Canonical permission risk metadata | Not implemented; permission codes are centralized but risk-class metadata remains a follow-up |
+| Canonical catalogue visibility/delegation/Owner template policy | Implemented in `WmsTenantPermissionPolicy` in the current implementation PR |
+| Tenant Owner default grant template | Implemented as a governance + read-only operational baseline; other role templates remain proposed |
+| Bootstrap/provisioning grant parity | Implemented through the shared Tenant Owner template and MySQL integration assertions |
 | Cross-workflow separation-of-duties enforcement | Not certified |
 | Tenant entitlement enforcement | Separate future work; not implemented by this policy |
 
-No permission grants, Flyway migrations, tenant records, credentials, Docker resources, or databases were changed by this policy design document.
+The implementation PR adds Flyway V28 to reconcile existing system `TENANT_OWNER` grants to the canonical template, and changes bootstrap/provisioning to use the same template. These changes do not create tenant records, change credentials, operate Docker resources, or connect to any user database. V1–V27 remain immutable.
