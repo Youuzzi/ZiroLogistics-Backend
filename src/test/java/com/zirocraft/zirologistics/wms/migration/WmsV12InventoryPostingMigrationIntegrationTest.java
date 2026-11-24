@@ -128,6 +128,12 @@ class WmsV12InventoryPostingMigrationIntegrationTest {
                     WHERE r.public_id = '""" + ownerRolePublicId + """
                     '
                     """));
+            assertEquals(13, scalar(statement, """
+                    SELECT COUNT(*) FROM roles
+                    WHERE tenant_id = (SELECT tenant_id FROM roles WHERE public_id = '""" + ownerRolePublicId + """
+                    ')
+                      AND is_system_role = 1 AND role_code <> 'TENANT_OWNER'
+                    """));
             assertEquals(1, scalar(statement, """
                     SELECT COUNT(*) FROM role_permissions rp
                     JOIN roles r ON r.id = rp.role_id
