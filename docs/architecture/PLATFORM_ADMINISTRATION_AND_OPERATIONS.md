@@ -1,8 +1,8 @@
 # Platform Administration and Operations
 
-**Status:** Target architecture approved for implementation planning; not implemented by this document.  
-**Scope:** Global control-plane identity, platform authorization, tenant lifecycle administration, privileged support access, and platform audit.  
-**Runtime baseline:** WMS Spring Boot runtime, MySQL 8.4, Spring Security, RS256 JWT, Flyway.  
+**Status:** Target architecture approved for implementation planning; not implemented by this document.
+**Scope:** Global control-plane identity, platform authorization, tenant lifecycle administration, privileged support access, and platform audit.
+**Runtime baseline:** WMS Spring Boot runtime, MySQL 8.4, Spring Security, RS256 JWT, Flyway.
 **Database boundary:** Additive WMS migrations only. Do not modify the frozen schema reference or legacy database.
 
 ## 1. Executive decision
