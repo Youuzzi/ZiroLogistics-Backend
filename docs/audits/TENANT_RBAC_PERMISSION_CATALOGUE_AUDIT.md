@@ -253,7 +253,7 @@ These are role templates for policy design. Do not seed them until the full perm
 |---|---|
 | Migration permission inventory | Audited from V5 and V7–V26 source |
 | Bootstrap owner grants | Verified: 2 permissions |
-| Repeatable provisioning owner grants | Verified: explicit 34-code list |
+| Repeatable provisioning owner grants | Verified: explicit 35-code list |
 | Existing-tenant migration backfills | Verified in migration source |
 | Role permission catalogue | Verified: restricted hard-coded subset |
 | Delegation ceiling | Verified: restricted hard-coded subset plus caller-authority check |
