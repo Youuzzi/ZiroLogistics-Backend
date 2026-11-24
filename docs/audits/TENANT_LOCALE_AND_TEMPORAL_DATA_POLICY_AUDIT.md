@@ -114,15 +114,21 @@ Do not treat an unqualified `LocalDateTime` as a globally comparable instant. AP
 - No assumption was made that tenant currency implies a complete financial model.
 - The legacy `zirologistics_db` and frozen reference database `zirowms_v1` remain untouched.
 
-## 7. Current status
+## 7. Implementation reconciliation in progress
+
+The follow-up implementation branch introduces `WmsTenantLocalePolicy` as the shared validator for bootstrap, repeatable provisioning, and tenant profile updates. It enforces the same Java `ZoneId` available-ID policy (plus `UTC`) and ISO-4217 currency validation at all three entry points. The associated unit and MySQL integration tests cover fixed-offset rejection (`+07:00`), unknown currency rejection (`ZZZ`), and no tenant writes on invalid provisioning/bootstrap input. This implementation remains subject to its own PR CI and merge; it is not yet part of `main`.
+
+This change closes the two entry-point validation mismatches (LOC-01 and LOC-02). It does not resolve scheduled `LocalDateTime` semantics, database session timezone guarantees, or the complete temporal field inventory.
+
+## 8. Current status
 
 | Area | Status |
 |---|---|
-| Tenant profile timezone validation | Verified: Java `ZoneId` available IDs plus UTC |
-| Tenant provisioning timezone validation | Verified: Java `ZoneId` available IDs plus UTC |
-| Bootstrap timezone parity | Gap identified |
-| Tenant profile/provisioning currency validation | Verified via Java Currency |
-| Bootstrap currency parity | Gap identified |
+| Tenant profile timezone validation | Shared validator in follow-up PR; pending CI/merge |
+| Tenant provisioning timezone validation | Shared validator in follow-up PR; pending CI/merge |
+| Bootstrap timezone parity | Shared validator implemented in follow-up PR; pending CI/merge |
+| Tenant profile/provisioning currency validation | Shared validator in follow-up PR; pending CI/merge |
+| Bootstrap currency parity | Shared validator implemented in follow-up PR; pending CI/merge |
 | Scheduled inbound/outbound/transfer API types | Verified: LocalDateTime |
 | Business-local schedule contract | Unresolved in API reference |
 | Database timestamp storage | DATETIME(6) in reviewed V1 schema |
