@@ -74,8 +74,10 @@ public class WmsInventoryPostingService {
                 "WMS_SHIPPING_SHIP", Set.of("ISSUE"),
                 "WMS_REPLENISHMENT_TASK_CONFIRM", Set.of("TRANSFER"),
                 "WMS_REPLENISHMENT_CONFIRMATION_REVERSE", Set.of("TRANSFER"));
-        if (command == null || !allowedMovements.getOrDefault(workflowPermission, Set.of())
-                .contains(command.movementType() == null ? "" : command.movementType().toUpperCase(Locale.ROOT))) {
+        Set<String> movements = workflowPermission == null
+                ? Set.of() : allowedMovements.getOrDefault(workflowPermission, Set.of());
+        if (command == null || !movements.contains(
+                command.movementType() == null ? "" : command.movementType().toUpperCase(Locale.ROOT))) {
             throw new AccessDeniedException("Workflow posting permission does not match the movement");
         }
         return postInternal(principal, command, false, null, workflowPermission);
