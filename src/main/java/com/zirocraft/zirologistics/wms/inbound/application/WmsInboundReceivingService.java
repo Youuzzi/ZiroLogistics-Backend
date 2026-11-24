@@ -350,8 +350,8 @@ public class WmsInboundReceivingService {
         }
 
         if (!legs.isEmpty()) {
-            postingService.post(principal, new WmsInventoryPostingService.PostingCommand(
-                    command.requestId(), "RECEIPT", legs, "Inbound receipt " + receipt.get("document_number")));
+            postingService.postFromWorkflow(principal, new WmsInventoryPostingService.PostingCommand(
+                    command.requestId(), "RECEIPT", legs, "Inbound receipt " + receipt.get("document_number")), "WMS_INBOUND_RECEIPT_POST");
         }
 
         for (SerialLink link : serialLinks) {
