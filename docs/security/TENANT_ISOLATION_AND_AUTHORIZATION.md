@@ -1,8 +1,8 @@
 # Tenant Isolation and Authorization
 
-**Status: AUDIT BASELINE — PARTIALLY VERIFIED; NOT A TENANT-ISOLATION CERTIFICATION**  
-**Reviewed branch:** `main`  
-**Reviewed commit:** `3f130a72e4f9b5b77e252158e94fff47d37280c7`  
+**Status: AUDIT BASELINE — PARTIALLY VERIFIED; NOT A TENANT-ISOLATION CERTIFICATION**
+**Reviewed branch:** `main`
+**Reviewed commit:** `3f130a72e4f9b5b77e252158e94fff47d37280c7`
 **Scope:** WMS tenant identity resolution, HTTP authorization boundary, tenant-scoped operational services, persistence access patterns, and available isolation tests.
 
 ## 1. Purpose and assurance statement
