@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessDeniedException;
+import com.zirocraft.zirologistics.wms.tenancy.domain.WmsTenantLocalePolicy;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import com.zirocraft.zirologistics.wms.tenancy.domain.TenantStatus;
 import com.zirocraft.zirologistics.wms.tenancy.infrastructure.persistence.TenantEntity;
@@ -20,7 +21,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import com.zirocraft.zirologistics.wms.tenancy.domain.WmsTenantLocalePolicy;
 
 @Service
 @Profile("wms")
@@ -178,6 +178,5 @@ public class WmsTenantProfileService {
         }
         return normalized;
     }
-
 
 }
