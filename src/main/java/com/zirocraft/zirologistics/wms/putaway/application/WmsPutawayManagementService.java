@@ -325,7 +325,7 @@ public class WmsPutawayManagementService {
         }
 
         postingService.postFromWorkflow(principal, new WmsInventoryPostingService.PostingCommand(
-                command.requestId(), "TRANSFER", legs, optional(command.notes(), 1000)));
+                command.requestId(), "TRANSFER", legs, optional(command.notes(), 1000)), "WMS_PUTAWAY_CONFIRM");
 
         String confirmationPublicId = UUID.randomUUID().toString();
         jdbc.update("""
