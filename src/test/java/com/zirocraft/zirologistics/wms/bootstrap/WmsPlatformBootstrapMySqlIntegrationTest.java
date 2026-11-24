@@ -90,9 +90,13 @@ class WmsPlatformBootstrapMySqlIntegrationTest {
         assertEquals(1, count("users"));
         assertEquals(1, count("tenants"));
         assertEquals(1, count("tenant_memberships"));
-        assertEquals(1, count("roles"));
+        assertEquals(1 + WmsTenantPermissionPolicy.systemRoleTemplates().size(), count("roles"));
         assertEquals(1, count("membership_roles"));
-        assertEquals(WmsTenantPermissionPolicy.tenantOwnerTemplate().size(), count("role_permissions"));
+        assertEquals(WmsTenantPermissionPolicy.tenantOwnerTemplate().size(), jdbc.queryForObject("""
+                SELECT COUNT(*) FROM role_permissions rp
+                JOIN roles r ON r.id = rp.role_id
+                WHERE r.public_id = ?
+                """, Integer.class, result.rolePublicId()));
         assertEquals(1, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM wms_platform_bootstrap_state WHERE status='COMPLETED' AND operation_ref=?",
                 Integer.class, result.operationRef()));
