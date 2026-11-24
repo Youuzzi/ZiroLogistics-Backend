@@ -77,6 +77,20 @@ class WmsV12InventoryPostingMigrationIntegrationTest {
         }
 
         Flyway.configure().dataSource(upgradeUrl, UPGRADE_MYSQL.getUsername(), UPGRADE_MYSQL.getPassword())
+                .locations("classpath:db/wms-migration").target("12").load().migrate();
+        try (Connection connection = DriverManager.getConnection(
+                upgradeUrl, UPGRADE_MYSQL.getUsername(), UPGRADE_MYSQL.getPassword());
+             Statement statement = connection.createStatement()) {
+            assertEquals(1, scalar(statement, """
+                    SELECT COUNT(*) FROM role_permissions rp
+                    JOIN roles r ON r.id = rp.role_id
+                    JOIN permissions p ON p.id = rp.permission_id
+                    WHERE r.public_id = '""" + ownerRolePublicId + """
+                    ' AND p.permission_code = 'WMS_INVENTORY_POST'
+                    """));
+        }
+
+        Flyway.configure().dataSource(upgradeUrl, UPGRADE_MYSQL.getUsername(), UPGRADE_MYSQL.getPassword())
                 .locations("classpath:db/wms-migration").load().migrate();
 
         try (Connection connection = DriverManager.getConnection(
@@ -85,7 +99,7 @@ class WmsV12InventoryPostingMigrationIntegrationTest {
             assertEquals(1, scalar(statement, """
                     SELECT COUNT(*) FROM permissions WHERE permission_code = 'WMS_INVENTORY_POST'
                     """));
-            assertEquals(1, scalar(statement, """
+            assertEquals(0, scalar(statement, """
                     SELECT COUNT(*) FROM role_permissions rp
                     JOIN roles r ON r.id = rp.role_id
                     JOIN permissions p ON p.id = rp.permission_id
@@ -98,6 +112,12 @@ class WmsV12InventoryPostingMigrationIntegrationTest {
                     JOIN permissions p ON p.id = rp.permission_id
                     WHERE r.public_id = '""" + customRolePublicId + """
                     ' AND p.permission_code = 'WMS_INVENTORY_POST'
+                    """));
+            assertEquals(30, scalar(statement, """
+                    SELECT COUNT(*) FROM role_permissions rp
+                    JOIN roles r ON r.id = rp.role_id
+                    WHERE r.public_id = '""" + ownerRolePublicId + """
+                    '
                     """));
             String checkClause = text(statement, """
                     SELECT check_clause FROM information_schema.check_constraints
