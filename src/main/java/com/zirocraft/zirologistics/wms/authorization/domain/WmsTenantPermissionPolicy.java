@@ -234,4 +234,10 @@ public final class WmsTenantPermissionPolicy {
     public static Set<String> delegablePermissionCodes() {
         return DELEGABLE_TO_CUSTOM_ROLES;
     }
+
+    public record RoleTemplate(String code, String name, String description, List<String> permissionCodes) {
+        public RoleTemplate {
+            permissionCodes = List.copyOf(permissionCodes);
+        }
+    }
 }
