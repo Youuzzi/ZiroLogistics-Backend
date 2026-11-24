@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.migration;
 
+import com.zirocraft.zirologistics.wms.authorization.domain.WmsTenantPermissionPolicy;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.MySQLContainer;
@@ -134,6 +135,28 @@ class WmsV12InventoryPostingMigrationIntegrationTest {
                     ')
                       AND is_system_role = 1 AND role_code <> 'TENANT_OWNER'
                     """));
+
+            for (WmsTenantPermissionPolicy.RoleTemplate template
+                    : WmsTenantPermissionPolicy.systemRoleTemplates()) {
+                try (PreparedStatement permissions = connection.prepareStatement("""
+                        SELECT p.permission_code
+                        FROM roles r
+                        JOIN role_permissions rp ON rp.role_id = r.id
+                        JOIN permissions p ON p.id = rp.permission_id
+                        WHERE r.tenant_id = (SELECT tenant_id FROM roles WHERE public_id = ?)
+                          AND r.role_code = ? AND r.is_system_role = 1
+                        ORDER BY p.permission_code
+                        """)) {
+                    permissions.setString(1, ownerRolePublicId);
+                    permissions.setString(2, template.code());
+                    try (ResultSet rows = permissions.executeQuery()) {
+                        java.util.List<String> actual = new java.util.ArrayList<>();
+                        while (rows.next()) actual.add(rows.getString(1));
+                        assertEquals(template.permissionCodes().stream().sorted().toList(), actual,
+                                "V28 grants differ for " + template.code());
+                    }
+                }
+            }
             assertEquals(1, scalar(statement, """
                     SELECT COUNT(*) FROM role_permissions rp
                     JOIN roles r ON r.id = rp.role_id
