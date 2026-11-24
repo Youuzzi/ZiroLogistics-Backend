@@ -73,5 +73,8 @@ class WmsTenantPermissionPolicyTest {
                 () -> WmsTenantPermissionPolicy.tenantOwnerTemplate().add("WMS_INVENTORY_POST"));
         assertThrows(UnsupportedOperationException.class,
                 () -> WmsTenantPermissionPolicy.delegablePermissionCodes().add("WMS_INVENTORY_POST"));
+        assertThrows(UnsupportedOperationException.class,
+                () -> WmsTenantPermissionPolicy.systemRoleTemplates().getFirst()
+                        .permissionCodes().add("WMS_INVENTORY_POST"));
     }
 }
