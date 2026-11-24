@@ -39,6 +39,20 @@ class WmsTenantPermissionPolicyTest {
     }
 
     @Test
+    void exposesUniqueReservedSystemRoleTemplates() {
+        var templates = WmsTenantPermissionPolicy.systemRoleTemplates();
+        var codes = templates.stream().map(WmsTenantPermissionPolicy.RoleTemplate::code).toList();
+
+        assertEquals(13, templates.size());
+        assertEquals(codes.size(), codes.stream().distinct().count());
+        assertEquals(templates.size(), WmsTenantPermissionPolicy.reservedSystemRoleCodes().size());
+        assertTrue(WmsTenantPermissionPolicy.reservedSystemRoleCodes().contains("SYS_INBOUND_CONTROLLER"));
+        assertTrue(WmsTenantPermissionPolicy.reservedSystemRoleCodes().contains("SYS_INVENTORY_APPROVER"));
+        assertFalse(WmsTenantPermissionPolicy.reservedSystemRoleCodes().contains("TENANT_OWNER"));
+        assertTrue(templates.stream().allMatch(template -> !template.permissionCodes().isEmpty()));
+    }
+
+    @Test
     void policyCollectionsCannotBeMutatedByCallers() {
         assertThrows(UnsupportedOperationException.class,
                 () -> WmsTenantPermissionPolicy.tenantOwnerTemplate().add("WMS_INVENTORY_POST"));
