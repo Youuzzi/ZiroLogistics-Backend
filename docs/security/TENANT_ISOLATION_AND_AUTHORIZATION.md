@@ -2,7 +2,7 @@
 
 **Status: AUDIT BASELINE — PARTIALLY VERIFIED; NOT A TENANT-ISOLATION CERTIFICATION**
 **Reviewed branch:** `main`
-**Reviewed commit:** `3f130a72e4f9b5b77e252158e94fff47d37280c7`
+**Reviewed commit:** `b95a98cde08492353e2d96f1de43fdb2da2d2b26`
 **Scope:** WMS tenant identity resolution, HTTP authorization boundary, tenant-scoped operational services, persistence access patterns, and available isolation tests.
 
 ## 1. Purpose and assurance statement
@@ -115,6 +115,24 @@ Tests must assert no cross-tenant read, mutation, side effect, or information di
 
 Inventory scheduled jobs, asynchronous listeners, message consumers, command runners, import/export jobs, and operational maintenance processes. For each path, define the trusted tenant source, actor identity, permission/policy enforcement, and audit attribution. A string operator reference is not proof of an authenticated platform operator.
 
+
+
+### 6.3.1 Tenant lifecycle command actor attribution
+
+Source reviewed:
+- `src/main/java/com/zirocraft/zirologistics/wms/tenancy/infrastructure/config/WmsTenantLifecycleCommandRunner.java`
+- `src/main/java/com/zirocraft/zirologistics/wms/tenancy/infrastructure/config/WmsTenantLifecycleProperties.java`
+- `src/main/java/com/zirocraft/zirologistics/wms/tenancy/application/WmsTenantLifecycleService.java`
+- `src/test/java/com/zirocraft/zirologistics/wms/tenancy/WmsTenantLifecycleMySqlIntegrationTest.java`
+
+The lifecycle runner is an explicitly enabled Spring `ApplicationRunner`, not an HTTP endpoint. It passes the configured `operatorReference` property directly to the lifecycle service. The service validates and normalizes this string, then writes it as `actor_reference` while recording `actor_type = PLATFORM_OPERATOR`; it does not resolve that string to a platform operator identity or verify an authenticated principal. The MySQL integration test supplies the literal `operator-console:production` and asserts that the same value is stored in the audit event. This proves audit attribution persistence, not operator authentication or authorization.
+
+The explicit command-mode flag is a useful operational guard, but it is not a substitute for a trusted execution identity, restricted deployment/operator access, approval controls, or tamper-resistant audit attribution. Keep this command path separate from HTTP platform-user access until the control-plane identity model is implemented. Before production use, define and test who may invoke the command, how the operator is authenticated outside the application, how the actor reference is bound to that identity, and how the invocation is recorded.
+
+### 6.3.2 Bootstrap and provisioning command boundaries
+
+The bootstrap and provisioning runners are also `ApplicationRunner` paths gated by explicit command-mode arguments. The inspected runner tests verify disabled-mode rejection and invocation behavior; they do not establish a platform operator identity or prove that command invocation is restricted to an authenticated platform role. These are operational bootstrap/provisioning boundaries, not platform-admin authentication features. First-tenant bootstrap remains a separately controlled operation requiring explicit owner identity confirmation and approval.
+
 ### 6.4 Platform control-plane separation
 
 The platform administration design requires a distinct operator identity, token audience, authorization catalogue, and HTTP security chain. Until implemented and tested, lifecycle command execution must remain an explicitly controlled operational path and must not be represented as authenticated platform-user access.
@@ -138,7 +156,7 @@ The platform administration design requires a distinct operator identity, token 
 | TI-05 | All tenant-owned SQL and nested references are tenant-safe | Not yet verified exhaustively | Audit every SQL statement and indirect reference |
 | TI-06 | All HTTP routes have equivalent negative cross-tenant coverage | Partially verified | Add route-family HTTP integration matrix |
 | TI-07 | Background and command execution paths have a uniform tenant/actor policy | Not yet verified exhaustively | Inventory and test non-HTTP paths |
-| TI-08 | Distinct authenticated platform operator boundary is implemented | Architecture documented; runtime implementation not established | Implement after tenant policy and permission catalogue are reconciled |
+| TI-08 | Distinct authenticated platform operator boundary is implemented | Architecture documented; runtime implementation not established | Implement after tenant policy and permission catalogue are reconciled |\n| TI-09 | Tenant lifecycle audit actor reference proves an authenticated platform operator | Not implemented; configured string is persisted as actor reference | Bind audit actor to a trusted operator identity and enforce invocation controls |
 
 ## 8. Explicit non-goals and safety constraints
 
