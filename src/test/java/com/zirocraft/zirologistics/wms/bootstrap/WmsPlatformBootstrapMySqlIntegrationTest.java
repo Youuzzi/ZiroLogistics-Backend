@@ -171,7 +171,7 @@ class WmsPlatformBootstrapMySqlIntegrationTest {
             assertEquals(1, count("users"));
             assertEquals(1, count("tenants"));
             assertEquals(1, count("tenant_memberships"));
-            assertEquals(1, count("roles"));
+            assertEquals(1 + WmsTenantPermissionPolicy.systemRoleTemplates().size(), count("roles"));
             assertEquals(1, jdbc.queryForObject(
                     "SELECT COUNT(*) FROM wms_platform_bootstrap_state WHERE status='COMPLETED'",
                     Integer.class));
