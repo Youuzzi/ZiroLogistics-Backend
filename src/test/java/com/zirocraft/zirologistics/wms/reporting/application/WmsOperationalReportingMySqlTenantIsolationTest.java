@@ -111,7 +111,7 @@ class WmsOperationalReportingMySqlTenantIsolationTest {
         jdbc.update("""
                 INSERT INTO role_permissions (role_id, permission_id)
                 SELECT ?, id FROM permissions
-                WHERE permission_code IN ('WMS_INVENTORY_POST', 'WMS_OPERATIONAL_REPORT_READ')
+                WHERE permission_code IN ('WMS_OPERATIONAL_REPORT_READ')
                 """, roleId);
 
         String warehousePublicId = uuid();
