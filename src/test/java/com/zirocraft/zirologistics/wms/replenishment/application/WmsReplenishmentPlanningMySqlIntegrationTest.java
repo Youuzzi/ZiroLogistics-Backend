@@ -629,7 +629,8 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                 INSERT INTO role_permissions (role_id, permission_id)
                 SELECT ?, id FROM permissions
                 WHERE permission_code IN (
-                  'WMS_INVENTORY_POST',\n                  'WMS_REPLENISHMENT_READ',
+                  'WMS_INVENTORY_POST',
+                  'WMS_REPLENISHMENT_READ',
                   'WMS_REPLENISHMENT_RULE_MANAGE','WMS_REPLENISHMENT_TASK_CREATE',
                   'WMS_REPLENISHMENT_TASK_RELEASE','WMS_REPLENISHMENT_TASK_ASSIGN',
                   'WMS_REPLENISHMENT_TASK_START','WMS_REPLENISHMENT_TASK_CONFIRM',
