@@ -1,8 +1,8 @@
 # WMS Role & Permission Management Design
 
-**Status:** Proposed implementation contract for roadmap Stage 6.  
-**Runtime:** WMS-only.  
-**Schema:** V1 is frozen. Any required schema change must be additive and justified by a concrete invariant.  
+**Status:** Partially implemented; remaining policy and coverage gaps are tracked in `ROLE_BASED_ACCESS_CONTROL.md`.
+**Runtime:** WMS-only.
+**Schema:** Existing merged migrations are immutable. Any required schema change must be additive and justified by a concrete invariant.
 **Security:** Deny by default; tenant context and effective permissions are resolved from persisted membership state.
 
 ## 1. Purpose
@@ -23,7 +23,7 @@ The frozen V1 schema already contains:
 
 The current authorization resolver calculates effective permissions from active user, membership, tenant, assigned active roles, and role-permission rows. It does not trust role or permission lists from JWT claims or client payloads.
 
-Existing explicit capabilities include `WMS_IDENTITY_MEMBERSHIP_INVITE` and `WMS_TENANT_PROFILE_UPDATE`. Their presence does not imply that role CRUD or role assignment endpoints already exist.
+The repository now contains role-management permissions and service/API functionality introduced by later migrations and implementation work. The permission catalogue and delegation policy are not yet complete for all WMS workflows. See the current source, migrations, tests, and `ROLE_BASED_ACCESS_CONTROL.md` for the implementation boundary.
 
 ## 3. Authorization model
 
@@ -51,7 +51,7 @@ The API surface should be implemented as separate use cases with explicit permis
 | Read membership role assignments | `WMS_MEMBERSHIP_ROLE_READ` |
 | Assign/remove a role from a membership | `WMS_MEMBERSHIP_ROLE_MANAGE` |
 
-These codes are proposals, not yet seeded permissions. Before migration, confirm the final minimal set and the bootstrap/provisioning grants. Do not grant all management permissions to `TENANT_OWNER` merely because it is the initial role. The initial owner must receive only an explicitly reviewed allowlist.
+These codes are an initial design vocabulary, not a complete statement of the current seeded catalogue. Verify each code against active Flyway migrations and enforcement tests before changing it. The role-management implementation exists, but the delegable catalogue is intentionally narrower than the full permission catalogue. Do not grant all management permissions to `TENANT_OWNER` merely because it is the initial role. The initial owner must receive only an explicitly reviewed allowlist.
 
 ## 5. Role lifecycle invariants
 
