@@ -193,6 +193,25 @@ class WmsRoleManagementServiceTest {
     }
 
     @Test
+    void preventsMemberFromSelfAssigningHighRiskSystemRole() {
+        when(accessService.resolve("user-public", "membership-public"))
+                .thenReturn(access(Set.of("WMS_MEMBERSHIP_ROLE_MANAGE")));
+        when(jdbc.queryForList(contains("SELECT id FROM tenants"), eq(Long.class), eq(10L)))
+                .thenReturn(List.of(10L));
+        when(jdbc.queryForList(contains("SELECT m.id FROM tenant_memberships"), eq(Long.class),
+                eq(10L), eq("membership-public"))).thenReturn(List.of(30L));
+        when(jdbc.queryForList(contains("SELECT id, public_id, role_code"), eq(10L), eq("role-public")))
+                .thenReturn(List.of(Map.of("id", 55L, "role_code", "SYS_INVENTORY_APPROVER", "status", "ACTIVE")));
+        when(jdbc.queryForObject(contains("SELECT u.public_id FROM tenant_memberships"), eq(String.class),
+                eq(30L), eq(10L))).thenReturn("user-public");
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.assignRole(principal(), "membership-public", "role-public"));
+
+        verify(jdbc, never()).update(contains("INSERT INTO membership_roles"), any(Object[].class));
+    }
+
+    @Test
     void cannotDelegatePermissionThatCurrentActorDoesNotPossess() {
         when(accessService.resolve("user-public", "membership-public"))
                 .thenReturn(access(Set.of("WMS_ROLE_PERMISSION_MANAGE", "WMS_ROLE_READ")));
