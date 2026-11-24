@@ -1,8 +1,8 @@
 # Tenant Role Templates and Permission Governance Policy
 
-**Status:** Proposed policy baseline; not yet implemented or approved as production grant data.  
-**Reviewed source baseline:** `cc1c489810e9551273d6c45397a3ef86150bd1b2`  
-**Related evidence:** `docs/audits/TENANT_RBAC_PERMISSION_CATALOGUE_AUDIT.md`, `docs/architecture/WMS_ROLE_PERMISSION_MANAGEMENT_DESIGN.md`, `docs/security/TENANT_ISOLATION_AND_AUTHORIZATION.md`  
+**Status:** Proposed policy baseline; not yet implemented or approved as production grant data.
+**Reviewed source baseline:** `cc1c489810e9551273d6c45397a3ef86150bd1b2`
+**Related evidence:** `docs/audits/TENANT_RBAC_PERMISSION_CATALOGUE_AUDIT.md`, `docs/architecture/WMS_ROLE_PERMISSION_MANAGEMENT_DESIGN.md`, `docs/security/TENANT_ISOLATION_AND_AUTHORIZATION.md`
 **Scope:** Tenant-scoped role templates, permission risk classes, delegation ceilings, separation of duties, and bootstrap/provisioning parity.
 
 ## 1. Purpose
