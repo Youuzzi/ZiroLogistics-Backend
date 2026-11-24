@@ -1,12 +1,11 @@
 package com.zirocraft.zirologistics.wms.bootstrap;
 
+import com.zirocraft.zirologistics.wms.authorization.domain.WmsTenantPermissionPolicy;
+import com.zirocraft.zirologistics.wms.tenancy.domain.WmsTenantLocalePolicy;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import com.zirocraft.zirologistics.wms.authorization.domain.WmsTenantPermissionPolicy;
-import com.zirocraft.zirologistics.wms.tenancy.domain.WmsTenantLocalePolicy;
-
 import java.util.Locale;
 import java.util.UUID;
 import java.util.regex.Pattern;
