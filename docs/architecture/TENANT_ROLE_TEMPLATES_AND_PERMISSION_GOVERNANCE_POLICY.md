@@ -223,7 +223,7 @@ The matrix below is the initial default policy proposal. A check mark means the 
 
 `✓*` means tenant governance may include master-data administration if the owner is intended to maintain the tenant's operating model; a stricter owner template can be read-only. `restricted` means only the exact permissions in the approved delegable set, never all G1 or M1 permissions by role name. `scoped` means the read permission may be included only when needed for the role's workflow.
 
-The matrix is intentionally conservative for C1 and A1. Shipment release is assigned to the separate Outbound Controller template. The shared `WMS_INVENTORY_POST` permission is a technical posting gate used by multiple workflow services; it is assigned only to operational templates that must commit inventory movements and is always paired with the workflow-specific permission. It is not granted to Tenant Owner, Tenant Administrator, Warehouse Supervisor, or Reporting Auditor.
+The matrix is intentionally conservative for C1 and A1. Shipment release is assigned to the separate Outbound Controller template. The generic `WMS_INVENTORY_POST` permission is reserved for the direct inventory-posting API and is not granted by any default role template. Internal inbound, putaway, picking, shipping, transfer, replenishment, and adjustment posting paths authorize against their own workflow-specific persisted permission, avoiding a broad generic posting grant.
 
 ## 6. Canonical policy and delegation contract
 
