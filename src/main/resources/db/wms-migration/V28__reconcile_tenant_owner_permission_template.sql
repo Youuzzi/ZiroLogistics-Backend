@@ -47,6 +47,7 @@ WHERE r.role_code = 'TENANT_OWNER'
   AND r.is_system_role = 1;
 
 -- Create each server-managed operational role for all tenants that predate this policy.
+-- A conflicting tenant role_code fails the migration rather than silently omitting a protected template.
 INSERT INTO roles (public_id, tenant_id, role_code, role_name, description, is_system_role, status)
 SELECT UUID(), t.id, templates.role_code, templates.role_name, templates.description, 1, 'ACTIVE'
 FROM tenants t
@@ -75,10 +76,7 @@ CROSS JOIN (
   UNION ALL
   SELECT 'SYS_REPORTING_AUDITOR' AS role_code, 'Reporting Auditor' AS role_name, 'Read-only access to tenant operational reports and workflow evidence.' AS description
 ) templates
-WHERE NOT EXISTS (
-  SELECT 1 FROM roles existing
-  WHERE existing.tenant_id = t.id AND existing.role_code = templates.role_code
-);
+;
 
 -- Grant the exact template permissions. INSERT IGNORE makes the mapping safe if a role
 -- was already created by an earlier controlled provisioning path.
