@@ -132,6 +132,10 @@ class WmsTenantProfileMySqlIntegrationTest {
                 profileService.updateCurrent(fixture.principal(),
                         new WmsTenantProfileUpdate("Changed Legal", "Changed Display",
                                 "Not/A-Timezone", "IDR", 0L)));
+        assertThrows(IllegalArgumentException.class, () ->
+                profileService.updateCurrent(fixture.principal(),
+                        new WmsTenantProfileUpdate("Changed Legal", "Changed Display",
+                                "Asia/Jakarta", "ZZZ", 0L)));
         assertEquals("ORIGINAL-" + fixture.suffix(),
                 tenantRepository.findById(fixture.tenant().getId()).orElseThrow().getDisplayName());
         assertEquals(0, jdbc.queryForObject("""
