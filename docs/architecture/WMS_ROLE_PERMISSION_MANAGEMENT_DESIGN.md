@@ -1,8 +1,8 @@
 # WMS Role & Permission Management Design
 
-**Status:** Partially implemented; remaining policy and coverage gaps are tracked in `ROLE_BASED_ACCESS_CONTROL.md`.  
-**Runtime:** WMS-only.  
-**Schema:** Existing merged migrations are immutable. Any required schema change must be additive and justified by a concrete invariant.  
+**Status:** Partially implemented; remaining policy and coverage gaps are tracked in `ROLE_BASED_ACCESS_CONTROL.md`.
+**Runtime:** WMS-only.
+**Schema:** Existing merged migrations are immutable. Any required schema change must be additive and justified by a concrete invariant.
 **Security:** Deny by default; tenant context and effective permissions are resolved from persisted membership state.
 
 ## 1. Purpose
