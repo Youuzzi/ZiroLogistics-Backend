@@ -171,6 +171,23 @@ class WmsTenantProvisioningMySqlIntegrationTest {
                 Integer.class, properties.getTenantCode()));
     }
 
+    @Test
+    void rejectsFixedOffsetTimezoneAndUnknownCurrencyBeforeTenantWrites() {
+        configure("TENANT_" + UUID.randomUUID().toString().substring(0, 8),
+                "invalid-locale-" + UUID.randomUUID() + "@example.test");
+
+        properties.setTimezone("+07:00");
+        assertThrows(RuntimeException.class, () -> provisioningService.provision(properties));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM tenants WHERE tenant_code = ?",
+                Integer.class, properties.getTenantCode()));
+
+        properties.setTimezone("Asia/Jakarta");
+        properties.setCurrency("ZZZ");
+        assertThrows(RuntimeException.class, () -> provisioningService.provision(properties));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM tenants WHERE tenant_code = ?",
+                Integer.class, properties.getTenantCode()));
+    }
+
     private void configure(String tenantCode, String ownerEmail) {
         properties.setEnabled(true);
         properties.setTenantCode(tenantCode.toUpperCase());
