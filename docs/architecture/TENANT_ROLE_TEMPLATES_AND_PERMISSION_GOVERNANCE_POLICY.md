@@ -267,7 +267,7 @@ At minimum, enforce the following at the application/domain layer and verify wit
 6. Replenishment confirmation reversal is separate from normal task confirmation.
 7. Role/permission governance cannot be delegated through arbitrary custom roles.
 8. No user can remove/deactivate the last effective Tenant Owner or leave the tenant without an owner.
-9. Self-assignment cannot be used to escalate privileges. First-owner bootstrap and controlled owner succession require explicit, audited paths.
+9. Members cannot self-assign high-risk controller, shipping, transfer, or approval system roles. The role-management service compares the target membership's persisted user identity with the authenticated actor before assignment. First-owner bootstrap and controlled owner succession require explicit, audited paths.
 10. Audit actor identity must resolve to persisted user/membership identity; a free-form operator reference is attribution metadata, not authentication.
 
 A permission split alone is not sufficient. The service must compare the persisted submitting actor with the persisted approving actor and enforce the transition invariant transactionally.
