@@ -39,7 +39,15 @@
 - Representative workflow code normalizes quantities to four decimal places and rejects excess fractional precision rather than silently rounding.
 - This evidence does not establish a monetary amount policy.
 
-## 2A. Runtime temporal configuration findings (follow-up review)\n\n- `application-wms.properties` configures `spring.jpa.properties.hibernate.jdbc.time_zone=UTC`, but does not define a datasource connection-init statement or other explicit MySQL session-timezone enforcement.\n- The reviewed `compose.yml` JDBC URL is `jdbc:mysql://mysql:3306/zirologistics_wms`; no timezone parameter or MySQL server timezone override is configured in that file. This is configuration evidence only; it does not prove the actual timezone of an externally deployed database or session.\n- `UserEntity` and `TenantEntity` map creation/update audit fields as `LocalDateTime` and use Hibernate `@CreationTimestamp` / `@UpdateTimestamp`. These are ORM-generated values and must be tested against JDBC/database-default timestamp paths under deliberately different session timezones.\n- `DATETIME(6)` itself carries no timezone conversion semantics. The application must define whether the stored value is UTC wall-clock representation or tenant-local wall-clock value; the recommended contract is UTC for event instants.\n- This follow-up still does not certify every temporal field or write path. No runtime connection was made to any database.\n\n## 3. Policy decisions recommended
+## 2A. Runtime temporal configuration findings (follow-up review)
+
+- `application-wms.properties` configures `spring.jpa.properties.hibernate.jdbc.time_zone=UTC`, but does not define a datasource connection-init statement or other explicit MySQL session-timezone enforcement.
+- The reviewed `compose.yml` JDBC URL is `jdbc:mysql://mysql:3306/zirologistics_wms`; no timezone parameter or MySQL server timezone override is configured in that file. This is configuration evidence only; it does not prove the actual timezone of an externally deployed database or session.
+- `UserEntity` and `TenantEntity` map creation/update audit fields as `LocalDateTime` and use Hibernate `@CreationTimestamp` / `@UpdateTimestamp`. These are ORM-generated values and must be tested against JDBC/database-default timestamp paths under deliberately different session timezones.
+- `DATETIME(6)` itself carries no timezone conversion semantics. The application must define whether the stored value is UTC wall-clock representation or tenant-local wall-clock value; the recommended contract is UTC for event instants.
+- This follow-up still does not certify every temporal field or write path. No runtime connection was made to any database.
+
+## 3. Policy decisions recommended
 
 These are recommendations for a consistent contract. They are not claims that every rule is already implemented.
 
