@@ -25,11 +25,24 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: java-kotlin
-          build-mode: autobuild
+          build-mode: manual
+
+      # Use the runner-provided Maven executable instead of the Maven Wrapper.
+      # CodeQL autobuild invokes ./mvnw, which must download its Maven distribution
+      # before extraction can begin; a transient Maven Central outage then prevents
+      # CodeQL from analyzing otherwise buildable source.
+      - name: Build for CodeQL analysis
+        run: mvn --batch-mode --no-transfer-progress -Pwms-runtime -DskipTests package
 
       - name: Perform CodeQL Analysis
         id: codeql
