@@ -88,3 +88,9 @@ CREATE TABLE platform_support_grant_scopes (
       'TENANT_AUDIT_METADATA_READ'
     ))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Approval is a separate privilege from requesting or revoking support access.
+INSERT INTO platform_permissions (permission_code, description, risk_level, status)
+VALUES ('PLATFORM_SUPPORT_GRANT_APPROVE',
+        'Approve or reject another operator\'s tenant-scoped support grant request.',
+        'CRITICAL', 'ACTIVE');
