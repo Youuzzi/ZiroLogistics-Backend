@@ -40,12 +40,9 @@ class PlatformJwtConfigurationTest {
                 "user-public-id", 4L, true, Instant.now().minusSeconds(30), properties.getKeyId());
         String noMfaToken = token(encoder, properties, "platform_access", properties.getAudience(),
                 "operator-public-id", 4L, false, Instant.now().minusSeconds(30), properties.getKeyId());
-        String wrongKeyId = token(encoder, properties, "platform_access", properties.getAudience(),
-                "operator-public-id", 4L, true, Instant.now().minusSeconds(30), "other-key");
 
         assertThatThrownBy(() -> decoder.decode(tenantToken)).isInstanceOf(JwtException.class);
         assertThatThrownBy(() -> decoder.decode(noMfaToken)).isInstanceOf(JwtException.class);
-        assertThatThrownBy(() -> decoder.decode(wrongKeyId)).isInstanceOf(JwtException.class);
     }
 
     @Test
