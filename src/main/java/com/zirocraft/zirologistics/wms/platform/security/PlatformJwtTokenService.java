@@ -2,6 +2,7 @@ package com.zirocraft.zirologistics.wms.platform.security;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -30,7 +31,7 @@ public class PlatformJwtTokenService {
     private final PlatformJwtProperties properties;
     private final Clock clock;
 
-    public PlatformJwtTokenService(JwtEncoder platformJwtEncoder, PlatformJwtProperties properties) {
+    public PlatformJwtTokenService(@Qualifier("platformJwtEncoder") JwtEncoder platformJwtEncoder, PlatformJwtProperties properties) {
         this(platformJwtEncoder, properties, Clock.systemUTC());
     }
 
