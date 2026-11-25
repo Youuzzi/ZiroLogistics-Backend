@@ -53,8 +53,10 @@ class MySqlWmsEmailOutboxStorageAdapterIntegrationTest {
                 .migrate();
 
         DataSource dataSource = new DriverManagerDataSource(
-                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+                nonUtcJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
         jdbcTemplate = new JdbcTemplate(dataSource);
+        assertEquals("+07:00", jdbcTemplate.queryForObject("SELECT @@session.time_zone", String.class),
+                "outbox adapter tests must exercise a non-UTC MySQL session");
         adapter = new MySqlWmsEmailOutboxStorageAdapter(
                 jdbcTemplate, new DataSourceTransactionManager(dataSource));
     }
@@ -164,6 +166,10 @@ class MySqlWmsEmailOutboxStorageAdapterIntegrationTest {
         assertThrows(IllegalArgumentException.class, () -> adapter.enqueue(
                 UUID.randomUUID(), WmsIdentityActionTokenPurpose.INVITATION,
                 "user@example.test", new byte[16], nonce(), 1, NOW));
+    }
+
+    private static String nonUtcJdbcUrl() {
+        return MYSQL.getJdbcUrl() + "?connectionTimeZone=%2B07:00&forceConnectionTimeZoneToSession=true";
     }
 
     private static void enqueue(UUID messageId, String suffix) {
