@@ -7,6 +7,7 @@ import com.zirocraft.zirologistics.wms.platform.security.PlatformAuthenticatedPr
 import com.zirocraft.zirologistics.wms.tenancy.application.WmsTenantLifecycleAction;
 import com.zirocraft.zirologistics.wms.tenancy.application.WmsTenantLifecycleResult;
 import com.zirocraft.zirologistics.wms.tenancy.application.WmsTenantLifecycleService;
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,6 +24,7 @@ import java.util.UUID;
  * Spring Security context and current persisted permissions are checked per action.
  */
 @Service
+@Profile("wms")
 public class PlatformTenantLifecycleApplicationService {
     private final PlatformPermissionEvaluator permissionEvaluator;
     private final WmsTenantLifecycleService lifecycleService;
