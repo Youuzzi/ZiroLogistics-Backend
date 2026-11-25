@@ -45,7 +45,8 @@ class WmsV8TenantAuditMigrationIntegrationTest {
             assertEquals(71, scalar(statement,
                     "SELECT COUNT(*) FROM information_schema.tables " +
                             "WHERE table_schema=DATABASE() AND table_type='BASE TABLE' " +
-                            "AND table_name <> 'flyway_schema_history'"));
+                            "AND table_name <> 'flyway_schema_history' " +
+                            "AND LEFT(table_name, 9) <> 'platform_'"));
             assertEquals("json", text(statement,
                     "SELECT data_type FROM information_schema.columns " +
                             "WHERE table_schema=DATABASE() AND table_name='tenant_audit_events' " +

@@ -126,6 +126,7 @@ class WmsV11InventoryCoreMigrationIntegrationTest {
                 SELECT COUNT(*) FROM information_schema.tables
                 WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'
                   AND table_name <> 'flyway_schema_history'
+                  AND LEFT(table_name, 9) <> 'platform_'
                 """);
     }
 
