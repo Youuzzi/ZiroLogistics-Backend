@@ -36,7 +36,7 @@ class PlatformPermissionEvaluatorMySqlIntegrationTest {
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         PlatformPermissionEvaluator evaluator = new PlatformPermissionEvaluator(jdbc);
-        PlatformAuthenticatedPrincipal principal = new PlatformAuthenticatedPrincipal("operator-" + UUID.randomUUID());
+        PlatformAuthenticatedPrincipal principal = new PlatformAuthenticatedPrincipal(UUID.randomUUID().toString());
 
         jdbc.update("""
                 INSERT INTO platform_operators
