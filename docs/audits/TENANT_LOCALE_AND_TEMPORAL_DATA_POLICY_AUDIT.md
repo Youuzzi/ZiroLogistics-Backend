@@ -44,7 +44,7 @@
 These are recommendations for a consistent contract. They are not claims that every rule is already implemented.
 
 ### 3.1 Tenant timezone
-- Persist a canonical canonical IANA/TZDB region identifier (for example `Asia/Jakarta`) for tenant business timezone.
+- Persist a canonical IANA/TZDB region identifier (for example `Asia/Jakarta`) for tenant business timezone.
 - Permit the explicit `UTC` identifier as a universal special case.
 - Reject fixed offsets (`+07:00`), abbreviations, and ambiguous short names as tenant timezone configuration.
 - Implemented by PR #290: bootstrap, provisioning, and tenant profile update use the same validator. Do not reintroduce entry-point-specific timezone semantics.
