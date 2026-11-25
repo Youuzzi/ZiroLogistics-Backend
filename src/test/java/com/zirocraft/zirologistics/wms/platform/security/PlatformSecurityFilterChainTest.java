@@ -5,15 +5,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
 
@@ -21,9 +18,9 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = PlatformSecurityFilterChainTest.ProbeController.class)
+@WebMvcTest(controllers = PlatformSecurityProbeController.class)
 @ContextConfiguration(classes = PlatformSecurityTestApplication.class)
-@Import({PlatformSecurityConfiguration.class, ProbeController.class})
+@Import({PlatformSecurityConfiguration.class, PlatformSecurityProbeController.class})
 @ActiveProfiles("wms")
 @TestPropertySource(properties = {
         "wms.platform.security.jwt.enabled=true",
@@ -77,21 +74,4 @@ class PlatformSecurityFilterChainTest {
                 .andExpect(status().isForbidden());
     }
 
-    @RestController
-    static class ProbeController {
-        @GetMapping("/api/platform/v1/probe")
-        String platformProbe(Authentication authentication) {
-            return authentication.getName();
-        }
-
-        @GetMapping("/api/wms/v1/probe")
-        String tenantProbe() {
-            return "tenant";
-        }
-
-        @GetMapping("/unmatched/probe")
-        String unmatchedProbe() {
-            return "unmatched";
-        }
-    }
 }
