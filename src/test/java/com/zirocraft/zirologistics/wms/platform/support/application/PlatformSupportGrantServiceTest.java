@@ -38,7 +38,7 @@ class PlatformSupportGrantServiceTest {
                 permissions, jdbc, new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC));
         var context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-                new PlatformAuthenticatedPrincipal(actor, NOW), null, List.of()));
+                new PlatformAuthenticatedPrincipal(actor), null, List.of()));
         SecurityContextHolder.setContext(context);
     }
 
@@ -107,12 +107,13 @@ class PlatformSupportGrantServiceTest {
         when(permissions.hasPermission(any(), eq("PLATFORM_SUPPORT_GRANT_APPROVE"))).thenReturn(true);
         when(jdbc.queryForObject(contains("SELECT id FROM platform_operators"), eq(Long.class), eq(actor)))
                 .thenReturn(11L);
-        when(jdbc.queryForList(contains("FROM platform_support_grants"), any()))
+        String grantPublicId = UUID.randomUUID().toString();
+        when(jdbc.queryForList(contains("FROM platform_support_grants"), eq((Object) grantPublicId)))
                 .thenReturn(List.of(Map.of("id", 33L, "tenant_id", 22L,
                         "requested_by_operator_id", 11L, "status", "REQUESTED", "tenant_status", "ACTIVE")));
 
         assertThatThrownBy(() -> service.approveGrant(
-                UUID.randomUUID().toString(), "Approved after independent access review",
+                grantPublicId, "Approved after independent access review",
                 UUID.randomUUID().toString()))
                 .isInstanceOf(PlatformSupportGrantRejectedException.class);
 
