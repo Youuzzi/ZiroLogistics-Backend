@@ -28,7 +28,7 @@ public final class WmsTenantLocalePolicy {
         }
         try {
             Currency currency = Currency.getInstance(code);
-            if (!currency.getCurrencyCode().equals(code)) {
+            if (currency == null || !currency.getCurrencyCode().equals(code)) {
                 throw new IllegalArgumentException("Tenant currency is invalid");
             }
             return code;
