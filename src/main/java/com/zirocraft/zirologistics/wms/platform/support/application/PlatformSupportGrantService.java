@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.platform.authorization.application.PlatformPermissionEvaluator;
 import com.zirocraft.zirologistics.wms.platform.security.PlatformAuthenticatedPrincipal;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
@@ -37,6 +38,7 @@ public class PlatformSupportGrantService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
+    @Autowired
     public PlatformSupportGrantService(
             PlatformPermissionEvaluator permissions, JdbcTemplate jdbc, ObjectMapper objectMapper) {
         this(permissions, jdbc, objectMapper, Clock.systemUTC());
