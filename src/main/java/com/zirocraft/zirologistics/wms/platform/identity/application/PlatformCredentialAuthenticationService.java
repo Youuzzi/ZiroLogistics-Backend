@@ -1,6 +1,5 @@
 package com.zirocraft.zirologistics.wms.platform.identity.application;
 
-import com.zirocraft.zirologistics.wms.identity.application.WmsEmailNormalizer;
 import com.zirocraft.zirologistics.wms.platform.identity.domain.PlatformOperatorStatus;
 import com.zirocraft.zirologistics.wms.platform.identity.infrastructure.persistence.PlatformOperatorEntity;
 import com.zirocraft.zirologistics.wms.platform.identity.infrastructure.persistence.PlatformOperatorRepository;
@@ -44,7 +43,7 @@ public final class PlatformCredentialAuthenticationService {
         Objects.requireNonNull(password, "password must not be null");
         final String normalizedEmail;
         try {
-            normalizedEmail = WmsEmailNormalizer.normalize(email);
+            normalizedEmail = PlatformOperatorEmailNormalizer.normalize(email);
         } catch (IllegalArgumentException invalidEmail) {
             throw new PlatformCredentialAuthenticationException();
         }
