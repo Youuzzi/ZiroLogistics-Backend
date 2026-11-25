@@ -1,7 +1,7 @@
 # Tenant Locale, Timezone, Currency, and Temporal Data Policy Audit
 
 **Status:** Source audit baseline; LOC-01 and LOC-02 are implemented through the shared `WmsTenantLocalePolicy` used by bootstrap, provisioning, and tenant profile updates. Temporal persistence/session policy remains open.
-**Reviewed commit:** `a0188c95051656f61d6040ffb550dffa2efe5a9e`
+**Reviewed commit:** `b3ac39828880eaae967b005d9169f6e9a3801bec`
 **Scope:** Tenant timezone/currency validation, WMS temporal API fields, persistence mappings, SQL timestamp generation, and quantity precision visible in representative workflows.
 **Assurance:** This is a targeted source audit, not a complete database-wide temporal or financial certification.
 
@@ -38,6 +38,14 @@
 - Inbound, outbound, transfer, picking, packing, inventory, adjustment, and replenishment APIs use `BigDecimal` for quantities.
 - Representative workflow code normalizes quantities to four decimal places and rejects excess fractional precision rather than silently rounding.
 - This evidence does not establish a monetary amount policy.
+
+## 2A. Runtime temporal configuration findings (follow-up review)
+
+- `application-wms.properties` configures `spring.jpa.properties.hibernate.jdbc.time_zone=UTC`, but does not define a datasource connection-init statement or other explicit MySQL session-timezone enforcement.
+- The reviewed `compose.yml` JDBC URL is `jdbc:mysql://mysql:3306/zirologistics_wms`; no timezone parameter or MySQL server timezone override is configured in that file. This is configuration evidence only; it does not prove the actual timezone of an externally deployed database or session.
+- `UserEntity` and `TenantEntity` map creation/update audit fields as `LocalDateTime` and use Hibernate `@CreationTimestamp` / `@UpdateTimestamp`. These are ORM-generated values and must be tested against JDBC/database-default timestamp paths under deliberately different session timezones.
+- `DATETIME(6)` itself carries no timezone conversion semantics. The application must define whether the stored value is UTC wall-clock representation or tenant-local wall-clock value; the recommended contract is UTC for event instants.
+- This follow-up still does not certify every temporal field or write path. No runtime connection was made to any database.
 
 ## 3. Policy decisions recommended
 
