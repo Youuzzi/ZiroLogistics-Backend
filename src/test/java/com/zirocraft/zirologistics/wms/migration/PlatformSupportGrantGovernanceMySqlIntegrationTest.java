@@ -31,6 +31,10 @@ class PlatformSupportGrantGovernanceMySqlIntegrationTest {
                 .migrate();
         JdbcTemplate jdbc = new JdbcTemplate(new DriverManagerDataSource(
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword()));
+        assertThat(jdbc.queryForObject("""
+                SELECT risk_level FROM platform_permissions
+                 WHERE permission_code = 'PLATFORM_SUPPORT_GRANT_APPROVE'
+                """, String.class)).isEqualTo("CRITICAL");
 
         long tenantId = createTenant(jdbc);
         long requesterId = createOperator(jdbc);
