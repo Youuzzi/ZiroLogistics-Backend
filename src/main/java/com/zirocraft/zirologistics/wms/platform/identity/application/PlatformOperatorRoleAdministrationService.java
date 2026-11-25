@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.platform.authorization.application.PlatformPermissionEvaluator;
 import com.zirocraft.zirologistics.wms.platform.security.PlatformAuthenticatedPrincipal;
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,6 +22,7 @@ import java.util.UUID;
  * is never assignable through routine administration.
  */
 @Service
+@Profile("wms")
 public class PlatformOperatorRoleAdministrationService {
     private static final String ROLE_ASSIGN_PERMISSION = "PLATFORM_OPERATOR_ROLE_ASSIGN";
     private static final String DELEGATION_CEILING_SQL = """
