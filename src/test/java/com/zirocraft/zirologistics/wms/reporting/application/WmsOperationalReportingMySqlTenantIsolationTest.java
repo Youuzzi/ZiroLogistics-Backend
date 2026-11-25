@@ -53,7 +53,7 @@ class WmsOperationalReportingMySqlTenantIsolationTest {
     @Autowired private ObjectMapper objectMapper;
 
     @Test
-    void operationalInventorySummaryIncludesOnlyTheAuthenticatedTenantsInventory() {
+    void operationalInventorySummaryIncludesOnlyTheAuthenticatedTenantsInventory() throws Exception {
         Fixture tenantA = fixture("REPORT_A");
         Fixture tenantB = fixture("REPORT_B");
 
