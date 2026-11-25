@@ -73,7 +73,8 @@ class MySqlWmsIdentityActionTokenStorageAdapterIntegrationTest {
         WmsIdentityActionTokenRecord token = find(digest, WmsIdentityActionTokenPurpose.EMAIL_VERIFICATION);
 
         assertEquals(tokenId, token.id());
-        assertEquals(NOW.truncatedTo(java.time.temporal.ChronoUnit.MICROS), token.createdAt());
+        assertEquals(NOW.plusNanos(123_456_789).truncatedTo(java.time.temporal.ChronoUnit.MICROS),
+                token.createdAt());
         assertEquals(NOW.plusNanos(987_654_321).truncatedTo(java.time.temporal.ChronoUnit.MICROS),
                 token.expiresAt());
     }
