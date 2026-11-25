@@ -7,6 +7,7 @@ import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAc
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessDeniedException;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import com.zirocraft.zirologistics.wms.tenancy.domain.TenantStatus;
+import com.zirocraft.zirologistics.wms.tenancy.domain.WmsTenantLocalePolicy;
 import com.zirocraft.zirologistics.wms.tenancy.infrastructure.persistence.TenantEntity;
 import com.zirocraft.zirologistics.wms.tenancy.infrastructure.persistence.TenantRepository;
 import org.springframework.context.annotation.Profile;
@@ -16,8 +17,6 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.ZoneId;
-import java.util.Currency;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -182,27 +181,10 @@ public class WmsTenantProfileService {
     }
 
     private static String validateTimezone(String value) {
-        String timezone = bounded(value, "timezone", 1, 60);
-        try {
-            if (!ZoneId.getAvailableZoneIds().contains(timezone) && !"UTC".equals(timezone)) {
-                throw new IllegalArgumentException();
-            }
-            return timezone;
-        } catch (RuntimeException invalid) {
-            throw new IllegalArgumentException("Timezone is invalid");
-        }
+        return WmsTenantLocalePolicy.normalizeTimezone(bounded(value, "timezone", 1, 60));
     }
 
     private static String validateCurrency(String value) {
-        String code = bounded(value, "default currency", 3, 3).toUpperCase(Locale.ROOT);
-        try {
-            Currency currency = Currency.getInstance(code);
-            if (!currency.getCurrencyCode().equals(code)) {
-                throw new IllegalArgumentException("Currency is invalid");
-            }
-            return code;
-        } catch (RuntimeException invalid) {
-            throw new IllegalArgumentException("Default currency is invalid");
-        }
+        return WmsTenantLocalePolicy.normalizeCurrency(bounded(value, "default currency", 3, 3));
     }
 }

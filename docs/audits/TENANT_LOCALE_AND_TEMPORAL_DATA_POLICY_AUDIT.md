@@ -1,6 +1,6 @@
 # Tenant Locale, Timezone, Currency, and Temporal Data Policy Audit
 
-**Status:** Source audit and policy baseline; implementation reconciliation remains open.
+**Status:** Source audit baseline; LOC-01 and LOC-02 are implemented through the shared `WmsTenantLocalePolicy` used by bootstrap, provisioning, and tenant profile updates. Temporal persistence/session policy remains open.
 **Reviewed commit:** `bcd21a8efee2bf44d529c3cec8334b39e8477c28`
 **Scope:** Tenant timezone/currency validation, WMS temporal API fields, persistence mappings, SQL timestamp generation, and quantity precision visible in representative workflows.
 **Assurance:** This is a targeted source audit, not a complete database-wide temporal or financial certification.
@@ -120,9 +120,9 @@ Do not treat an unqualified `LocalDateTime` as a globally comparable instant. AP
 |---|---|
 | Tenant profile timezone validation | Verified: Java `ZoneId` available IDs plus UTC |
 | Tenant provisioning timezone validation | Verified: Java `ZoneId` available IDs plus UTC |
-| Bootstrap timezone parity | Gap identified |
+| Bootstrap timezone parity | Implemented: bootstrap now uses the same region-ID validator as provisioning/profile |
 | Tenant profile/provisioning currency validation | Verified via Java Currency |
-| Bootstrap currency parity | Gap identified |
+| Bootstrap currency parity | Implemented: bootstrap now uses the same ISO-4217 currency validator as provisioning/profile |
 | Scheduled inbound/outbound/transfer API types | Verified: LocalDateTime |
 | Business-local schedule contract | Unresolved in API reference |
 | Database timestamp storage | DATETIME(6) in reviewed V1 schema |
