@@ -13,6 +13,7 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -77,6 +78,7 @@ class PlatformOperatorPersistenceMySqlIntegrationTest {
         assertEquals(0L, operatorRepository.countByStatus(PlatformOperatorStatus.ACTIVE));
 
         saved.setStatus(PlatformOperatorStatus.ACTIVE);
+        saved.setEmailVerifiedAt(LocalDateTime.of(2026, 1, 1, 0, 0));
         operatorRepository.saveAndFlush(saved);
 
         assertEquals(0L, operatorRepository.countByStatus(PlatformOperatorStatus.INVITED));
