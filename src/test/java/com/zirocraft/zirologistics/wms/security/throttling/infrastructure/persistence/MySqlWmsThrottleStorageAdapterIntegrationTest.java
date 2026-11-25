@@ -50,8 +50,10 @@ class MySqlWmsThrottleStorageAdapterIntegrationTest {
                 .migrate();
 
         DataSource dataSource = new DriverManagerDataSource(
-                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+                nonUtcJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
         jdbcTemplate = new JdbcTemplate(dataSource);
+        assertEquals("+07:00", jdbcTemplate.queryForObject("SELECT @@session.time_zone", String.class),
+                "throttle adapter tests must exercise a non-UTC MySQL session");
         adapter = new MySqlWmsThrottleStorageAdapter(
                 jdbcTemplate, new DataSourceTransactionManager(dataSource));
     }
@@ -278,6 +280,10 @@ class MySqlWmsThrottleStorageAdapterIntegrationTest {
                 adapter.recordFailedAccountAttempt(account, WINDOW, 0, WINDOW.plusSeconds(60)));
         assertThrows(IllegalArgumentException.class, () ->
                 adapter.deleteExpiredBuckets(WINDOW, WINDOW, 0));
+    }
+
+    private static String nonUtcJdbcUrl() {
+        return MYSQL.getJdbcUrl() + "?connectionTimeZone=%2B07:00&forceConnectionTimeZoneToSession=true";
     }
 
     private static WmsThrottleBucketKey key(WmsThrottleBucketType type, String suffix) {
