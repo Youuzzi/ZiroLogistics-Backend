@@ -95,7 +95,12 @@ class PlatformJwtAuthenticationConverterTest {
     }
 
     private static Jwt jwtWithClaims(Map<String, Object> claims) {
+        Map<String, Object> completeClaims = new java.util.HashMap<>(claims);
+        completeClaims.put("iat", NOW.minusSeconds(60));
+        completeClaims.put("exp", NOW.plusSeconds(60));
+        completeClaims.put("iss", "https://control.zirologistics.test");
+        completeClaims.put("aud", java.util.List.of("zirologistics-platform-api"));
         return new Jwt("token", NOW.minusSeconds(60), NOW.plusSeconds(60),
-                Map.of("alg", "RS256", "kid", "platform-key"), claims);
+                Map.of("alg", "RS256", "kid", "platform-key"), completeClaims);
     }
 }
