@@ -34,7 +34,7 @@ class PlatformJwtConfigurationTest {
                 "operator-public-id", 4L, true, Instant.now().minusSeconds(30), properties.getKeyId());
         Jwt decoded = decoder.decode(valid);
         assertThat(decoded.getSubject()).isEqualTo("operator-public-id");
-        assertThat(decoded.getClaimAsLong("cv")).isEqualTo(4L);
+        assertThat(((Number) decoded.getClaims().get("cv")).longValue()).isEqualTo(4L);
 
         String tenantToken = token(encoder, properties, "access", "zirologistics-wms-api",
                 "user-public-id", 4L, true, Instant.now().minusSeconds(30), properties.getKeyId());
