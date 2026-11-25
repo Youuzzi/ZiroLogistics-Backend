@@ -51,8 +51,26 @@ CREATE TABLE platform_support_grants (
            (approved_by_operator_id IS NOT NULL AND approved_at IS NOT NULL)),
   CONSTRAINT chk_platform_support_grants_rejected_state
     CHECK (status <> 'REJECTED' OR (rejected_by_operator_id IS NOT NULL AND rejected_at IS NOT NULL)),
-  CONSTRAINT chk_platform_support_grants_revoked_state
-    CHECK (status <> 'REVOKED' OR (revoked_by_operator_id IS NOT NULL AND revoked_at IS NOT NULL))
+  CONSTRAINT chk_platform_support_grants_state_consistency
+    CHECK (
+      (status = 'REQUESTED' AND approved_by_operator_id IS NULL AND approved_at IS NULL
+       AND rejected_by_operator_id IS NULL AND rejected_at IS NULL
+       AND revoked_by_operator_id IS NULL AND revoked_at IS NULL)
+      OR (status = 'APPROVED' AND approved_by_operator_id IS NOT NULL AND approved_at IS NOT NULL
+          AND rejected_by_operator_id IS NULL AND rejected_at IS NULL
+          AND revoked_by_operator_id IS NULL AND revoked_at IS NULL)
+      OR (status = 'REJECTED' AND approved_by_operator_id IS NULL AND approved_at IS NULL
+          AND rejected_by_operator_id IS NOT NULL AND rejected_at IS NOT NULL
+          AND revoked_by_operator_id IS NULL AND revoked_at IS NULL)
+      OR (status = 'REVOKED' AND approved_by_operator_id IS NOT NULL AND approved_at IS NOT NULL
+          AND rejected_by_operator_id IS NULL AND rejected_at IS NULL
+          AND revoked_by_operator_id IS NOT NULL AND revoked_at IS NOT NULL)
+      OR (status = 'EXPIRED' AND approved_by_operator_id IS NOT NULL AND approved_at IS NOT NULL
+          AND rejected_by_operator_id IS NULL AND rejected_at IS NULL
+          AND revoked_by_operator_id IS NULL AND revoked_at IS NULL)
+    ),
+  CONSTRAINT chk_platform_support_grants_revoked_time
+    CHECK (revoked_at IS NULL OR revoked_at >= approved_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE platform_support_grant_scopes (
