@@ -64,7 +64,9 @@ public class PlatformJwtConfiguration {
         OAuth2TokenValidator<Jwt> mfa = jwt -> {
             Object verified = jwt.getClaims().get("mfa");
             Object authenticatedAt = jwt.getClaims().get("mfa_at");
-            return Boolean.TRUE.equals(verified) && authenticatedAt instanceof java.time.Instant
+            boolean validTimestamp = authenticatedAt instanceof java.time.Instant mfaAt
+                    && jwt.getIssuedAt() != null && !mfaAt.isAfter(jwt.getIssuedAt());
+            return Boolean.TRUE.equals(verified) && validTimestamp
                     ? OAuth2TokenValidatorResult.success() : failure("Platform MFA authentication is required");
         };
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
