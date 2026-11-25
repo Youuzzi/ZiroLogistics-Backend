@@ -62,7 +62,7 @@ public class PlatformTenantLifecycleApplicationService {
 
         if (!result.alreadyApplied()) {
             Long actorId = jdbc.queryForObject(
-                    "SELECT id FROM platform_operators WHERE public_id = ? AND status = 'ACTIVE' AND email_verified_at IS NOT NULL",
+                    "SELECT id FROM platform_operators WHERE public_id = ? AND status = 'ACTIVE' AND email_verified_at IS NOT NULL FOR UPDATE",
                     Long.class, principal.operatorPublicId());
             String payload = serialize(Map.of(
                     "action", request.action().name(),
