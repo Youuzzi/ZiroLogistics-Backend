@@ -30,6 +30,7 @@ class PlatformCredentialAuthenticationServiceTest {
 
     @BeforeEach
     void setUp() {
+        when(dummyPasswordEncoder.encode(any(CharSequence.class))).thenReturn("dummy-hash");
         attempt = new PlatformLoginThrottlePort.Attempt() {};
         when(throttle.beginAttempt(any(), any())).thenReturn(attempt);
         dummyVerifier = new PlatformUnknownPasswordVerifier(dummyPasswordEncoder);
