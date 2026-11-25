@@ -500,6 +500,46 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         assertEquals(new BigDecimal("5.0000"), reserved(fixture));
     }
 
+    @Test
+    void outboundNestedLineAndLocationReferencesCannotCrossTenantBoundaries() {
+        String ownShipmentId = createShipment(fixture);
+        String ownLineId = addLine(fixture, ownShipmentId, "5.0000");
+
+        Fixture otherTenant = fixture("NONE");
+        receive(otherTenant, "5.0000", List.of());
+        String foreignShipmentId = createShipment(otherTenant);
+        String foreignLineId = addLine(otherTenant, foreignShipmentId, "5.0000");
+
+        WmsOutboundShipmentService.AllocationCommand ownLocationAllocation =
+                new WmsOutboundShipmentService.AllocationCommand(List.of(
+                        new WmsOutboundShipmentService.AllocationLine(
+                                fixture.receivingLocationPublicId(), null, BigDecimal.ONE, List.of())));
+
+        assertThrows(WmsResourceNotFoundException.class,
+                () -> shipmentService.allocate(fixture.principal(), ownShipmentId, foreignLineId,
+                        ownLocationAllocation));
+
+        WmsOutboundShipmentService.AllocationCommand foreignLocationAllocation =
+                new WmsOutboundShipmentService.AllocationCommand(List.of(
+                        new WmsOutboundShipmentService.AllocationLine(
+                                otherTenant.receivingLocationPublicId(), null, BigDecimal.ONE, List.of())));
+
+        assertThrows(WmsResourceNotFoundException.class,
+                () -> shipmentService.allocate(fixture.principal(), ownShipmentId, ownLineId,
+                        foreignLocationAllocation));
+
+        assertEquals(BigDecimal.ZERO.setScale(4), reserved(fixture));
+        assertEquals(BigDecimal.ZERO.setScale(4), reserved(otherTenant));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM outbound_shipment_allocations
+                WHERE tenant_id = ? AND outbound_shipment_line_id = (
+                  SELECT id FROM outbound_shipment_lines WHERE tenant_id = ? AND public_id = ?
+                )
+                """, fixture.tenantId(), fixture.tenantId(), ownLineId));
+        assertEquals("DRAFT", shipmentStatus(fixture, ownShipmentId));
+        assertEquals("DRAFT", shipmentStatus(otherTenant, foreignShipmentId));
+    }
+
     private String createShipment(Fixture f) {
         return (String) shipmentService.create(f.principal(),
                 new WmsOutboundShipmentService.CreateShipmentCommand(
