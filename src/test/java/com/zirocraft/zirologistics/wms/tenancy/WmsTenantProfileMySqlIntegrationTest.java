@@ -22,6 +22,7 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.UUID;
 
@@ -57,6 +58,61 @@ class WmsTenantProfileMySqlIntegrationTest {
     @Autowired private RolePermissionRepository rolePermissionRepository;
     @Autowired private WmsTenantProfileService profileService;
     @Autowired private JdbcTemplate jdbc;
+
+    @Test
+    void initializesMySqlSessionTimezoneToUtcForApplicationConnections() {
+        assertEquals("+00:00", jdbc.queryForObject("SELECT @@session.time_zone", String.class));
+        assertEquals(0L, jdbc.queryForObject(
+                "SELECT TIMESTAMPDIFF(MICROSECOND, UTC_TIMESTAMP(6), CURRENT_TIMESTAMP(6))", Long.class));
+    }
+
+    @Test
+    void generatesOrmAuditTimestampsFromUtcDatabaseClock() {
+        Fixture fixture = fixture(true);
+        assertUtcTimestamp("tenants", "created_at", "id = ?", fixture.tenant().getId());
+        assertUtcTimestamp("users", "created_at", "id = ?", fixture.user().getId());
+        assertUtcTimestamp("tenant_memberships", "created_at", "id = ?", fixture.membership().getId());
+
+        Long roleId = jdbc.queryForObject("SELECT id FROM roles WHERE tenant_id = ? AND role_code = ?",
+                Long.class, fixture.tenant().getId(), "TENANT_OWNER_" + fixture.suffix());
+        Long permissionId = jdbc.queryForObject("SELECT id FROM permissions WHERE permission_code = ?",
+                Long.class, WmsTenantProfileService.UPDATE_PERMISSION);
+        assertNotNull(roleId);
+        assertNotNull(permissionId);
+        assertUtcTimestamp("roles", "created_at", "id = ?", roleId);
+        assertUtcTimestamp("membership_roles", "created_at",
+                "tenant_id = ? AND membership_id = ? AND role_id = ?",
+                fixture.tenant().getId(), fixture.membership().getId(), roleId);
+        assertUtcTimestamp("role_permissions", "created_at",
+                "role_id = ? AND permission_id = ?", roleId, permissionId);
+
+        PermissionEntity generatedPermission = new PermissionEntity();
+        generatedPermission.setPermissionCode("TEMPORAL_TEST_" + fixture.suffix());
+        generatedPermission.setModule("TEST");
+        generatedPermission.setDescription("Temporal timestamp integration fixture");
+        generatedPermission = permissionRepository.saveAndFlush(generatedPermission);
+        assertUtcTimestamp("permissions", "created_at", "id = ?", generatedPermission.getId());
+
+        TenantEntity tenant = tenantRepository.findById(fixture.tenant().getId()).orElseThrow();
+        tenant.setDisplayName("UTC-UPDATED-" + fixture.suffix());
+        tenantRepository.saveAndFlush(tenant);
+        assertUtcTimestamp("tenants", "updated_at", "id = ?", tenant.getId());
+
+        UserEntity user = userRepository.findById(fixture.user().getId()).orElseThrow();
+        user.setFullName("UTC-UPDATED-USER-" + fixture.suffix());
+        userRepository.saveAndFlush(user);
+        assertUtcTimestamp("users", "updated_at", "id = ?", user.getId());
+
+        TenantMembershipEntity membership = membershipRepository.findById(fixture.membership().getId()).orElseThrow();
+        membership.setJoinedAt(LocalDateTime.of(2026, 11, 25, 12, 0));
+        membershipRepository.saveAndFlush(membership);
+        assertUtcTimestamp("tenant_memberships", "updated_at", "id = ?", membership.getId());
+
+        RoleEntity role = roleRepository.findById(roleId).orElseThrow();
+        role.setDescription("UTC-UPDATED-ROLE-" + fixture.suffix());
+        roleRepository.saveAndFlush(role);
+        assertUtcTimestamp("roles", "updated_at", "id = ?", role.getId());
+    }
 
     @Test
     void updatesOnlyCurrentTenantProfileAndWritesTransactionalAuditEvent() {
@@ -137,6 +193,16 @@ class WmsTenantProfileMySqlIntegrationTest {
         assertEquals(0, jdbc.queryForObject("""
                 SELECT COUNT(*) FROM tenant_audit_events WHERE tenant_id = ?
                 """, Integer.class, fixture.tenant().getId()));
+    }
+
+    private void assertUtcTimestamp(String table, String column, String predicate, Object... args) {
+        Long differenceMicros = jdbc.queryForObject(
+                "SELECT ABS(TIMESTAMPDIFF(MICROSECOND, " + column + ", UTC_TIMESTAMP(6))) "
+                        + "FROM " + table + " WHERE " + predicate,
+                Long.class, args);
+        assertNotNull(differenceMicros, table + "." + column + " timestamp must exist");
+        assertTrue(differenceMicros < 60_000_000L,
+                table + "." + column + " must use the UTC database wall-clock contract");
     }
 
     private Fixture fixture(boolean grantProfilePermission) {
