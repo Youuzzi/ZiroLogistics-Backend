@@ -8,6 +8,7 @@ CREATE TABLE platform_support_grants (
   tenant_id BIGINT NOT NULL,
   requested_by_operator_id BIGINT NOT NULL,
   approved_by_operator_id BIGINT DEFAULT NULL,
+  rejected_by_operator_id BIGINT DEFAULT NULL,
   revoked_by_operator_id BIGINT DEFAULT NULL,
   operation_ref CHAR(36) NOT NULL,
   purpose VARCHAR(500) NOT NULL,
@@ -16,6 +17,7 @@ CREATE TABLE platform_support_grants (
   starts_at DATETIME(6) NOT NULL,
   expires_at DATETIME(6) NOT NULL,
   approved_at DATETIME(6) DEFAULT NULL,
+  rejected_at DATETIME(6) DEFAULT NULL,
   revoked_at DATETIME(6) DEFAULT NULL,
   version BIGINT UNSIGNED NOT NULL DEFAULT 0,
   PRIMARY KEY (id),
@@ -30,6 +32,8 @@ CREATE TABLE platform_support_grants (
     FOREIGN KEY (requested_by_operator_id) REFERENCES platform_operators (id),
   CONSTRAINT fk_platform_support_grants_approver
     FOREIGN KEY (approved_by_operator_id) REFERENCES platform_operators (id),
+  CONSTRAINT fk_platform_support_grants_rejector
+    FOREIGN KEY (rejected_by_operator_id) REFERENCES platform_operators (id),
   CONSTRAINT fk_platform_support_grants_revoker
     FOREIGN KEY (revoked_by_operator_id) REFERENCES platform_operators (id),
   CONSTRAINT chk_platform_support_grants_status
@@ -40,9 +44,13 @@ CREATE TABLE platform_support_grants (
     CHECK (expires_at > starts_at),
   CONSTRAINT chk_platform_support_grants_approval
     CHECK (approved_by_operator_id IS NULL OR approved_by_operator_id <> requested_by_operator_id),
+  CONSTRAINT chk_platform_support_grants_rejection
+    CHECK (rejected_by_operator_id IS NULL OR rejected_by_operator_id <> requested_by_operator_id),
   CONSTRAINT chk_platform_support_grants_approved_state
     CHECK (status NOT IN ('APPROVED', 'REVOKED', 'EXPIRED') OR
            (approved_by_operator_id IS NOT NULL AND approved_at IS NOT NULL)),
+  CONSTRAINT chk_platform_support_grants_rejected_state
+    CHECK (status <> 'REJECTED' OR (rejected_by_operator_id IS NOT NULL AND rejected_at IS NOT NULL)),
   CONSTRAINT chk_platform_support_grants_revoked_state
     CHECK (status <> 'REVOKED' OR (revoked_by_operator_id IS NOT NULL AND revoked_at IS NOT NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
