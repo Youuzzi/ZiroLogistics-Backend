@@ -16,10 +16,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Issues platform-only access tokens after password authentication and completed MFA.
- * This service is deliberately independent of tenant membership and tenant JWT services.
- */
+/** Issues platform-only access tokens after password authentication and completed MFA. */
 @Service
 @Profile("wms")
 @ConditionalOnProperty(prefix = "wms.platform.security.jwt", name = "enabled", havingValue = "true")
@@ -64,7 +61,8 @@ public class PlatformJwtTokenService {
                 .claim("token_use", "platform_access")
                 .claim("cv", credentialVersion)
                 .claim("mfa", true)
-                .claim("mfa_at", mfaAuthenticatedAt)
+                // Custom JWT claims use NumericDate seconds; Instant objects are not JSON-safe here.
+                .claim("mfa_at", mfaAuthenticatedAt.getEpochSecond())
                 .build();
         JwsHeader headers = JwsHeader.with(SignatureAlgorithm.RS256).keyId(properties.getKeyId()).build();
         return encoder.encode(JwtEncoderParameters.from(headers, claims)).getTokenValue();
