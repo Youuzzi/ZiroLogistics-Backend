@@ -1,0 +1,63 @@
+# Platform Administration Implementation Plan
+
+**Status:** Implementation plan derived from the approved target architecture; no platform identity or authenticated control-plane runtime is claimed by this document.
+**Baseline commit:** `2b72fb4b7870e8312b643a2b5fb71321eab0ab45`.
+**Primary architecture:** `docs/architecture/PLATFORM_ADMINISTRATION_AND_OPERATIONS.md`.
+
+## 1. Current implementation boundary
+
+The repository currently has tenant-scoped authentication and authorization. `WmsSecurityConfiguration` installs a WMS catch-all security chain. Tenant JWTs resolve a selected membership and persisted tenant permissions. The platform bootstrap creates a tenant owner, not a platform operator.
+
+Tenant lifecycle/provisioning code can record `actor_type = PLATFORM_OPERATOR` and an `operator_reference` string. That string is audit attribution only: the current lifecycle service validates its syntax but does not resolve it to an authenticated, persisted operator identity. It must not be exposed as an authenticated administrative API.
+
+## 2. Control-plane/data-plane invariants
+
+1. Platform and tenant identities are distinct principals, even if one human is separately enrolled in both systems.
+2. Platform and tenant JWT audiences, token purposes, authentication chains, and route namespaces are distinct.
+3. Platform permissions never enter the tenant permission catalogue; tenant roles never grant platform authority.
+4. Tenant lifecycle operations require an authenticated platform principal and operation-specific permission.
+5. Platform tenant metadata access does not grant access to warehouse transactions.
+6. Support access is explicit, time-limited, reason-bound, revocable, and audited; no standing impersonation or platform god-mode.
+7. Every command/background execution records a verifiable service/operator identity, not a caller-supplied label.
+
+## 3. Implementation slices
+
+### Slice 1 — Platform identity persistence
+Add additive WMS migrations for platform operators, platform roles, platform permissions, operator-role assignments, role-permission grants, authentication/session revocation metadata, and platform audit events. Use opaque public IDs, normalized unique email, adaptive password hashes, lifecycle status, credential version, and UTC audit timestamps.
+
+### Slice 2 — Platform authentication
+Implement platform-specific credential authentication and token profile with a distinct audience and purpose. Require MFA enrollment before privileged permissions are usable. Keep existing tenant token claims and tenant auth flow unchanged.
+
+### Slice 3 — Platform authorization boundary
+Add a dedicated `/api/platform/v1/**` security chain with explicit ordering and deny-by-default behavior. Tenant tokens must be rejected by platform routes; platform tokens must be rejected by tenant routes. Add HTTP integration tests for both directions.
+
+### Slice 4 — Tenant lifecycle integration
+Replace untrusted operator labels on authenticated lifecycle paths with a resolved platform operator identity. Preserve explicit command-mode bootstrap only as a separately controlled execution mode and make its identity provenance clear. Require action-specific permissions, reason, operation reference, and audit.
+
+### Slice 5 — Support access and break-glass
+Implement a time-limited support grant model with tenant, purpose, requested scope, approver, expiry, and revocation. Do not allow warehouse transaction access unless a separate approved workflow explicitly grants it. Record every access and mutation.
+
+### Slice 6 — Platform role and permission governance
+Start from the approved least-privilege role proposals in the architecture document. Seed only permissions needed by implemented platform endpoints. Avoid wildcard grants and do not seed future billing permissions as active capabilities before billing workflows exist.
+
+## 4. Initial implementation roles
+
+The proposed roles are separate from tenant system-role templates:
+- `PLATFORM_OWNER`
+- `PLATFORM_ADMIN`
+- `PLATFORM_SUPPORT`
+- `PLATFORM_BILLING_ADMIN`
+- `PLATFORM_SECURITY_ADMIN`
+- `PLATFORM_AUDITOR`
+
+These are platform control-plane roles, not warehouse job titles. Each role must have an explicit permission matrix and risk classification. Billing permissions remain dormant until subscription and invoice workflows are implemented.
+
+## 5. Verification gates
+
+- Migration clean-install and upgrade tests on MySQL 8.4.
+- Platform operator lifecycle and credential-version invalidation tests.
+- MFA-required authorization tests for privileged permissions.
+- Cross-audience JWT rejection tests in both security planes.
+- Platform route deny-by-default tests.
+- Tenant lifecycle audit attribution tied to persisted operator ID.
+- No change to legacy DB, frozen schema reference, existing tenant role grants, or tenant API v1 token semantics.
