@@ -22,6 +22,7 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.UUID;
 
@@ -85,10 +86,32 @@ class WmsTenantProfileMySqlIntegrationTest {
         assertUtcTimestamp("role_permissions", "created_at",
                 "role_id = ? AND permission_id = ?", roleId, permissionId);
 
+        PermissionEntity generatedPermission = new PermissionEntity();
+        generatedPermission.setPermissionCode("TEMPORAL_TEST_" + fixture.suffix());
+        generatedPermission.setModule("TEST");
+        generatedPermission.setDescription("Temporal timestamp integration fixture");
+        generatedPermission = permissionRepository.saveAndFlush(generatedPermission);
+        assertUtcTimestamp("permissions", "created_at", "id = ?", generatedPermission.getId());
+
         TenantEntity tenant = tenantRepository.findById(fixture.tenant().getId()).orElseThrow();
         tenant.setDisplayName("UTC-UPDATED-" + fixture.suffix());
         tenantRepository.saveAndFlush(tenant);
         assertUtcTimestamp("tenants", "updated_at", "id = ?", tenant.getId());
+
+        UserEntity user = userRepository.findById(fixture.user().getId()).orElseThrow();
+        user.setFullName("UTC-UPDATED-USER-" + fixture.suffix());
+        userRepository.saveAndFlush(user);
+        assertUtcTimestamp("users", "updated_at", "id = ?", user.getId());
+
+        TenantMembershipEntity membership = membershipRepository.findById(fixture.membership().getId()).orElseThrow();
+        membership.setJoinedAt(LocalDateTime.of(2026, 11, 25, 12, 0));
+        membershipRepository.saveAndFlush(membership);
+        assertUtcTimestamp("tenant_memberships", "updated_at", "id = ?", membership.getId());
+
+        RoleEntity role = roleRepository.findById(roleId).orElseThrow();
+        role.setDescription("UTC-UPDATED-ROLE-" + fixture.suffix());
+        roleRepository.saveAndFlush(role);
+        assertUtcTimestamp("roles", "updated_at", "id = ?", role.getId());
     }
 
     @Test
