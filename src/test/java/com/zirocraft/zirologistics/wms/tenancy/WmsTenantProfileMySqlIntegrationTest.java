@@ -59,6 +59,13 @@ class WmsTenantProfileMySqlIntegrationTest {
     @Autowired private JdbcTemplate jdbc;
 
     @Test
+    void initializesMySqlSessionTimezoneToUtcForApplicationConnections() {
+        assertEquals("+00:00", jdbc.queryForObject("SELECT @@session.time_zone", String.class));
+        assertEquals(0L, jdbc.queryForObject(
+                "SELECT TIMESTAMPDIFF(MICROSECOND, UTC_TIMESTAMP(6), CURRENT_TIMESTAMP(6))", Long.class));
+    }
+
+    @Test
     void updatesOnlyCurrentTenantProfileAndWritesTransactionalAuditEvent() {
         Fixture fixture = fixture(true);
         WmsTenantProfile before = profileService.getCurrent(fixture.principal());
