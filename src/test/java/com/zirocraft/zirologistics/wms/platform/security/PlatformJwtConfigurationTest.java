@@ -57,9 +57,12 @@ class PlatformJwtConfigurationTest {
         String invalidVersion = token(encoder, properties, "platform_access", properties.getAudience(),
                 "operator-public-id", -1L, true, Instant.now().minusSeconds(30), properties.getKeyId());
         String missingMfaAt = tokenWithoutMfaAt(encoder, properties);
+        String futureMfaAt = token(encoder, properties, "platform_access", properties.getAudience(),
+                "operator-public-id", 1L, true, Instant.now().plusSeconds(30), properties.getKeyId());
 
         assertThatThrownBy(() -> decoder.decode(invalidVersion)).isInstanceOf(JwtException.class);
         assertThatThrownBy(() -> decoder.decode(missingMfaAt)).isInstanceOf(JwtException.class);
+        assertThatThrownBy(() -> decoder.decode(futureMfaAt)).isInstanceOf(JwtException.class);
     }
 
     private static PlatformJwtProperties properties(KeyPair pair) {
