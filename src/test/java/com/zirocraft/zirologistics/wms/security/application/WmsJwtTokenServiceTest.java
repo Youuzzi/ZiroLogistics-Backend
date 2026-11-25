@@ -10,7 +10,10 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -43,7 +46,8 @@ class WmsJwtTokenServiceTest {
         properties.setKeyId("wms-test-key-1");
 
         membershipAccessService = mock(WmsMembershipAccessService.class);
-        tokenService = new WmsJwtTokenService(jwtEncoder, properties, membershipAccessService);
+        tokenService = new WmsJwtTokenService(jwtEncoder, properties, membershipAccessService,
+                Clock.fixed(Instant.parse("2026-01-15T10:20:30Z"), ZoneOffset.UTC));
         parametersCaptor = ArgumentCaptor.forClass(JwtEncoderParameters.class);
     }
 
@@ -65,8 +69,8 @@ class WmsJwtTokenServiceTest {
         assertThat(claims.getClaimAsString("token_use")).isEqualTo("tenant_selection");
         assertThat(claims.getClaims()).containsEntry("cv", 4L);
         assertThat(claims.getId()).isNotBlank();
-        assertThat(claims.getIssuedAt()).isNotNull();
-        assertThat(claims.getNotBefore()).isNotNull();
+        assertThat(claims.getIssuedAt()).isEqualTo(Instant.parse("2026-01-15T10:20:30Z"));
+        assertThat(claims.getNotBefore()).isEqualTo(Instant.parse("2026-01-15T10:20:30Z"));
         assertThat(Duration.between(claims.getIssuedAt(), claims.getExpiresAt()))
                 .isEqualTo(Duration.ofMinutes(5));
         assertThat(claims.getClaims()).doesNotContainKeys("mid", "roles", "permissions");
@@ -96,6 +100,7 @@ class WmsJwtTokenServiceTest {
         assertThat(claims.getClaimAsString("mid")).isEqualTo("membership-public-id");
         assertThat(claims.getClaims()).containsEntry("cv", 4L);
         assertThat(claims.getId()).isNotBlank();
+        assertThat(claims.getIssuedAt()).isEqualTo(Instant.parse("2026-01-15T10:20:30Z"));
         assertThat(Duration.between(claims.getIssuedAt(), claims.getExpiresAt()))
                 .isEqualTo(Duration.ofMinutes(10));
         assertThat(claims.getClaims()).doesNotContainKeys("roles", "permissions", "tenant_id");
