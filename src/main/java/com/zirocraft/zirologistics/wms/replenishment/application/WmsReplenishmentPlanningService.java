@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -38,12 +40,20 @@ public class WmsReplenishmentPlanningService {
     private final WmsMembershipAccessService accessService;
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
+    private final Clock clock;
 
+    @Autowired
     public WmsReplenishmentPlanningService(WmsMembershipAccessService accessService,
                                            JdbcTemplate jdbc, ObjectMapper mapper) {
+        this(accessService, jdbc, mapper, Clock.systemUTC());
+    }
+
+    WmsReplenishmentPlanningService(WmsMembershipAccessService accessService,
+                                    JdbcTemplate jdbc, ObjectMapper mapper, Clock clock) {
         this.accessService = Objects.requireNonNull(accessService);
         this.jdbc = Objects.requireNonNull(jdbc);
         this.mapper = Objects.requireNonNull(mapper);
+        this.clock = Objects.requireNonNull(clock);
     }
 
     @Transactional(readOnly = true)
@@ -271,7 +281,7 @@ public class WmsReplenishmentPlanningService {
         if (remaining.signum() != 0) throw new IllegalStateException("Source allocation did not reconcile to the planned quantity");
 
         String taskPublicId = UUID.randomUUID().toString();
-        String taskNumber = "RPL-" + LocalDate.now() + "-" + taskPublicId.substring(0, 8).toUpperCase(Locale.ROOT);
+        String taskNumber = "RPL-" + tenantBusinessDate(access.tenantId()) + "-" + taskPublicId.substring(0, 8).toUpperCase(Locale.ROOT);
         jdbc.update("""
                 INSERT INTO replenishment_tasks
                   (public_id, tenant_id, warehouse_id, replenishment_rule_id, task_number,
@@ -298,6 +308,11 @@ public class WmsReplenishmentPlanningService {
                         "sourceAvailableQty", totalAvailable.toPlainString(),
                         "destinationOnHandQty", destinationOnHand.toPlainString()));
         return taskView(access.tenantId(), taskPublicId);
+    }
+
+    private LocalDate tenantBusinessDate(long tenantId) {
+        String timezone = jdbc.queryForObject("SELECT timezone FROM tenants WHERE id = ?", String.class, tenantId);
+        return WmsTenantBusinessDate.today(timezone, clock);
     }
 
     private RuleValues values(RuleCommand command) {
