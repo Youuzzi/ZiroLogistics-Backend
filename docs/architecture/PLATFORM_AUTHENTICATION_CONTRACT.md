@@ -78,3 +78,17 @@ The first credential-authentication application slice is implemented without ena
 - Unit tests cover successful authentication, unknown operators, inactive operators, and credential-version races; the MySQL integration test verifies the conditional timestamp update.
 
 This slice does not create operators, grant roles, issue platform tokens, or expose login endpoints.
+
+
+## Implementation status — isolated platform JWT foundation
+
+The platform JWT issuer and decoder are implemented as a separate, disabled-by-default profile:
+
+- Platform signing uses its own RSA key pair, key identifier, issuer, and audience configuration. It never reads or reuses the tenant WMS JWT signing material.
+- The platform decoder validates issuer/time, exact platform audience, `platform_access` purpose, key identifier, operator subject, non-negative integral credential version, and MFA claims.
+- Issued access tokens are short-lived (10 minutes), carry the operator public ID and credential version, and contain no tenant membership, tenant ID, role, or permission claims.
+- The issuer refuses to sign unless a successful MFA timestamp is present, not in the future, and no older than five minutes.
+- Cross-profile tests prove a tenant access token is rejected by the platform decoder; missing MFA, wrong key ID, and invalid credential-version claims are rejected.
+- Platform JWT remains disabled unless explicitly enabled with distinct deployment secrets. No platform HTTP route or security chain is enabled by this slice, and no operator/bootstrap credential is created.
+
+The platform decoder is not yet the final revocation enforcement point: the upcoming platform authentication converter/security chain must re-check the operator's current status and credential version against persistence on authenticated requests.
