@@ -81,7 +81,7 @@ class PlatformJwtConfigurationTest {
         JwtClaimsSet claims = JwtClaimsSet.builder().issuer(p.getIssuer()).subject(subject)
                 .audience(List.of(audience)).issuedAt(now).notBefore(now.minusSeconds(1))
                 .expiresAt(now.plusSeconds(90)).id(UUID.randomUUID().toString())
-                .claim("token_use", purpose).claim("cv", cv).claim("mfa", mfa).claim("mfa_at", mfaAt).build();
+                .claim("token_use", purpose).claim("cv", cv).claim("mfa", mfa).claim("mfa_at", mfaAt.getEpochSecond()).build();
         return encode(encoder, claims, keyId);
     }
 
