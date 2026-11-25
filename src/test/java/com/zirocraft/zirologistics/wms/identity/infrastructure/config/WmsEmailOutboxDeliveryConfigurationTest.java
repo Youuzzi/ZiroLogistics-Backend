@@ -22,6 +22,8 @@ class WmsEmailOutboxDeliveryConfigurationTest {
         WmsEmailOutboxDeliveryProperties properties = validProperties();
         properties.setProcessingLease(Duration.ofSeconds(4));
         properties.setSmtpConnectionTimeoutMs(5_000);
+        properties.setSmtpReadTimeoutMs(1_000);
+        properties.setSmtpWriteTimeoutMs(1_000);
 
         assertThrows(IllegalStateException.class,
                 () -> WmsEmailOutboxDeliveryConfiguration.validateConfiguration(properties));
@@ -31,6 +33,8 @@ class WmsEmailOutboxDeliveryConfigurationTest {
     void rejectsLeaseThatCanExpireBeforeWriteTimeout() {
         WmsEmailOutboxDeliveryProperties properties = validProperties();
         properties.setProcessingLease(Duration.ofSeconds(9));
+        properties.setSmtpConnectionTimeoutMs(1_000);
+        properties.setSmtpReadTimeoutMs(1_000);
         properties.setSmtpWriteTimeoutMs(10_000);
 
         assertThrows(IllegalStateException.class,
