@@ -62,3 +62,19 @@ MFA secret material must be encrypted at rest using the approved key-management 
 ## Safety gate
 
 Do not seed or create a first platform operator, provision a tenant, or generate bootstrap credentials until the user explicitly approves the bootstrap procedure. Schema and runtime implementation can proceed without those actions.
+
+
+## Implementation status — credential foundation
+
+The first credential-authentication application slice is implemented without enabling HTTP routes or issuing tokens:
+
+- Platform operator email normalization is isolated from tenant/WMS identity normalization.
+- Credential lookup is restricted to `platform_operators`.
+- Only `ACTIVE` operators with verified email and a matching password can proceed.
+- Unknown email and malformed stored password hashes perform dummy password verification and return the same generic authentication failure.
+- A platform-specific throttling port is required by the use case; no tenant throttle key or storage namespace is reused.
+- Successful authentication metadata is written only through a conditional database update that rechecks operator status, email verification, and credential version.
+- The use case is deliberately not auto-wired as an HTTP service. A platform-specific throttle adapter, token issuer/decoder, ordered security chain, and MFA enforcement remain prerequisites before any route is exposed.
+- Unit tests cover successful authentication, unknown operators, inactive operators, and credential-version races; the MySQL integration test verifies the conditional timestamp update.
+
+This slice does not create operators, grant roles, issue platform tokens, or expose login endpoints.
