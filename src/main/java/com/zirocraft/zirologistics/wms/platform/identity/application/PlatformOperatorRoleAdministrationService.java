@@ -76,7 +76,7 @@ public class PlatformOperatorRoleAdministrationService {
         Long actorId = activeVerifiedOperatorId(actor.operatorPublicId());
         Long targetIdValue = activeVerifiedOperatorId(targetId);
         Long roleId = jdbc.queryForObject("""
-                SELECT id FROM platform_roles WHERE role_code = ? AND status = 'ACTIVE'
+                SELECT id FROM platform_roles WHERE role_code = ? AND status = 'ACTIVE' FOR UPDATE
                 """, Long.class, normalizedRole);
 
         Integer exceedsDelegation = jdbc.queryForObject(DELEGATION_CEILING_SQL,
@@ -125,7 +125,7 @@ public class PlatformOperatorRoleAdministrationService {
         Long actorId = activeVerifiedOperatorId(actor.operatorPublicId());
         Long targetIdValue = activeVerifiedOperatorId(targetId);
         Long roleId = jdbc.queryForObject("""
-                SELECT id FROM platform_roles WHERE role_code = ? AND status = 'ACTIVE'
+                SELECT id FROM platform_roles WHERE role_code = ? AND status = 'ACTIVE' FOR UPDATE
                 """, Long.class, normalizedRole);
         Long assignmentId = jdbc.queryForObject("""
                 SELECT id FROM platform_operator_roles
