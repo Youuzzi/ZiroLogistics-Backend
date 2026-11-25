@@ -1,5 +1,7 @@
 package com.zirocraft.zirologistics.wms.reporting.application;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.inventory.application.WmsInventoryPostingService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
@@ -20,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -47,9 +50,10 @@ class WmsOperationalReportingMySqlTenantIsolationTest {
     @Autowired private WmsOperationalReportingService reportingService;
     @Autowired private WmsInventoryPostingService postingService;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private ObjectMapper objectMapper;
 
     @Test
-    void operationalInventorySummaryIncludesOnlyTheAuthenticatedTenantsInventory() {
+    void operationalInventorySummaryIncludesOnlyTheAuthenticatedTenantsInventory() throws Exception {
         Fixture tenantA = fixture("REPORT_A");
         Fixture tenantB = fixture("REPORT_B");
 
@@ -57,6 +61,9 @@ class WmsOperationalReportingMySqlTenantIsolationTest {
         receive(tenantB, "20.0000");
 
         Map<String, Object> summary = reportingService.operationalSummary(tenantA.principal());
+        assertEquals(Instant.class, summary.get("generatedAtUtc").getClass());
+        JsonNode serialized = objectMapper.readTree(objectMapper.writeValueAsString(summary));
+        assertEquals(true, serialized.get("generatedAtUtc").asText().endsWith("Z"));
         @SuppressWarnings("unchecked")
         Map<String, Object> inventory = (Map<String, Object>) summary.get("inventoryPosition");
 

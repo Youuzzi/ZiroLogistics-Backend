@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.wms.security.config;
 
 import com.nimbusds.jose.jwk.JWKSet;
+import java.time.Clock;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
@@ -26,6 +27,11 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 @ConditionalOnProperty(prefix = "wms.security.jwt", name = "enabled", havingValue = "true")
 @EnableConfigurationProperties(WmsJwtProperties.class)
 public class WmsJwtConfiguration {
+
+    @Bean
+    Clock wmsJwtClock() {
+        return Clock.systemUTC();
+    }
 
     @Bean
     WmsRsaKeyMaterial wmsRsaKeyMaterial(WmsJwtProperties properties) {

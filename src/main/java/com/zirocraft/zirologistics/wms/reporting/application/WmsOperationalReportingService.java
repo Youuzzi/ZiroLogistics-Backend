@@ -9,6 +9,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,7 +47,8 @@ public class WmsOperationalReportingService {
         long tenantId = access.tenantId();
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("generatedAtUtc", jdbc.queryForObject("SELECT UTC_TIMESTAMP(6)", java.sql.Timestamp.class));
+        LocalDateTime generatedAtUtc = jdbc.queryForObject("SELECT UTC_TIMESTAMP(6)", LocalDateTime.class);
+        result.put("generatedAtUtc", generatedAtUtc == null ? null : generatedAtUtc.toInstant(ZoneOffset.UTC));
         result.put("statusScope", "ALL_TENANT_DOCUMENTS_CURRENT_STATUS");
         result.put("inventoryPosition", jdbc.queryForMap("""
                 SELECT COALESCE(SUM(on_hand_qty), 0.0000) AS onHandQty,

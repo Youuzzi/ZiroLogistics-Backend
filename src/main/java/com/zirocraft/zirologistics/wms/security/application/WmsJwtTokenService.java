@@ -13,6 +13,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -37,14 +38,17 @@ public class WmsJwtTokenService {
     private final JwtEncoder jwtEncoder;
     private final WmsJwtProperties properties;
     private final WmsMembershipAccessService membershipAccessService;
+    private final Clock clock;
 
     public WmsJwtTokenService(
             JwtEncoder jwtEncoder,
             WmsJwtProperties properties,
-            WmsMembershipAccessService membershipAccessService) {
+            WmsMembershipAccessService membershipAccessService,
+            Clock clock) {
         this.jwtEncoder = jwtEncoder;
         this.properties = properties;
         this.membershipAccessService = membershipAccessService;
+        this.clock = clock;
     }
 
     /**
@@ -54,7 +58,7 @@ public class WmsJwtTokenService {
         requireIdentifier(authenticatedUserPublicId, "authenticated user");
         requireCredentialVersion(credentialVersion);
 
-        Instant issuedAt = Instant.now();
+        Instant issuedAt = clock.instant();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer(properties.getIssuer())
                 .subject(authenticatedUserPublicId)
@@ -87,7 +91,7 @@ public class WmsJwtTokenService {
             throw new WmsCredentialAuthenticationException();
         }
 
-        Instant issuedAt = Instant.now();
+        Instant issuedAt = clock.instant();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer(properties.getIssuer())
                 .subject(access.userPublicId())
