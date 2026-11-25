@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.wms.platform.authorization.application;
 
 import com.zirocraft.zirologistics.wms.platform.security.PlatformAuthenticatedPrincipal;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -47,6 +48,7 @@ public class PlatformPermissionEvaluator {
     private final JdbcTemplate jdbcTemplate;
     private final Clock clock;
 
+    @Autowired
     public PlatformPermissionEvaluator(JdbcTemplate jdbcTemplate) {
         this(jdbcTemplate, Clock.systemUTC());
     }
