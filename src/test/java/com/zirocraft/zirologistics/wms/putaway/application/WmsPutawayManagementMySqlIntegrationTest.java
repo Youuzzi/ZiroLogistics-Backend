@@ -293,7 +293,6 @@ class WmsPutawayManagementMySqlIntegrationTest {
                 INSERT INTO role_permissions (role_id, permission_id)
                 SELECT ?, id FROM permissions
                 WHERE permission_code IN (
-                  'WMS_INVENTORY_POST',
                   'WMS_INBOUND_RECEIPT_READ', 'WMS_INBOUND_RECEIPT_CREATE',
                   'WMS_INBOUND_RECEIPT_UPDATE', 'WMS_INBOUND_RECEIPT_POST',
                   'WMS_PUTAWAY_READ', 'WMS_PUTAWAY_CREATE', 'WMS_PUTAWAY_ASSIGN',

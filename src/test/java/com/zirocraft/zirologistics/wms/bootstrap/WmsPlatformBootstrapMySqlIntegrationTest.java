@@ -1,6 +1,7 @@
 package com.zirocraft.zirologistics.wms.bootstrap;
 
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
+import com.zirocraft.zirologistics.wms.authorization.domain.WmsTenantPermissionPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -89,9 +90,13 @@ class WmsPlatformBootstrapMySqlIntegrationTest {
         assertEquals(1, count("users"));
         assertEquals(1, count("tenants"));
         assertEquals(1, count("tenant_memberships"));
-        assertEquals(1, count("roles"));
+        assertEquals(1 + WmsTenantPermissionPolicy.systemRoleTemplates().size(), count("roles"));
         assertEquals(1, count("membership_roles"));
-        assertEquals(2, count("role_permissions"));
+        assertEquals(WmsTenantPermissionPolicy.tenantOwnerTemplate().size(), jdbc.queryForObject("""
+                SELECT COUNT(*) FROM role_permissions rp
+                JOIN roles r ON r.id = rp.role_id
+                WHERE r.public_id = ?
+                """, Integer.class, result.rolePublicId()));
         assertEquals(1, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM wms_platform_bootstrap_state WHERE status='COMPLETED' AND operation_ref=?",
                 Integer.class, result.operationRef()));
@@ -102,15 +107,40 @@ class WmsPlatformBootstrapMySqlIntegrationTest {
         assertTrue(passwordHash.startsWith("$argon2"));
         assertTrue(passwordEncoder.matches(RAW_PASSWORD, passwordHash));
 
-        assertEquals(2, jdbc.queryForObject("""
-                SELECT COUNT(*)
+        java.util.List<String> actualOwnerPermissions = jdbc.queryForList("""
+                SELECT p.permission_code
                 FROM role_permissions rp
-                INNER JOIN permissions p ON p.id=rp.permission_id
-                WHERE p.permission_code IN (
-                  'WMS_IDENTITY_MEMBERSHIP_INVITE',
-                  'WMS_TENANT_PROFILE_UPDATE'
-                )
-                """, Integer.class));
+                JOIN roles r ON r.id = rp.role_id
+                JOIN permissions p ON p.id = rp.permission_id
+                WHERE r.public_id = ?
+                ORDER BY p.permission_code
+                """, String.class, result.rolePublicId());
+        assertEquals(WmsTenantPermissionPolicy.tenantOwnerTemplate().stream().sorted().toList(),
+                actualOwnerPermissions);
+        assertFalse(actualOwnerPermissions.contains("WMS_INVENTORY_POST"));
+
+        java.util.List<String> actualSystemRoleCodes = jdbc.queryForList("""
+                SELECT role_code FROM roles
+                WHERE tenant_id = (SELECT id FROM tenants WHERE public_id = ?)
+                  AND is_system_role = 1 AND role_code <> 'TENANT_OWNER'
+                ORDER BY role_code
+                """, String.class, result.tenantPublicId());
+        assertEquals(WmsTenantPermissionPolicy.systemRoleTemplates().stream()
+                .map(WmsTenantPermissionPolicy.RoleTemplate::code).sorted().toList(), actualSystemRoleCodes);
+        for (WmsTenantPermissionPolicy.RoleTemplate template
+                : WmsTenantPermissionPolicy.systemRoleTemplates()) {
+            java.util.List<String> actualTemplatePermissions = jdbc.queryForList("""
+                    SELECT p.permission_code
+                    FROM roles r
+                    JOIN role_permissions rp ON rp.role_id = r.id
+                    JOIN permissions p ON p.id = rp.permission_id
+                    WHERE r.tenant_id = (SELECT id FROM tenants WHERE public_id = ?)
+                      AND r.role_code = ? AND r.is_system_role = 1
+                    ORDER BY p.permission_code
+                    """, String.class, result.tenantPublicId(), template.code());
+            assertEquals(template.permissionCodes().stream().sorted().toList(), actualTemplatePermissions,
+                    "Persisted grants differ for system role " + template.code());
+        }
         assertEquals(1, jdbc.queryForObject("""
                 SELECT COUNT(*) FROM users
                 WHERE public_id=? AND status='ACTIVE' AND email_verified_at IS NOT NULL
@@ -164,7 +194,7 @@ class WmsPlatformBootstrapMySqlIntegrationTest {
             assertEquals(1, count("users"));
             assertEquals(1, count("tenants"));
             assertEquals(1, count("tenant_memberships"));
-            assertEquals(1, count("roles"));
+            assertEquals(1 + WmsTenantPermissionPolicy.systemRoleTemplates().size(), count("roles"));
             assertEquals(1, jdbc.queryForObject(
                     "SELECT COUNT(*) FROM wms_platform_bootstrap_state WHERE status='COMPLETED'",
                     Integer.class));

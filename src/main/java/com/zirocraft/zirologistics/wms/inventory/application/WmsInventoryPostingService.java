@@ -56,7 +56,31 @@ public class WmsInventoryPostingService {
 
     @Transactional
     public Map<String, Object> post(WmsAuthenticatedPrincipal principal, PostingCommand command) {
-        return postInternal(principal, command, false, null);
+        return postInternal(principal, command, false, null, "WMS_INVENTORY_POST");
+    }
+
+    /**
+     * Internal workflow posting boundary. Each workflow must present its own persisted
+     * permission; the generic WMS_INVENTORY_POST permission remains reserved for direct
+     * inventory posting API requests.
+     */
+    @Transactional
+    public Map<String, Object> postFromWorkflow(
+            WmsAuthenticatedPrincipal principal, PostingCommand command, String workflowPermission) {
+        Map<String, Set<String>> allowedMovements = Map.of(
+                "WMS_INBOUND_RECEIPT_POST", Set.of("RECEIPT"),
+                "WMS_PUTAWAY_CONFIRM", Set.of("TRANSFER"),
+                "WMS_PICKING_CONFIRM", Set.of("TRANSFER"),
+                "WMS_SHIPPING_SHIP", Set.of("ISSUE"),
+                "WMS_REPLENISHMENT_TASK_CONFIRM", Set.of("TRANSFER"),
+                "WMS_REPLENISHMENT_CONFIRMATION_REVERSE", Set.of("TRANSFER"));
+        Set<String> movements = workflowPermission == null
+                ? Set.of() : allowedMovements.getOrDefault(workflowPermission, Set.of());
+        if (command == null || !movements.contains(
+                command.movementType() == null ? "" : command.movementType().toUpperCase(Locale.ROOT))) {
+            throw new AccessDeniedException("Workflow posting permission does not match the movement");
+        }
+        return postInternal(principal, command, false, null, workflowPermission);
     }
 
     /**
@@ -74,7 +98,7 @@ public class WmsInventoryPostingService {
         }
         if (principal == null) throw new AccessDeniedException("Tenant context is required");
         lockTenant(principal.tenantId());
-        Access access = access(principal);
+        Access access = access(principal, "WMS_INVENTORY_ADJUSTMENT_POST");
         Map<String, Object> adjustment = requiredRowForUpdate("""
                 SELECT a.id AS adjustment_id, a.adjustment_type
                 FROM inventory_adjustments a
@@ -117,7 +141,7 @@ public class WmsInventoryPostingService {
         }
         AdjustmentPostingContext context = new AdjustmentPostingContext(
                 number(adjustment, "adjustment_id"), null, adjustmentLineId, systemBaseline, currentBaseline);
-        return postInternal(principal, command, false, context);
+        return postInternal(principal, command, false, context, "WMS_INVENTORY_ADJUSTMENT_POST");
     }
 
     /**
@@ -135,7 +159,7 @@ public class WmsInventoryPostingService {
         }
         if (principal == null) throw new AccessDeniedException("Tenant context is required");
         lockTenant(principal.tenantId());
-        Access access = access(principal);
+        Access access = access(principal, "WMS_INVENTORY_ADJUSTMENT_POST");
         Map<String, Object> context = requiredRowForUpdate("""
                 SELECT a.id AS adjustment_id, c.id AS count_id
                 FROM inventory_adjustments a
@@ -167,7 +191,7 @@ public class WmsInventoryPostingService {
         AdjustmentPostingContext postingContext = new AdjustmentPostingContext(
                 number(context, "adjustment_id"), number(context, "count_id"), adjustmentLineId,
                 systemBaseline, currentBaseline);
-        return postInternal(principal, command, false, postingContext);
+        return postInternal(principal, command, false, postingContext, "WMS_INVENTORY_ADJUSTMENT_POST");
     }
 
     @Transactional
@@ -175,7 +199,7 @@ public class WmsInventoryPostingService {
         if (command == null || !"TRANSFER_DISPATCH".equalsIgnoreCase(command.movementType())) {
             throw new IllegalArgumentException("Transfer dispatch posting type is required");
         }
-        return postInternal(principal, command, true, null);
+        return postInternal(principal, command, true, null, "WMS_TRANSFER_DISPATCH");
     }
 
     @Transactional
@@ -183,14 +207,14 @@ public class WmsInventoryPostingService {
         if (command == null || !"TRANSFER_RECEIPT".equalsIgnoreCase(command.movementType())) {
             throw new IllegalArgumentException("Transfer receipt posting type is required");
         }
-        return postInternal(principal, command, true, null);
+        return postInternal(principal, command, true, null, "WMS_TRANSFER_RECEIVE");
     }
 
     @Transactional
     public void markTransferSerialLost(WmsAuthenticatedPrincipal principal, String serialPublicId) {
         if (principal == null) throw new AccessDeniedException("Tenant context is required");
         lockTenant(principal.tenantId());
-        Access access = access(principal);
+        Access access = access(principal, "WMS_TRANSFER_RECEIVE");
         Map<String,Object> serial = requiredRowForUpdate(
                 "SELECT id, status FROM inventory_serials WHERE tenant_id = ? AND public_id = ?",
                 access.tenantId(), required(serialPublicId, "serial public ID"));
@@ -206,12 +230,13 @@ public class WmsInventoryPostingService {
     }
 
     private Map<String, Object> postInternal(WmsAuthenticatedPrincipal principal, PostingCommand command,
-                                             boolean transferBoundary, AdjustmentPostingContext adjustmentContext) {
+                                             boolean transferBoundary, AdjustmentPostingContext adjustmentContext,
+                                             String requiredPermission) {
         if (principal == null) throw new AccessDeniedException("Tenant context is required");
         // Lock the tenant before resolving effective permissions so role/membership mutations
         // that share the tenant lock cannot race authorization with this posting transaction.
         lockTenant(principal.tenantId());
-        Access access = access(principal);
+        Access access = access(principal, requiredPermission);
         NormalizedCommand normalized = normalize(command);
         if (adjustmentContext != null) {
             normalized = normalized.withReference("INVENTORY_ADJUSTMENT",
@@ -957,6 +982,10 @@ public class WmsInventoryPostingService {
     }
 
     private Access access(WmsAuthenticatedPrincipal principal) {
+        return access(principal, "WMS_INVENTORY_POST");
+    }
+
+    private Access access(WmsAuthenticatedPrincipal principal, String requiredPermission) {
         if (principal == null) throw new AccessDeniedException("Tenant context is required");
         WmsMembershipAccess resolved = accessService.resolve(principal.userPublicId(), principal.membershipPublicId());
         if (!Objects.equals(resolved.userPublicId(), principal.userPublicId())
@@ -966,7 +995,9 @@ public class WmsInventoryPostingService {
                 || !Objects.equals(resolved.membershipPublicId(), principal.membershipPublicId())) {
             throw new AccessDeniedException("Tenant context is unavailable");
         }
-        if (!resolved.hasPermission("WMS_INVENTORY_POST")) throw new AccessDeniedException("Inventory posting permission is required");
+        if (!resolved.hasPermission(requiredPermission)) {
+            throw new AccessDeniedException("Inventory workflow posting permission is required");
+        }
         return new Access(resolved.tenantId(), resolved.membershipId(), resolved.userPublicId());
     }
 

@@ -72,7 +72,7 @@ class WmsV11InventoryCoreMigrationIntegrationTest {
                 upgradeUrl, UPGRADE_MYSQL.getUsername(), UPGRADE_MYSQL.getPassword());
              Statement statement = connection.createStatement()) {
             assertInventoryPermissions(statement);
-            assertEquals(15, scalar(statement, """
+            assertEquals(7, scalar(statement, """
                     SELECT COUNT(*) FROM role_permissions rp
                     JOIN roles r ON r.id = rp.role_id
                     JOIN permissions p ON p.id = rp.permission_id

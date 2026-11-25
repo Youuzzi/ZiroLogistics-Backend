@@ -1382,7 +1382,8 @@ class WmsStockCountMySqlIntegrationTest {
                 INSERT INTO role_permissions (role_id, permission_id)
                 SELECT ?, id FROM permissions
                 WHERE permission_code IN (
-                  'WMS_INVENTORY_POST', 'WMS_INVENTORY_RESERVE',
+                  'WMS_INVENTORY_POST',
+                  'WMS_TRANSFER_DISPATCH', 'WMS_TRANSFER_RECEIVE', 'WMS_INVENTORY_RESERVE',
                   'WMS_STOCK_COUNT_READ', 'WMS_STOCK_COUNT_CREATE',
                   'WMS_STOCK_COUNT_PLAN', 'WMS_STOCK_COUNT_START', 'WMS_STOCK_COUNT_CANCEL',
                   'WMS_STOCK_COUNT_RECORD', 'WMS_STOCK_COUNT_SUBMIT',

@@ -1,6 +1,6 @@
 # Tenant Role Templates and Permission Governance Policy
 
-**Status:** Proposed policy baseline; not yet implemented or approved as production grant data.
+**Status:** Policy implemented in the current authorization implementation PR; role templates beyond Tenant Owner remain proposed and are not active persisted system roles.
 **Reviewed source baseline:** `cc1c489810e9551273d6c45397a3ef86150bd1b2`
 **Related evidence:** `docs/audits/TENANT_RBAC_PERMISSION_CATALOGUE_AUDIT.md`, `docs/architecture/WMS_ROLE_PERMISSION_MANAGEMENT_DESIGN.md`, `docs/security/TENANT_ISOLATION_AND_AUTHORIZATION.md`
 **Scope:** Tenant-scoped role templates, permission risk classes, delegation ceilings, separation of duties, and bootstrap/provisioning parity.
@@ -116,7 +116,16 @@ Proposed grants:
 - Required item, inventory, warehouse/location, lot and serial reads.
 - No `WMS_OUTBOUND_SHIPMENT_RELEASE` or `WMS_SHIPPING_SHIP` by default.
 
-### 4.7 Shipping Clerk
+### 4.7 Outbound Controller
+
+**Purpose:** Independently release allocated outbound shipments before picking and final shipping.
+
+Proposed grants:
+- Outbound shipment read and release.
+- Packing read and inventory/ledger read for release validation.
+- No shipment preparation, inventory reserve, picking, packing mutation, or final shipping commit.
+
+### 4.8 Shipping Clerk
 
 **Purpose:** Perform the final shipping handoff after packing is complete.
 
@@ -125,7 +134,7 @@ Proposed grants:
 - Outbound shipment read and packing read as needed for dispatch validation.
 - No shipment creation, allocation, inventory adjustment, or posting rights.
 
-### 4.8 Inventory Controller
+### 4.9 Inventory Controller
 
 **Purpose:** Control stock integrity, stock counts, and adjustment submissions.
 
@@ -136,7 +145,7 @@ Proposed grants:
 - Replenishment read, rule management, task create/release/assign/start/confirm/cancel.
 - No stock-count approve, adjustment approve/reject/post, or replenishment confirmation reverse by default.
 
-### 4.9 Inventory Approver
+### 4.10 Inventory Approver
 
 **Purpose:** Independently review and decide inventory variance and adjustment requests.
 
@@ -147,7 +156,7 @@ Proposed grants:
 - Replenishment read only unless a separately reviewed approval workflow is added.
 - Cannot approve, reject, or post an operation submitted by the same actor. The check must use persisted actor membership/user identity, not a client-supplied reference.
 
-### 4.10 Transfer Dispatcher and Transfer Receiver
+### 4.11 Transfer Dispatcher and Transfer Receiver
 
 Split transfer duties into two templates where tenant size and operating model justify it.
 
@@ -163,7 +172,7 @@ Split transfer duties into two templates where tenant size and operating model j
 
 If a small tenant intentionally combines dispatch and receive duties, that must be an explicit tenant policy decision and remain visible in audit evidence; it must not happen because the default role grants both sides automatically.
 
-### 4.11 Replenishment Operator
+### 4.12 Replenishment Operator
 
 **Purpose:** Execute replenishment work without controlling reversal of completed inventory movement.
 
@@ -172,7 +181,7 @@ Proposed grants:
 - Inventory, warehouse/location, item and lot/serial reads as required.
 - No `WMS_REPLENISHMENT_CONFIRMATION_REVERSE` by default.
 
-### 4.12 Reporting / Auditor
+### 4.13 Reporting / Auditor
 
 **Purpose:** Read operational performance and permitted evidence without mutation rights.
 
@@ -186,35 +195,35 @@ The audit role must not imply access to platform-wide logs or another tenant's d
 
 The matrix below is the initial default policy proposal. A check mark means the role template may include the permission; it does not mean the permission is currently granted in the repository.
 
-| Permission family | Owner | Tenant Admin | Warehouse Supervisor | Inbound Operator | Inbound Controller | Outbound Operator | Shipping Clerk | Inventory Controller | Inventory Approver | Transfer Dispatcher | Transfer Receiver | Replenishment Operator | Auditor |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Tenant profile / invite | ✓ | delegated | — | — | — | — | — | — | — | — | — | — | — |
-| Role and membership governance | ✓ | restricted | — | — | — | — | — | — | — | — | — | — | — |
-| Warehouse/location master data | ✓* | ✓ | read | read | read | read | read | read | read | read | read | read | read |
-| Item/category/UOM master data | ✓* | ✓ | read | read | read | read | read | read | read | read | read | read | read |
-| Lot/serial management | ✓* | restricted | read | read | read | read | — | manage | read | read | read | read | read |
-| Inventory/ledger read | ✓ | ✓ | ✓ | read | ✓ | ✓ | read | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Inbound receipt create/update | — | — | — | ✓ | — | — | — | — | — | — | — | — | — |
-| Inbound receipt post | — | — | — | — | ✓ | — | — | — | — | — | — | — | — |
-| Putaway create/start/confirm | — | — | assign | ✓ | — | — | — | — | — | — | — | — | — |
-| Outbound shipment create/update/allocate | — | — | — | — | — | ✓ | — | — | — | — | — | — | — |
-| Inventory reserve | — | — | — | — | — | ✓ | — | — | — | — | — | — | — |
-| Picking / packing execution | — | — | assign | — | — | ✓ | read | — | — | — | — | — | — |
-| Shipment release | — | — | policy-specific | — | — | — | — | — | — | — | — | — | — |
-| Shipping commit | — | — | — | — | — | — | ✓ | — | — | — | — | — | — |
-| Stock count prepare/record/submit | — | — | read/assign | — | — | — | — | ✓ | — | — | — | — | — |
-| Stock count approve | — | — | — | — | — | — | — | — | ✓ | — | — | — | — |
-| Adjustment create/submit | — | — | — | — | — | — | — | ✓ | — | — | — | — | — |
-| Adjustment approve/reject/post | — | — | — | — | — | — | — | — | ✓ | — | — | — | — |
-| Transfer create/release/dispatch | — | — | read/assign | — | — | — | — | — | — | ✓ | — | — | — |
-| Transfer receive | — | — | read/assign | — | — | — | — | — | — | — | ✓ | — | — |
-| Replenishment execution | — | — | assign | — | — | — | — | ✓ | — | — | — | ✓ | — |
-| Replenishment reversal | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| Operational reporting | ✓ | ✓ | ✓ | scoped | scoped | scoped | scoped | ✓ | ✓ | scoped | scoped | scoped | ✓ |
+| Permission family | Owner | Tenant Admin | Warehouse Supervisor | Inbound Operator | Inbound Controller | Outbound Operator | Outbound Controller | Shipping Clerk | Inventory Controller | Inventory Approver | Transfer Dispatcher | Transfer Receiver | Replenishment Operator | Auditor |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Tenant profile / invite | ✓ | delegated | — | — | — | — | — | — | — | — | — | — | — | — |
+| Role and membership governance | ✓ | restricted | — | — | — | — | — | — | — | — | — | — | — | — |
+| Warehouse/location master data | ✓* | ✓ | read | read | read | read | — | read | read | read | read | read | read | read |
+| Item/category/UOM master data | ✓* | ✓ | read | read | read | read | — | read | read | read | read | read | read | read |
+| Lot/serial management | ✓* | restricted | read | read | read | read | — | — | manage | read | read | read | read | read |
+| Inventory/ledger read | ✓ | ✓ | ✓ | read | ✓ | ✓ | — | read | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Inbound receipt create/update | — | — | — | ✓ | — | — | — | — | — | — | — | — | — | — |
+| Inbound receipt post | — | — | — | — | ✓ | — | — | — | — | — | — | — | — | — |
+| Putaway create/start/confirm | — | — | assign | ✓ | — | — | — | — | — | — | — | — | — | — |
+| Outbound shipment create/update/allocate | — | — | — | — | — | ✓ | — | — | — | — | — | — | — | — |
+| Inventory reserve | — | — | — | — | — | ✓ | — | — | — | — | — | — | — | — |
+| Picking / packing execution | — | — | assign | — | — | ✓ | — | read | — | — | — | — | — | — |
+| Shipment release | — | — | — | — | — | — | ✓ | — | — | — | — | — | — | — |
+| Shipping commit | — | — | — | — | — | — | — | ✓ | — | — | — | — | — | — |
+| Stock count prepare/record/submit | — | — | read/assign | — | — | — | — | — | ✓ | — | — | — | — | — |
+| Stock count approve | — | — | — | — | — | — | — | — | — | ✓ | — | — | — | — |
+| Adjustment create/submit | — | — | — | — | — | — | — | — | ✓ | — | — | — | — | — |
+| Adjustment approve/reject/post | — | — | — | — | — | — | — | — | — | ✓ | — | — | — | — |
+| Transfer create/release/dispatch | — | — | read/assign | — | — | — | — | — | — | — | ✓ | — | — | — |
+| Transfer receive | — | — | read/assign | — | — | — | — | — | — | — | — | ✓ | — | — |
+| Replenishment execution | — | — | assign | — | — | — | — | — | ✓ | — | — | — | ✓ | — |
+| Replenishment reversal | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Operational reporting | ✓ | ✓ | ✓ | scoped | scoped | scoped | — | scoped | ✓ | ✓ | scoped | scoped | scoped | ✓ |
 
 `✓*` means tenant governance may include master-data administration if the owner is intended to maintain the tenant's operating model; a stricter owner template can be read-only. `restricted` means only the exact permissions in the approved delegable set, never all G1 or M1 permissions by role name. `scoped` means the read permission may be included only when needed for the role's workflow.
 
-The matrix is intentionally conservative for C1 and A1. Shipment release and other operational commitment actions must receive a dedicated policy review before default grants are finalized.
+The matrix is intentionally conservative for C1 and A1. Shipment release is assigned to the separate Outbound Controller template. The generic `WMS_INVENTORY_POST` permission is reserved for the direct inventory-posting API and is not granted by any default role template. Internal inbound, putaway, picking, shipping, transfer, replenishment, and adjustment posting paths authorize against their own workflow-specific persisted permission, avoiding a broad generic posting grant.
 
 ## 6. Canonical policy and delegation contract
 
@@ -258,14 +267,14 @@ At minimum, enforce the following at the application/domain layer and verify wit
 6. Replenishment confirmation reversal is separate from normal task confirmation.
 7. Role/permission governance cannot be delegated through arbitrary custom roles.
 8. No user can remove/deactivate the last effective Tenant Owner or leave the tenant without an owner.
-9. Self-assignment cannot be used to escalate privileges. First-owner bootstrap and controlled owner succession require explicit, audited paths.
+9. Members cannot self-assign high-risk controller, shipping, transfer, or approval system roles. The role-management service compares the target membership's persisted user identity with the authenticated actor before assignment. First-owner bootstrap and controlled owner succession require explicit, audited paths.
 10. Audit actor identity must resolve to persisted user/membership identity; a free-form operator reference is attribution metadata, not authentication.
 
 A permission split alone is not sufficient. The service must compare the persisted submitting actor with the persisted approving actor and enforce the transition invariant transactionally.
 
 ## 8. Bootstrap and provisioning parity
 
-The exact same canonical policy must supply role grants for:
+The exact same canonical policy must supply role grants and protected role-template definitions for:
 - first-install bootstrap;
 - repeatable tenant provisioning;
 - any future tenant migration/provisioning repair command;
@@ -284,7 +293,7 @@ Bootstrap and provisioning must produce the same initial owner role permissions 
 - No platform-only permission is exposed by tenant WMS APIs.
 
 ### Provisioning parity tests
-- Fresh-install bootstrap and repeatable provisioning produce identical owner grant sets.
+- Fresh-install bootstrap and repeatable provisioning produce identical Owner grant sets and exact protected system role templates.
 - Provisioning a tenant after all migrations have run still assigns the complete approved role template.
 - Re-running provisioning is idempotent and does not widen or erase customized tenant roles.
 
@@ -293,7 +302,7 @@ Bootstrap and provisioning must produce the same initial owner role permissions 
 - A caller cannot grant a non-delegable permission to a custom role.
 - A tenant cannot assign another tenant's role or membership.
 - Inactive users, memberships, tenants, and roles deny access.
-- Protected system roles cannot be modified through custom-role APIs.
+- Protected system roles cannot be created under reserved custom role codes or modified through custom-role APIs.
 - Last-owner removal, self-escalation, and self-approval are denied atomically.
 
 ### Workflow tests
@@ -304,6 +313,8 @@ Bootstrap and provisioning must produce the same initial owner role permissions 
 Run these suites with MySQL 8.4 Testcontainers and include HTTP authorization-boundary coverage. Unit tests over constants alone are insufficient.
 
 ## 10. Implementation order
+
+The first implementation slice is now in progress: shared Tenant Owner and delegation policy, bootstrap/provisioning parity, and additive V28 reconciliation. The broader named role templates, per-permission risk metadata, and cross-workflow separation-of-duties enforcement remain subsequent work.
 
 1. Complete and merge the source permission catalogue audit.
 2. Approve this role-template matrix and risk classifications.
@@ -321,13 +332,13 @@ Run these suites with MySQL 8.4 Testcontainers and include HTTP authorization-bo
 | Global WMS permission catalogue | Seeded by Flyway V5 and V7–V26 |
 | DB-backed effective permission resolution | Implemented |
 | Multiple active role permission union | Implemented in membership-access query/service |
-| Role CRUD and protected system-role handling | Partially implemented |
-| Caller-authority check for permission replacement | Implemented with a restricted hard-coded allowlist |
-| Canonical permission risk metadata | Not implemented |
-| Canonical catalogue/visible/grantable/template policy | Not implemented |
-| Reviewed default role templates | Proposed in this document only |
-| Bootstrap/provisioning grant parity | Not achieved |
-| Cross-workflow separation-of-duties enforcement | Not certified |
-| Tenant entitlement enforcement | Separate future work; not implemented by this policy |
+| Role CRUD and protected system-role handling | Implemented for current tenant APIs; protected template codes cannot be created as custom roles and system grants remain immutable |
+| Caller-authority check for permission replacement | Implemented with canonical delegable policy and caller-effective-permission ceiling |
+| Canonical permission risk metadata | Not implemented; permission codes are centralized but risk-class metadata remains a follow-up |
+| Canonical catalogue visibility/delegation/Owner/system-role template policy | Implemented in `WmsTenantPermissionPolicy` |
+| Tenant Owner default grant template | Implemented as a 30-code governance + read-only operational baseline |
+| Bootstrap/provisioning grant parity | Implemented through the shared Owner and 13 operational role templates with MySQL persisted-grant assertions |
+| Cross-workflow separation-of-duties enforcement | Partially implemented: high-risk system-role self-assignment is blocked and stock-count/adjustment actor separation exists; inbound/shipping/transfer actor separation is not universally certified |
+| Internal inventory posting authorization | Implemented with workflow-specific permission checks; generic `WMS_INVENTORY_POST` is reserved for the direct posting API |\n| High-risk system-role self-assignment | Implemented using persisted target membership user identity |\n| Tenant entitlement enforcement | Separate future work; not implemented by this policy |
 
-No permission grants, Flyway migrations, tenant records, credentials, Docker resources, or databases were changed by this policy design document.
+The implementation adds Flyway V28 to reconcile existing system `TENANT_OWNER` grants and provision 13 immutable operational role templates for existing tenants. First-install bootstrap and repeatable provisioning use the same canonical Owner and operational role definitions. Internal workflow posting is checked against its workflow permission rather than the generic direct-post permission. High-risk role self-assignment is denied. V1–V27 remain immutable. No user database, tenant bootstrap, credentials, or Docker resources were operated.

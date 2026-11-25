@@ -297,7 +297,7 @@ public class WmsPickingManagementService {
                 warehouse,source,item,lot,serial,null,"AVAILABLE",qty);
         WmsInventoryPostingService.PostingLeg to=new WmsInventoryPostingService.PostingLeg(
                 warehouse,destination,item,lot,serial,null,"AVAILABLE",qty);
-        postingService.post(principal,new WmsInventoryPostingService.PostingCommand(requestId,"TRANSFER",List.of(from,to),"Outbound picking to staging"));
+        postingService.postFromWorkflow(principal,new WmsInventoryPostingService.PostingCommand(requestId,"TRANSFER",List.of(from,to),"Outbound picking to staging"), "WMS_PICKING_CONFIRM");
     }
 
     private Map<String,Object> task(long tenant,String publicId){

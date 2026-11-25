@@ -1,5 +1,6 @@
 package com.zirocraft.zirologistics.wms.migration;
 
+import com.zirocraft.zirologistics.wms.authorization.domain.WmsTenantPermissionPolicy;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.MySQLContainer;
@@ -74,6 +75,29 @@ class WmsV12InventoryPostingMigrationIntegrationTest {
                 role.setString(2, tenantPublicId);
                 assertEquals(1, role.executeUpdate());
             }
+            try (PreparedStatement grant = connection.prepareStatement("""
+                    INSERT INTO role_permissions (role_id, permission_id)
+                    SELECT r.id, p.id FROM roles r
+                    JOIN permissions p ON p.permission_code = 'WMS_ITEM_READ'
+                    WHERE r.public_id = ?
+                    """)) {
+                grant.setString(1, customRolePublicId);
+                assertEquals(1, grant.executeUpdate());
+            }
+        }
+
+        Flyway.configure().dataSource(upgradeUrl, UPGRADE_MYSQL.getUsername(), UPGRADE_MYSQL.getPassword())
+                .locations("classpath:db/wms-migration").target("12").load().migrate();
+        try (Connection connection = DriverManager.getConnection(
+                upgradeUrl, UPGRADE_MYSQL.getUsername(), UPGRADE_MYSQL.getPassword());
+             Statement statement = connection.createStatement()) {
+            assertEquals(1, scalar(statement, """
+                    SELECT COUNT(*) FROM role_permissions rp
+                    JOIN roles r ON r.id = rp.role_id
+                    JOIN permissions p ON p.id = rp.permission_id
+                    WHERE r.public_id = '""" + ownerRolePublicId + """
+                    ' AND p.permission_code = 'WMS_INVENTORY_POST'
+                    """));
         }
 
         Flyway.configure().dataSource(upgradeUrl, UPGRADE_MYSQL.getUsername(), UPGRADE_MYSQL.getPassword())
@@ -85,7 +109,7 @@ class WmsV12InventoryPostingMigrationIntegrationTest {
             assertEquals(1, scalar(statement, """
                     SELECT COUNT(*) FROM permissions WHERE permission_code = 'WMS_INVENTORY_POST'
                     """));
-            assertEquals(1, scalar(statement, """
+            assertEquals(0, scalar(statement, """
                     SELECT COUNT(*) FROM role_permissions rp
                     JOIN roles r ON r.id = rp.role_id
                     JOIN permissions p ON p.id = rp.permission_id
@@ -98,6 +122,47 @@ class WmsV12InventoryPostingMigrationIntegrationTest {
                     JOIN permissions p ON p.id = rp.permission_id
                     WHERE r.public_id = '""" + customRolePublicId + """
                     ' AND p.permission_code = 'WMS_INVENTORY_POST'
+                    """));
+            assertEquals(30, scalar(statement, """
+                    SELECT COUNT(*) FROM role_permissions rp
+                    JOIN roles r ON r.id = rp.role_id
+                    WHERE r.public_id = '""" + ownerRolePublicId + """
+                    '
+                    """));
+            assertEquals(13, scalar(statement, """
+                    SELECT COUNT(*) FROM roles
+                    WHERE tenant_id = (SELECT tenant_id FROM roles WHERE public_id = '""" + ownerRolePublicId + """
+                    ')
+                      AND is_system_role = 1 AND role_code <> 'TENANT_OWNER'
+                    """));
+
+            for (WmsTenantPermissionPolicy.RoleTemplate template
+                    : WmsTenantPermissionPolicy.systemRoleTemplates()) {
+                try (PreparedStatement permissions = connection.prepareStatement("""
+                        SELECT p.permission_code
+                        FROM roles r
+                        JOIN role_permissions rp ON rp.role_id = r.id
+                        JOIN permissions p ON p.id = rp.permission_id
+                        WHERE r.tenant_id = (SELECT tenant_id FROM roles WHERE public_id = ?)
+                          AND r.role_code = ? AND r.is_system_role = 1
+                        ORDER BY p.permission_code
+                        """)) {
+                    permissions.setString(1, ownerRolePublicId);
+                    permissions.setString(2, template.code());
+                    try (ResultSet rows = permissions.executeQuery()) {
+                        java.util.List<String> actual = new java.util.ArrayList<>();
+                        while (rows.next()) actual.add(rows.getString(1));
+                        assertEquals(template.permissionCodes().stream().sorted().toList(), actual,
+                                "V28 grants differ for " + template.code());
+                    }
+                }
+            }
+            assertEquals(1, scalar(statement, """
+                    SELECT COUNT(*) FROM role_permissions rp
+                    JOIN roles r ON r.id = rp.role_id
+                    JOIN permissions p ON p.id = rp.permission_id
+                    WHERE r.public_id = '""" + customRolePublicId + """
+                    ' AND p.permission_code = 'WMS_ITEM_READ'
                     """));
             String checkClause = text(statement, """
                     SELECT check_clause FROM information_schema.check_constraints

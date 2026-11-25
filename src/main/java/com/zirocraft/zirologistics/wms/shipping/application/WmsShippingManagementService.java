@@ -104,8 +104,8 @@ public class WmsShippingManagementService {
             throw new IllegalStateException("Shipping exceeds the inventory posting limit of 200 legs");
         }
 
-        postingService.post(principal, new WmsInventoryPostingService.PostingCommand(
-                command.requestId(), "ISSUE", legs, notes == null ? "Outbound shipment shipped" : notes));
+        postingService.postFromWorkflow(principal, new WmsInventoryPostingService.PostingCommand(
+                command.requestId(), "ISSUE", legs, notes == null ? "Outbound shipment shipped" : notes), "WMS_SHIPPING_SHIP");
 
         int lineCount = count("SELECT COUNT(*) FROM outbound_shipment_lines WHERE tenant_id=? AND outbound_shipment_id=?",
                 a.tenantId(), shipmentId);

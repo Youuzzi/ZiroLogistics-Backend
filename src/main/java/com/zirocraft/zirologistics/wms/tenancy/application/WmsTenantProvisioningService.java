@@ -3,6 +3,8 @@ package com.zirocraft.zirologistics.wms.tenancy.application;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zirocraft.zirologistics.wms.identity.application.WmsEmailNormalizer;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsTenantRoleTemplateProvisioner;
+import com.zirocraft.zirologistics.wms.authorization.domain.WmsTenantPermissionPolicy;
 import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
 import com.zirocraft.zirologistics.wms.tenancy.infrastructure.config.WmsTenantProvisioningProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -28,22 +30,6 @@ import java.util.regex.Pattern;
 @Profile("wms")
 public class WmsTenantProvisioningService {
     private static final Pattern TENANT_CODE = Pattern.compile("[A-Z0-9][A-Z0-9_-]{2,63}");
-    private static final List<String> OWNER_PERMISSIONS = List.of(
-            "WMS_IDENTITY_MEMBERSHIP_INVITE", "WMS_TENANT_PROFILE_UPDATE",
-            "WMS_ROLE_READ", "WMS_ROLE_CREATE", "WMS_ROLE_UPDATE", "WMS_ROLE_DEACTIVATE",
-            "WMS_PERMISSION_CATALOG_READ", "WMS_ROLE_PERMISSION_MANAGE",
-            "WMS_MEMBERSHIP_ROLE_READ", "WMS_MEMBERSHIP_ROLE_MANAGE",
-            "WMS_WAREHOUSE_READ", "WMS_WAREHOUSE_CREATE", "WMS_WAREHOUSE_UPDATE",
-            "WMS_WAREHOUSE_STATUS_MANAGE", "WMS_LOCATION_READ", "WMS_LOCATION_CREATE",
-            "WMS_LOCATION_UPDATE", "WMS_LOCATION_STATUS_MANAGE",
-            "WMS_ITEM_READ", "WMS_ITEM_CREATE", "WMS_ITEM_UPDATE", "WMS_ITEM_STATUS_MANAGE",
-            "WMS_ITEM_CATEGORY_READ", "WMS_ITEM_CATEGORY_MANAGE",
-            "WMS_ITEM_IDENTIFIER_MANAGE", "WMS_ITEM_UOM_CONVERSION_MANAGE",
-            "WMS_UOM_CATALOG_READ", "WMS_LOT_READ", "WMS_LOT_MANAGE",
-            "WMS_SERIAL_READ", "WMS_SERIAL_MANAGE",
-            "WMS_INVENTORY_READ", "WMS_INVENTORY_LEDGER_READ", "WMS_INVENTORY_POST",
-            "WMS_OPERATIONAL_REPORT_READ");
-
     private final JdbcTemplate jdbc;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
@@ -123,12 +109,14 @@ public class WmsTenantProvisioningService {
                 INSERT INTO membership_roles (tenant_id, membership_id, role_id)
                 VALUES (?, ?, ?)
                 """, tenantId, membershipId, roleId);
-        for (String permissionCode : OWNER_PERMISSIONS) {
+        for (String permissionCode : WmsTenantPermissionPolicy.tenantOwnerTemplate()) {
             Long permissionId = jdbc.queryForObject(
                     "SELECT id FROM permissions WHERE permission_code = ?", Long.class, permissionCode);
             jdbc.update("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
                     roleId, permissionId);
         }
+
+        WmsTenantRoleTemplateProvisioner.provision(jdbc, tenantId);
 
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("tenantCode", input.tenantCode());

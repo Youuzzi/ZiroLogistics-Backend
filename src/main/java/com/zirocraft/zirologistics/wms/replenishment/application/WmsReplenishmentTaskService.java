@@ -275,17 +275,17 @@ public class WmsReplenishmentTaskService {
                 String serialId = required(serialPublicId, "Serial public ID");
                 UUID serialRequest = UUID.nameUUIDFromBytes((command.requestId() + ":" + serialId)
                         .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                postingService.post(a.principal(), new WmsInventoryPostingService.PostingCommand(
+                postingService.postFromWorkflow(a.principal(), new WmsInventoryPostingService.PostingCommand(
                         serialRequest, "TRANSFER",
                         List.of(postingLeg(line, serialId, BigDecimal.ONE),
                                 destinationPostingLeg(line, serialId, BigDecimal.ONE)),
-                        optional(command.notes())));
+                        optional(command.notes())), "WMS_REPLENISHMENT_TASK_CONFIRM");
             }
         } else {
-            postingService.post(a.principal(), new WmsInventoryPostingService.PostingCommand(
+            postingService.postFromWorkflow(a.principal(), new WmsInventoryPostingService.PostingCommand(
                     command.requestId(), "TRANSFER",
                     List.of(postingLeg(line, null, quantity), destinationPostingLeg(line, null, quantity)),
-                    optional(command.notes())));
+                    optional(command.notes())), "WMS_REPLENISHMENT_TASK_CONFIRM");
         }
 
         String confirmationPublicId = UUID.randomUUID().toString();
@@ -397,17 +397,17 @@ public class WmsReplenishmentTaskService {
                         """, a.tenantId(), serialId);
                 UUID serialRequest = UUID.nameUUIDFromBytes((command.requestId() + ":reverse:" + serialId)
                         .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                postingService.post(a.principal(), new WmsInventoryPostingService.PostingCommand(
+                postingService.postFromWorkflow(a.principal(), new WmsInventoryPostingService.PostingCommand(
                         serialRequest, "TRANSFER",
                         List.of(reverseDestinationLeg(original, serialPublicId),
-                                reverseSourceLeg(original, serialPublicId)), optional(command.notes())));
+                                reverseSourceLeg(original, serialPublicId)), optional(command.notes())), "WMS_REPLENISHMENT_CONFIRMATION_REVERSE");
             }
         } else {
             BigDecimal qty = decimal(original.get("confirmed_qty"));
-            postingService.post(a.principal(), new WmsInventoryPostingService.PostingCommand(
+            postingService.postFromWorkflow(a.principal(), new WmsInventoryPostingService.PostingCommand(
                     command.requestId(), "TRANSFER",
                     List.of(reverseDestinationLeg(original, null, qty),
-                            reverseSourceLeg(original, null, qty)), optional(command.notes())));
+                            reverseSourceLeg(original, null, qty)), optional(command.notes())), "WMS_REPLENISHMENT_CONFIRMATION_REVERSE");
         }
         String reversalPublicId = UUID.randomUUID().toString();
         try {
