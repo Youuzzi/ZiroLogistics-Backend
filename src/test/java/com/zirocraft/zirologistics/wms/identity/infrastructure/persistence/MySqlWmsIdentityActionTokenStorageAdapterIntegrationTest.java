@@ -54,10 +54,28 @@ class MySqlWmsIdentityActionTokenStorageAdapterIntegrationTest {
                 .migrate();
 
         DataSource dataSource = new DriverManagerDataSource(
-                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+                nonUtcJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
         jdbcTemplate = new JdbcTemplate(dataSource);
+        assertEquals("+07:00", jdbcTemplate.queryForObject("SELECT @@session.time_zone", String.class),
+                "identity adapter tests must exercise a non-UTC MySQL session");
         adapter = new MySqlWmsIdentityActionTokenStorageAdapter(jdbcTemplate);
         transactionTemplate = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+    }
+
+    @Test
+    void instantValuesRoundTripAsUtcWallClockValuesUnderNonUtcSession() {
+        long userId = insertUser("non-utc-round-trip");
+        byte[] digest = randomDigest();
+        long tokenId = adapter.insert(digest, WmsIdentityActionTokenPurpose.EMAIL_VERIFICATION,
+                userId, null, null, uniqueEmail("non-utc-round-trip"),
+                NOW.plusNanos(987_654_321), NOW.plusNanos(123_456_789));
+
+        WmsIdentityActionTokenRecord token = find(digest, WmsIdentityActionTokenPurpose.EMAIL_VERIFICATION);
+
+        assertEquals(tokenId, token.id());
+        assertEquals(NOW.truncatedTo(java.time.temporal.ChronoUnit.MICROS), token.createdAt());
+        assertEquals(NOW.plusNanos(987_654_321).truncatedTo(java.time.temporal.ChronoUnit.MICROS),
+                token.expiresAt());
     }
 
     @Test
@@ -243,6 +261,10 @@ class MySqlWmsIdentityActionTokenStorageAdapterIntegrationTest {
         assertThrows(IllegalArgumentException.class, () -> adapter.lockTenantForInvitation(0));
         assertThrows(IllegalArgumentException.class,
                 () -> adapter.revokeOutstandingInvitations(1, " not-normalized@example.test ", NOW));
+    }
+
+    private static String nonUtcJdbcUrl() {
+        return MYSQL.getJdbcUrl() + "?connectionTimeZone=%2B07:00&forceConnectionTimeZoneToSession=true";
     }
 
     private static WmsIdentityActionTokenRecord find(
