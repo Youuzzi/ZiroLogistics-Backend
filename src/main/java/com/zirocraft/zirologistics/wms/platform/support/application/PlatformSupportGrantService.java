@@ -138,7 +138,8 @@ public class PlatformSupportGrantService {
         Long actorId = activeVerifiedOperatorId(actor.operatorPublicId());
         Map<String, Object> grant = lockGrant(grantId);
         Long requesterId = ((Number) grant.get("requested_by_operator_id")).longValue();
-        if (!"REQUESTED".equals(grant.get("status")) || requesterId.equals(actorId)) {
+        if (!"REQUESTED".equals(grant.get("status")) || requesterId.equals(actorId)
+                || (approve && !"ACTIVE".equals(grant.get("tenant_status")))) {
             throw new PlatformSupportGrantRejectedException();
         }
 
@@ -168,9 +169,12 @@ public class PlatformSupportGrantService {
 
     private Map<String, Object> lockGrant(String grantPublicId) {
         List<Map<String, Object>> rows = jdbc.queryForList("""
-                SELECT id, tenant_id, requested_by_operator_id, status
-                  FROM platform_support_grants
-                 WHERE public_id = ?
+                SELECT support_grant.id, support_grant.tenant_id,
+                       support_grant.requested_by_operator_id, support_grant.status,
+                       tenant.status AS tenant_status
+                  FROM platform_support_grants support_grant
+                  JOIN tenants tenant ON tenant.id = support_grant.tenant_id
+                 WHERE support_grant.public_id = ?
                  FOR UPDATE
                 """, grantPublicId);
         if (rows.isEmpty()) throw new PlatformSupportGrantRejectedException();
