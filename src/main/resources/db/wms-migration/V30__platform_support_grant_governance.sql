@@ -92,5 +92,5 @@ CREATE TABLE platform_support_grant_scopes (
 -- Approval is a separate privilege from requesting or revoking support access.
 INSERT INTO platform_permissions (permission_code, description, risk_level, status)
 VALUES ('PLATFORM_SUPPORT_GRANT_APPROVE',
-        'Approve or reject another operator\'s tenant-scoped support grant request.',
+        'Approve or reject another operator''s tenant-scoped support grant request.',
         'CRITICAL', 'ACTIVE');
