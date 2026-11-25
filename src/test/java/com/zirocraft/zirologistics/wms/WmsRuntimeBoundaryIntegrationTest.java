@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
                 "spring.datasource.username=sa",
                 "spring.datasource.password=",
                 "spring.datasource.driver-class-name=org.h2.Driver",
+                "spring.datasource.hikari.connection-init-sql=",
                 "spring.jpa.hibernate.ddl-auto=none",
                 "spring.flyway.enabled=false"
         })
