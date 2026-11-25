@@ -54,8 +54,10 @@ class PlatformSupportGrantServiceTest {
                 .thenReturn(11L);
         when(jdbc.queryForObject(contains("SELECT id FROM tenants"), eq(Long.class), eq(tenant)))
                 .thenReturn(22L);
+        // INSERT has seven bind parameters: public_id, tenant_id, requester, operation_ref,
+        // purpose, starts_at, and expires_at. Keep the Mockito signature aligned with the SQL.
         when(jdbc.update(contains("INSERT INTO platform_support_grants"), any(), eq(22L), eq(11L),
-                any(), any(), any(), any(), any())).thenReturn(1);
+                any(), any(), any(), any())).thenReturn(1);
         when(jdbc.queryForObject(contains("SELECT id FROM platform_support_grants"), eq(Long.class), any()))
                 .thenReturn(33L);
         when(jdbc.update(contains("INSERT INTO platform_support_grant_scopes"), eq(33L), anyString()))
