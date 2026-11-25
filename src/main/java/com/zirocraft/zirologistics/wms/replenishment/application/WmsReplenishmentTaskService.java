@@ -7,6 +7,7 @@ import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAc
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
 import com.zirocraft.zirologistics.wms.inventory.application.WmsInventoryPostingService;
 import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -16,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.*;
 
 /**
@@ -29,14 +32,23 @@ public class WmsReplenishmentTaskService {
     private final WmsInventoryPostingService postingService;
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
+    private final Clock clock;
 
+    @Autowired
     public WmsReplenishmentTaskService(WmsMembershipAccessService accessService,
                                        WmsInventoryPostingService postingService,
                                        JdbcTemplate jdbc, ObjectMapper mapper) {
+        this(accessService, postingService, jdbc, mapper, Clock.systemUTC());
+    }
+
+    WmsReplenishmentTaskService(WmsMembershipAccessService accessService,
+                                WmsInventoryPostingService postingService,
+                                JdbcTemplate jdbc, ObjectMapper mapper, Clock clock) {
         this.accessService = Objects.requireNonNull(accessService);
         this.postingService = Objects.requireNonNull(postingService);
         this.jdbc = Objects.requireNonNull(jdbc);
         this.mapper = Objects.requireNonNull(mapper);
+        this.clock = Objects.requireNonNull(clock);
     }
 
     @Transactional(readOnly = true)
@@ -138,7 +150,7 @@ public class WmsReplenishmentTaskService {
                 throw new IllegalArgumentException("Combined requested quantity exceeds available source stock");
         }
         String taskPublicId = UUID.randomUUID().toString();
-        String taskNumber = "RPL-" + java.time.LocalDate.now() + "-" + taskPublicId.substring(0, 8).toUpperCase(Locale.ROOT);
+        String taskNumber = "RPL-" + tenantBusinessDate(a.tenantId()) + "-" + taskPublicId.substring(0, 8).toUpperCase(Locale.ROOT);
         jdbc.update("""
                 INSERT INTO replenishment_tasks
                   (public_id, tenant_id, warehouse_id, replenishment_rule_id, task_number,
@@ -493,6 +505,11 @@ public class WmsReplenishmentTaskService {
         audit(a, taskPublicId, "CANCEL", Map.of("status", string(task, "status")),
                 Map.of("status", "CANCELLED", "reason", notes));
         return taskView(a.tenantId(), taskPublicId);
+    }
+
+    private LocalDate tenantBusinessDate(long tenantId) {
+        String timezone = jdbc.queryForObject("SELECT timezone FROM tenants WHERE id = ?", String.class, tenantId);
+        return WmsTenantBusinessDate.today(timezone, clock);
     }
 
     private void refreshTaskStatus(long tenantId, long taskId) {
