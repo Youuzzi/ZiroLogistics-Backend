@@ -83,6 +83,11 @@ class PlatformOperatorPersistenceMySqlIntegrationTest {
         assertEquals(1L, operatorRepository.countByStatus(PlatformOperatorStatus.ACTIVE));
         assertEquals(PlatformOperatorStatus.ACTIVE,
                 operatorRepository.findByPublicId(saved.getPublicId()).orElseThrow().getStatus());
+
+        assertEquals(1, operatorRepository.recordSuccessfulAuthentication(saved.getId(), 0L));
+        assertNotNull(operatorRepository.findByPublicId(saved.getPublicId())
+                .orElseThrow().getLastAuthenticatedAt());
+        assertEquals(0, operatorRepository.recordSuccessfulAuthentication(saved.getId(), 1L));
     }
 
     @Test
