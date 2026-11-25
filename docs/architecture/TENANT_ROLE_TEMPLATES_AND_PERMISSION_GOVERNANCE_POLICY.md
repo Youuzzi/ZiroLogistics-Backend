@@ -1,7 +1,7 @@
 # Tenant Role Templates and Permission Governance Policy
 
-**Status:** Policy implemented in the current authorization implementation PR; role templates beyond Tenant Owner remain proposed and are not active persisted system roles.
-**Reviewed source baseline:** `cc1c489810e9551273d6c45397a3ef86150bd1b2`
+**Status:** Canonical Tenant Owner grants, delegation/catalogue sets, and all 13 operational tenant system-role templates are implemented. Machine-readable permission risk metadata and universal cross-workflow separation-of-duties enforcement remain incomplete.
+**Implementation source of truth:** `WmsTenantPermissionPolicy` and its MySQL persisted-grant integration tests on `main`.
 **Related evidence:** `docs/audits/TENANT_RBAC_PERMISSION_CATALOGUE_AUDIT.md`, `docs/architecture/WMS_ROLE_PERMISSION_MANAGEMENT_DESIGN.md`, `docs/security/TENANT_ISOLATION_AND_AUTHORIZATION.md`
 **Scope:** Tenant-scoped role templates, permission risk classes, delegation ceilings, separation of duties, and bootstrap/provisioning parity.
 
@@ -9,7 +9,7 @@
 
 Define a consistent least-privilege role policy for the WMS permission catalogue. The policy must be shared by first-install bootstrap, repeatable tenant provisioning, role catalogue responses, role permission changes, and membership-role assignment.
 
-The permission catalogue audit identified separate bootstrap and provisioning owner allowlists, historical migration backfills, and a restricted hard-coded delegation catalogue. These paths must converge on one canonical policy. This document is the proposed policy contract; it does not claim that the role templates or grants are already implemented.
+The earlier permission catalogue audit identified separate bootstrap and provisioning owner allowlists. That finding is superseded: both paths now use `WmsTenantPermissionPolicy.tenantOwnerTemplate()` and `WmsTenantRoleTemplateProvisioner`. The 13 operational system-role templates are persisted for newly bootstrapped and provisioned tenants, with MySQL tests asserting the actual role-permission rows. The older migration history remains immutable; V28 reconciles existing tenants. This document retains design rationale and a conservative role matrix, but exact current grants must be read from the Java policy source, not inferred from the illustrative matrix.
 
 ## 2. Authorization model
 
@@ -41,7 +41,7 @@ Every global permission code must be classified once in a canonical server-side 
 
 Risk classes are metadata for policy and review. They must not replace explicit per-operation authorization checks.
 
-## 4. Proposed role templates
+## 4. Role template design and implemented system roles
 
 The following templates are the recommended default tenant role set. They are policy bundles, not necessarily persisted system roles today. A tenant may create custom roles only within the grantability rules in section 6.
 
@@ -193,7 +193,7 @@ The audit role must not imply access to platform-wide logs or another tenant's d
 
 ## 5. Permission-to-role matrix
 
-The matrix below is the initial default policy proposal. A check mark means the role template may include the permission; it does not mean the permission is currently granted in the repository.
+The matrix below is a policy-design reference, not an exact serialization of current grants. The canonical Java role-template definitions and persisted-grant integration tests are authoritative for current implementation.
 
 | Permission family | Owner | Tenant Admin | Warehouse Supervisor | Inbound Operator | Inbound Controller | Outbound Operator | Outbound Controller | Shipping Clerk | Inventory Controller | Inventory Approver | Transfer Dispatcher | Transfer Receiver | Replenishment Operator | Auditor |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -227,7 +227,7 @@ The matrix is intentionally conservative for C1 and A1. Shipment release is assi
 
 ## 6. Canonical policy and delegation contract
 
-Implement one immutable server-side policy definition with, at minimum, these attributes per permission code:
+Implemented today: a centralized immutable Java policy defines the Tenant Owner baseline, catalogue-visible permissions, custom-role delegable permissions, restricted self-assignment system roles, and 13 immutable operational system-role templates. Permission risk classes and per-permission metadata are still design requirements, not implemented fields. A future metadata registry should define, at minimum, these attributes per permission code:
 
 - code, module, display description;
 - risk class;

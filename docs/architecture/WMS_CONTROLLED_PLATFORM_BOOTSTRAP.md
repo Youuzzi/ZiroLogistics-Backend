@@ -1,97 +1,93 @@
 # WMS Controlled Platform Bootstrap
 
-Status: implementation contract — bootstrap remains disabled until an operator deliberately enables it.
+**Status:** Implemented as a disabled-by-default, one-time, non-web first-install operation. It creates the initial WMS tenant owner; it does not create a global platform operator.
+**Execution boundary:** Dedicated short-lived operator process, explicit command mode, out-of-band secret injection, fresh-database checks, and transactional completion marker.
 
 ## Purpose
 
-Create the initial tenant and tenant-owner identity in a fresh WMS installation without exposing a public registration or "create first admin" HTTP endpoint. This is a deployment operation, not a tenant-facing API. The current schema has no global platform-operator identity model; this operation does not create a global superuser.
+Create the initial tenant and tenant-owner identity in a fresh WMS installation without exposing public registration or a "create first admin" HTTP endpoint. This is a deployment operation, not a tenant-facing API. The platform operator identity plane is separate and must be provisioned through its own future controlled process; WMS tenant bootstrap must not be treated as platform-admin creation.
 
 ## Security invariants
 
-1. Bootstrap is disabled by default and is never enabled by the ordinary `wms` runtime profile alone.
-2. Bootstrap credentials and tenant details are supplied through a one-time deployment secret channel. They must not be committed, placed in application logs, command history, container image layers, or a checked-in properties file.
-3. The bootstrap operation runs only in a dedicated, short-lived operator process with the WMS datasource and Flyway location. It must not run in the legacy application.
-4. The operation is atomic: platform operator, initial tenant, active membership, initial tenant role, reviewed role grants, and bootstrap completion marker commit together or not at all.
+1. Bootstrap is disabled by default and is never enabled by the ordinary WMS runtime profile alone.
+2. Bootstrap credentials and tenant details are supplied through a one-time deployment secret channel. They must not be committed, placed in application logs, command history, container image layers, or checked-in properties.
+3. Bootstrap runs only in explicit non-web command mode with the WMS datasource and WMS Flyway location.
+4. The operation is atomic: initial tenant, WMS user, active tenant membership, tenant Owner role, canonical Owner grants, operational system-role templates, and bootstrap completion marker commit together or not at all.
 5. A database-backed singleton bootstrap marker is locked with `SELECT ... FOR UPDATE`. Concurrent attempts serialize; exactly one can complete.
-6. A completed marker permanently prevents re-running the bootstrap. There is no HTTP reset or "force" switch. Recovery requires a separately reviewed, audited operator procedure.
-7. Bootstrap must fail closed if the database is not an expected fresh WMS installation, if required migrations are absent, or if any identity/tenant uniqueness conflict exists.
+6. A completed marker permanently prevents rerunning bootstrap. There is no HTTP reset or force switch. Recovery requires a separately reviewed and audited operator procedure.
+7. Bootstrap fails closed if the database is not an expected fresh WMS installation or any identity/tenant uniqueness conflict exists.
 8. The initial user's password is encoded using the WMS Argon2id encoder. Raw passwords are never persisted or logged.
-9. The operator identity is email-verified as part of this trusted out-of-band bootstrap. Normal invited users still use the email verification lifecycle.
+9. The initial WMS user is email-verified as part of this trusted out-of-band bootstrap. Normal invited users use the email-verification lifecycle.
 10. No legacy database, user table, credentials, or schema is read or modified.
+11. No platform operator, platform role, platform permission grant, or platform access token is created by this tenant bootstrap.
 
-## Initial authorization
+## Initial tenant authorization
 
-The bootstrap-created `TENANT_OWNER` role is tenant-scoped. The current implementation grants only the explicit allowlist `WMS_IDENTITY_MEMBERSHIP_INVITE` and `WMS_TENANT_PROFILE_UPDATE`. This is intentionally a minimum grant, not a complete warehouse-administration permission set. It does not automatically grant future permissions, and it does not create platform-wide privileges or a global superuser. Additional tenant capabilities must be provisioned through separately reviewed role/permission workflows.
+The bootstrap-created `TENANT_OWNER` role receives the canonical least-privilege template from `WmsTenantPermissionPolicy.tenantOwnerTemplate()`. It includes tenant governance and operational read visibility; it does not grant wildcard access, inventory posting, shipment release/shipping, stock-count approval, adjustment approval/posting, replenishment reversal, or platform permissions.
+
+The same Owner policy is used by repeatable tenant provisioning. Both creation paths also provision the 13 immutable tenant operational role templates through `WmsTenantRoleTemplateProvisioner`. These templates are tenant roles, not platform roles and not mandatory staffing positions. Operational access is assigned separately under tenant RBAC policy.
 
 ## Required bootstrap state
 
-Use an additive WMS migration to create a singleton state table with:
+The additive WMS migration creates a singleton state table with:
 - a fixed singleton primary key constrained to one allowed value;
-- a boolean/status that distinguishes NOT_COMPLETED from COMPLETED;
+- status distinguishing `NOT_COMPLETED` from `COMPLETED`;
 - completion timestamp;
 - created/updated timestamps;
-- optional opaque operation reference (not an email, password, or token).
+- opaque operation reference.
 
-The migration seeds exactly one NOT_COMPLETED row. The primary key and CHECK constraint enforce the singleton ID. The runtime locks row ID 1; a missing row is a hard failure.
+The migration seeds exactly one `NOT_COMPLETED` row. Runtime locks row ID 1; a missing row is a hard failure.
 
 ## Execution contract
 
-The implementation should expose an operator-only application command, not a controller:
-- launch `WmsRuntimeApplication` with the explicit command-line switch `--wms.bootstrap.command-mode=true` (this switches Spring to non-web mode);
-- also require `--wms.bootstrap.enabled=true`; both switches are absent/false by default;
-- set `WMS_BOOTSTRAP_ENABLED=true`; inject `WMS_BOOTSTRAP_TENANT_CODE`, `WMS_BOOTSTRAP_TENANT_LEGAL_NAME`, `WMS_BOOTSTRAP_TENANT_DISPLAY_NAME`, `WMS_BOOTSTRAP_TIMEZONE`, `WMS_BOOTSTRAP_CURRENCY`, `WMS_BOOTSTRAP_OPERATOR_EMAIL`, `WMS_BOOTSTRAP_OPERATOR_FULL_NAME`, and `WMS_BOOTSTRAP_OPERATOR_PASSWORD` through a secret manager/environment (never command-line arguments);
-- validate and normalize all inputs before opening the write transaction;
-- perform expensive Argon2id encoding before acquiring database row locks;
-- lock bootstrap state first, then re-check completion and fresh-install invariants;
-- create records and the reviewed minimum role grants in one transaction;
-- set the completion marker last in the same transaction;
-- print only a success/failure operation reference and generated public identifiers, never secrets or email addresses;
-- terminate after execution. It must not remain as a long-lived web process.
+The operator-only application command requires:
+- `--wms.bootstrap.command-mode=true` to switch Spring to non-web mode;
+- `--wms.bootstrap.enabled=true`;
+- `WMS_BOOTSTRAP_ENABLED=true`;
+- `WMS_BOOTSTRAP_TENANT_CODE`;
+- `WMS_BOOTSTRAP_TENANT_LEGAL_NAME`;
+- `WMS_BOOTSTRAP_TENANT_DISPLAY_NAME`;
+- `WMS_BOOTSTRAP_TIMEZONE`;
+- `WMS_BOOTSTRAP_CURRENCY`;
+- `WMS_BOOTSTRAP_OPERATOR_EMAIL`;
+- `WMS_BOOTSTRAP_OPERATOR_FULL_NAME`;
+- `WMS_BOOTSTRAP_OPERATOR_PASSWORD`.
 
-A repeated invocation after completion returns a generic already-completed result without revealing the original operator identity. Concurrent invocations must yield one success and one already-completed result.
+Values must be injected from a secret manager or ephemeral deployment environment, never command-line arguments. The command validates and normalizes inputs before opening the write transaction, performs Argon2id encoding before acquiring database locks, locks bootstrap state, checks freshness, creates all records and grants transactionally, sets completion last, prints only non-sensitive operation/public identifiers, and terminates.
 
 ## Fresh-install checks
 
-The command must refuse to bootstrap when any of the following already exist:
-- any user;
-- any tenant;
-- any tenant membership;
-- any tenant role;
-- a completed bootstrap marker.
+Bootstrap refuses to run if any user, tenant, tenant membership, tenant role, or completed marker already exists. A failed transaction leaves no partial records and the marker remains `NOT_COMPLETED`.
 
-This avoids adopting an unknown or partially initialized database as the platform's first installation. A failed transaction must leave no partial records and the marker remains NOT_COMPLETED.
+## Verification
 
-## Verification requirements
+Disposable MySQL 8.4 Testcontainers verify:
+- exactly one initial bootstrap marker;
+- atomic creation of the WMS tenant owner and all canonical role grants/templates;
+- Argon2id password encoding and absence of raw-password persistence;
+- invalid configuration and non-empty database refusal;
+- transactional rollback and concurrency safety;
+- repeated invocation cannot create another tenant or WMS user;
+- ordinary HTTP runtime does not trigger bootstrap;
+- legacy runtime/database remains unaffected.
 
-Use disposable MySQL 8.4 Testcontainers only. Required tests:
-- migration creates exactly one NOT_COMPLETED marker and enforces singleton semantics;
-- fresh installation bootstraps the operator, tenant, membership, role and explicit permission allowlist atomically;
-- password is Argon2id encoded and no raw password is persisted;
-- missing/invalid configuration fails before writes;
-- pre-existing identity or tenant data causes fail-closed refusal;
-- rollback leaves no partial bootstrap data;
-- concurrent bootstrap attempts result in exactly one completion;
-- repeated invocation cannot create another operator or tenant;
-- ordinary WMS HTTP runtime does not trigger the command runner when the command-line switch is absent;
-- legacy runtime is unaffected.
-
-## Rollout and operational procedure
+## Rollout
 
 1. Provision an empty, dedicated WMS database and verify its target identity through deployment controls.
-2. Apply only the WMS Flyway migrations using the WMS migration location.
-3. Provide the bootstrap values through a secret manager or ephemeral deployment secret injection.
-4. Run the WMS application in explicit non-web command mode once, with bootstrap enabled and all required values injected from the secret manager.
-5. Verify only non-sensitive counts/status and the returned public identifiers.
-6. Remove the bootstrap secret injection and disable the bootstrap execution path.
-7. Start the ordinary WMS runtime with bootstrap disabled.
-8. Preserve the operation result in the deployment audit record without storing the password or other secrets.
+2. Apply WMS Flyway migrations only.
+3. Inject bootstrap values through a secret manager or ephemeral deployment secret.
+4. Run the WMS application once in explicit non-web command mode.
+5. Verify non-sensitive counts/status and returned public identifiers.
+6. Remove secret injection and disable bootstrap.
+7. Start ordinary WMS runtime with bootstrap disabled.
+8. Preserve the operation result in deployment audit records without storing secrets.
 
 ## Explicit non-goals
 
-- No public self-registration.
-- No unauthenticated bootstrap endpoint.
-- No default credentials.
-- No hard-coded tenant, email, password, or permission wildcard.
-- No changes to frozen V1 or V2 migrations.
-- No access to the user's local `zirowms_v1` or legacy database.
-- No automatic production execution from application startup.
+- No public self-registration or unauthenticated bootstrap endpoint.
+- No default credentials or checked-in secrets.
+- No platform administrator, global superuser, or platform token creation.
+- No billing/payment integration.
+- No tenant data deletion or physical purge.
+- No changes to frozen historical migrations.
+- No access to the local `zirowms_v1` reference database or legacy database.
