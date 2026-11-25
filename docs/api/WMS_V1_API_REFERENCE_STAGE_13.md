@@ -75,7 +75,7 @@ Invitation issuance, existing-account invitation acceptance, password changes an
 - A warehouse location may define `maxWeightCapacity` with `weightUom`; the UOM must be an active MASS unit. When configured, every positive inventory posting into that location is checked against projected on-hand weight. Item and location mass UOMs support `KG`, `G`, `MG`, and `TONNE` conversion. Items already held in a capacity-controlled location must have weight metadata before further stock can be added.
 - Versioned workflow commands carry expected version values where required.
 - Idempotent commands use command-specific request identifiers. A POST is not automatically idempotent.
-- Some scheduled date-time fields use `LocalDateTime`, which contains no timezone/offset. Their business-local interpretation remains an explicit contract item to settle before frontend integration.
+- Inbound receipt `expectedAt`, outbound shipment `scheduledAt`, and inter-warehouse transfer `scheduledAt` are represented as `LocalDateTime` in the current v1 request/service contracts. `LocalDateTime` carries no offset or timezone; the current API contract does not yet define how these values are resolved against the tenant timezone, how daylight-saving gaps/overlaps are handled, or whether the stored value is an instant. Clients must not assume these fields are UTC instants. This contract must be settled before frontend scheduling integration; changing the v1 representation requires an explicit compatibility/versioning decision.
 
 ## 5. Collection bounds
 
