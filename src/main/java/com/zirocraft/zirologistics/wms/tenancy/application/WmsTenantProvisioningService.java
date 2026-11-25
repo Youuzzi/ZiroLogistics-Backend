@@ -7,6 +7,7 @@ import com.zirocraft.zirologistics.wms.authorization.application.WmsTenantRoleTe
 import com.zirocraft.zirologistics.wms.authorization.domain.WmsTenantPermissionPolicy;
 import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
 import com.zirocraft.zirologistics.wms.tenancy.infrastructure.config.WmsTenantProvisioningProperties;
+import com.zirocraft.zirologistics.wms.tenancy.domain.WmsTenantLocalePolicy;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -16,8 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.time.ZoneId;
-import java.util.Currency;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -233,21 +232,13 @@ public class WmsTenantProvisioningService {
         }
         String legalName = bounded(p.getLegalName(), "legal name", 2, 200);
         String displayName = bounded(p.getDisplayName(), "display name", 2, 150);
-        String timezone = bounded(p.getTimezone(), "timezone", 1, 60);
+        String timezone;
+        String currency;
         try {
-            if (!ZoneId.getAvailableZoneIds().contains(timezone) && !"UTC".equals(timezone)) {
-                throw new IllegalArgumentException();
-            }
-        } catch (RuntimeException invalid) {
-            throw new WmsTenantProvisioningRejectedException("Tenant timezone is invalid");
-        }
-        String currency = required(p.getCurrency(), "currency").toUpperCase(Locale.ROOT);
-        try {
-            if (!Currency.getInstance(currency).getCurrencyCode().equals(currency)) {
-                throw new IllegalArgumentException();
-            }
-        } catch (RuntimeException invalid) {
-            throw new WmsTenantProvisioningRejectedException("Tenant currency is invalid");
+            timezone = WmsTenantLocalePolicy.normalizeTimezone(bounded(p.getTimezone(), "timezone", 1, 60));
+            currency = WmsTenantLocalePolicy.normalizeCurrency(required(p.getCurrency(), "currency"));
+        } catch (IllegalArgumentException invalid) {
+            throw new WmsTenantProvisioningRejectedException("Tenant locale configuration is invalid");
         }
         String email;
         try {
