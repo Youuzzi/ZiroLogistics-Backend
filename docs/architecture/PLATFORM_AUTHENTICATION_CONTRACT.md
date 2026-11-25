@@ -92,3 +92,19 @@ The platform JWT issuer and decoder are implemented as a separate, disabled-by-d
 - Platform JWT remains disabled unless explicitly enabled with distinct deployment secrets. No platform HTTP route or security chain is enabled by this slice, and no operator/bootstrap credential is created.
 
 The platform decoder is not yet the final revocation enforcement point: the upcoming platform authentication converter/security chain must re-check the operator's current status and credential version against persistence on authenticated requests.
+
+
+## Implementation status — request identity and route isolation
+
+The platform request identity and route-boundary slices are implemented on the current Stage 16 mainline PR sequence:
+
+- The platform JWT authentication converter resolves the token subject against `platform_operators` for every authenticated request.
+- Authentication is rejected if the operator is missing, not ACTIVE, not email-verified, or the current credential version differs from the token's `cv` claim.
+- The converter requires a non-negative integral credential version and a valid, sufficiently recent MFA timestamp encoded as JWT NumericDate seconds.
+- The resulting principal contains only the platform operator public ID. No tenant identifier or membership is attached.
+- No platform authorities are granted by default. Platform permission loading must be explicitly added with reviewed grants and endpoint policy.
+- A dedicated `/api/platform/v1/**` security filter chain is ordered before the tenant WMS catch-all and uses only the platform decoder and converter.
+- Every platform route is authenticated by default; there are no public platform routes in this slice. The chain is disabled unless platform JWT is explicitly enabled with separately provisioned key material.
+- MockMvc coverage checks that platform routes require bearer authentication and that tenant/unmatched routes do not become public through the platform matcher.
+
+These slices do not yet add login/MFA endpoints, role grants, operator lifecycle endpoints, or bootstrap credentials.
