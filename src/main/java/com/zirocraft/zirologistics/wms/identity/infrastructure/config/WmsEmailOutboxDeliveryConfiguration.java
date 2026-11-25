@@ -48,10 +48,13 @@ public class WmsEmailOutboxDeliveryConfiguration {
         return sender;
     }
 
-    private static void validateConfiguration(WmsEmailOutboxDeliveryProperties properties) {
+    static void validateConfiguration(WmsEmailOutboxDeliveryProperties properties) {
+        int maximumSmtpTimeoutMs = Math.max(properties.getSmtpConnectionTimeoutMs(),
+                Math.max(properties.getSmtpReadTimeoutMs(), properties.getSmtpWriteTimeoutMs()));
         if (properties.getRetryBaseDelay().isNegative() || properties.getRetryBaseDelay().isZero()
                 || properties.getRetryMaxDelay().compareTo(properties.getRetryBaseDelay()) < 0
-                || properties.getProcessingLease().toMillis() <= properties.getSmtpReadTimeoutMs()
+                || properties.getProcessingLease().isNegative() || properties.getProcessingLease().isZero()
+                || properties.getProcessingLease().compareTo(java.time.Duration.ofMillis(maximumSmtpTimeoutMs)) <= 0
                 || properties.getMaxMessagesPerPoll() > 100
                 || properties.getMaxAttempts() > 100) {
             throw new IllegalStateException("WMS identity email delivery policy is invalid");
