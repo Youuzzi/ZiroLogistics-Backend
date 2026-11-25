@@ -55,7 +55,7 @@ class PlatformJwtTokenServiceTest {
         assertThat(claims.getSubject()).isEqualTo("operator-public-id");
         assertThat(claims.getClaimAsString("token_use")).isEqualTo("platform_access");
         assertThat(claims.getClaims()).containsEntry("cv", 7L).containsEntry("mfa", true);
-        assertThat((Instant) claims.getClaim("mfa_at")).isEqualTo(mfaAt);
+        assertThat(((Number) claims.getClaim("mfa_at")).longValue()).isEqualTo(mfaAt.getEpochSecond());
         assertThat(claims.getId()).isNotBlank();
         assertThat(Duration.between(claims.getIssuedAt(), claims.getExpiresAt())).isEqualTo(Duration.ofMinutes(10));
         assertThat(claims.getClaims()).doesNotContainKeys("mid", "tenant_id", "membership_id", "roles", "permissions");
