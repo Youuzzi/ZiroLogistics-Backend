@@ -109,7 +109,7 @@ class PlatformSupportGrantServiceTest {
                 .thenReturn(11L);
         when(jdbc.queryForList(contains("FROM platform_support_grants"), any()))
                 .thenReturn(List.of(Map.of("id", 33L, "tenant_id", 22L,
-                        "requested_by_operator_id", 11L, "status", "REQUESTED")));
+                        "requested_by_operator_id", 11L, "status", "REQUESTED", "tenant_status", "ACTIVE")));
 
         assertThatThrownBy(() -> service.approveGrant(
                 UUID.randomUUID().toString(), "Approved after independent access review",
