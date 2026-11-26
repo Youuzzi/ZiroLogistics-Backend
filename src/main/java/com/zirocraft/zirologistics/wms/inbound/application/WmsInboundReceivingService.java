@@ -220,6 +220,10 @@ public class WmsInboundReceivingService {
         if (!"DRAFT".equals(receipt.get("status")) && !"IN_PROGRESS".equals(receipt.get("status"))) {
             throw new IllegalStateException("Receipt is not eligible for posting");
         }
+        if (number(receipt, "created_by_membership_id") == access.membershipId()) {
+            throw new AccessDeniedException(
+                    "Inbound receipt posting must be performed by a membership other than the receipt creator");
+        }
 
         List<Map<String, Object>> storedLines = jdbc.queryForList("""
                 SELECT l.id, l.public_id, l.item_id, l.expected_qty, l.status,
