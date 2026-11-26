@@ -122,8 +122,8 @@ class WmsV31TenantMfaMigrationIntegrationTest {
                     userAId, tenantBId, membershipAId, "SINGLE_OPERATOR_ACTIVATION"),
                     "A challenge cannot bind a membership to another tenant");
 
-            assertThrows(SQLException.class, () -> insertRecoveryCode(connection,
-                    factorPublicId, userBId, new byte[32]),
+            assertThrows(SQLException.class, () -> insertRecoveryCodeWithWrongUser(
+                    connection, factorPublicId, userBId, new byte[32]),
                     "A recovery code cannot bind a factor to another user");
 
             assertThrows(SQLException.class, () -> insertChallenge(connection,
@@ -245,6 +245,19 @@ class WmsV31TenantMfaMigrationIntegrationTest {
             insert.setString(2, factorPublicId);
             insert.setLong(3, userId);
             assertEquals(1, insert.executeUpdate());
+        }
+    }
+
+    private static void insertRecoveryCodeWithWrongUser(
+            Connection connection, String factorPublicId, long userId, byte[] digest) throws SQLException {
+        try (PreparedStatement insert = connection.prepareStatement("""
+                INSERT INTO wms_tenant_mfa_recovery_codes (factor_id, user_id, code_digest, digest_key_version)
+                VALUES ((SELECT id FROM wms_tenant_mfa_factors WHERE public_id = ?), ?, ?, 'test-digest-v1')
+                """)) {
+            insert.setString(1, factorPublicId);
+            insert.setLong(2, userId);
+            insert.setBytes(3, digest);
+            insert.executeUpdate();
         }
     }
 
