@@ -350,7 +350,7 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                 SELECT public_id FROM replenishment_confirmations
                 WHERE tenant_id=? AND confirmation_type='MOVE'
                 """, String.class, serialFixture.tenantId());
-        task = taskService.reverse(serialFixture.principal(), confirmationPublicId,
+        task = taskService.reverse(independentActor(serialFixture), confirmationPublicId,
                 new WmsReplenishmentTaskService.ReverseCommand(UUID.randomUUID(), "Return serial to source"));
         assertEquals("IN_PROGRESS", task.get("status"));
         assertEquals(serialFixture.sourceLocationId(), jdbc.queryForObject("""
