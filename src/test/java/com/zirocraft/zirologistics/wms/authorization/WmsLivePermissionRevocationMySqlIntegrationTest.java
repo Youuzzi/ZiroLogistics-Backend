@@ -283,7 +283,7 @@ class WmsLivePermissionRevocationMySqlIntegrationTest {
         assertEquals(java.util.List.of("WMS_ITEM_CREATE"), replaced);
         assertEquals(1, jdbc.queryForObject(
                 "SELECT version FROM roles WHERE tenant_id=? AND public_id=?",
-                Integer.class, tenant.getId(), targetRolePublicId));
+                Long.class, tenant.getId(), targetRolePublicId));
         assertEquals(1, jdbc.queryForObject("""
                 SELECT COUNT(*) FROM role_permissions rp
                 JOIN permissions p ON p.id=rp.permission_id
@@ -305,7 +305,7 @@ class WmsLivePermissionRevocationMySqlIntegrationTest {
                         java.util.List.of("WMS_INVENTORY_POST"), 1L));
         assertEquals(1, jdbc.queryForObject(
                 "SELECT version FROM roles WHERE tenant_id=? AND public_id=?",
-                Integer.class, tenant.getId(), targetRolePublicId));
+                Long.class, tenant.getId(), targetRolePublicId));
         assertEquals(1, jdbc.queryForObject("""
                 SELECT COUNT(*) FROM role_permissions rp
                 JOIN permissions p ON p.id=rp.permission_id
@@ -327,7 +327,7 @@ class WmsLivePermissionRevocationMySqlIntegrationTest {
                         java.util.List.of("WMS_ITEM_CREATE"), 1L));
         assertEquals(1, jdbc.queryForObject(
                 "SELECT version FROM roles WHERE tenant_id=? AND public_id=?",
-                Integer.class, tenant.getId(), targetRolePublicId));
+                Long.class, tenant.getId(), targetRolePublicId));
     }
 
 }
