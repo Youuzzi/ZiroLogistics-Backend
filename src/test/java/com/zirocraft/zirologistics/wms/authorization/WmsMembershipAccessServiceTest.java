@@ -2,6 +2,7 @@ package com.zirocraft.zirologistics.wms.authorization;
 
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessDeniedException;
 import com.zirocraft.zirologistics.wms.authorization.infrastructure.persistence.WmsMembershipAccessProjection;
 import com.zirocraft.zirologistics.wms.authorization.infrastructure.persistence.WmsMembershipAccessRepository;
 import org.junit.jupiter.api.Test;
@@ -44,14 +45,14 @@ class WmsMembershipAccessServiceTest {
     void rejectsMembershipWhenNoActivePersistedMembershipRowsExist() {
         when(repository.findActiveAccess("user-1", "revoked-membership")).thenReturn(List.of());
 
-        assertThrows(RuntimeException.class,
+        assertThrows(WmsMembershipAccessDeniedException.class,
                 () -> service.resolve("user-1", "revoked-membership"));
     }
 
     @Test
     void rejectsMissingIdentityBeforeRepositoryAccess() {
-        assertThrows(RuntimeException.class, () -> service.resolve(" ", "membership-1"));
-        assertThrows(RuntimeException.class, () -> service.resolve("user-1", null));
+        assertThrows(WmsMembershipAccessDeniedException.class, () -> service.resolve(" ", "membership-1"));
+        assertThrows(WmsMembershipAccessDeniedException.class, () -> service.resolve("user-1", null));
         verifyNoInteractions(repository);
     }
 
