@@ -557,6 +557,7 @@ public class WmsInterWarehouseTransferService {
                 WHERE c.tenant_id = ?
                   AND c.stock_transfer_id = ?
                   AND c.command_type = 'DISPATCH'
+                  AND e.event_type = 'WMS_STOCK_TRANSFER_UPDATED'
                   AND e.actor_type = 'TENANT_MEMBER'
                   AND e.actor_membership_id = ?
                 """, Long.class, transferPublicId, a.tenantId(), transferId, a.membershipId());
