@@ -403,7 +403,8 @@ public class WmsInboundReceivingService {
     private Map<String, Object> receipt(long tenantId, String publicId) {
         return requiredRow("""
                 SELECT r.id, r.public_id, r.document_number, r.external_reference, r.receipt_type,
-                       r.status, r.expected_at, r.received_at, r.posted_at, r.notes, r.version,
+                       r.status, r.expected_at, r.received_at, r.posted_at, r.notes,
+                       r.created_by_membership_id, r.version,
                        r.created_at, r.updated_at, w.public_id AS warehouse_public_id,
                        w.warehouse_code, w.warehouse_name, loc.public_id AS receiving_location_public_id,
                        bp.public_id AS supplier_public_id, bp.partner_code AS supplier_code,
