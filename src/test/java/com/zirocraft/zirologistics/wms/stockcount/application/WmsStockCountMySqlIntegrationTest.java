@@ -165,6 +165,35 @@ class WmsStockCountMySqlIntegrationTest {
     }
 
     @Test
+    void stockCountListDetailAndWorkflowCommandsAreIsolatedAcrossTenants() {
+        Fixture otherTenant = fixture("NONE");
+        String ownCountId = createAndPlan(fixture);
+        String foreignCountId = createAndPlan(otherTenant);
+
+        assertTrue(stockCountService.list(fixture.principal()).stream()
+                .anyMatch(row -> ownCountId.equals(row.get("publicId"))));
+        assertFalse(stockCountService.list(fixture.principal()).stream()
+                .anyMatch(row -> foreignCountId.equals(row.get("publicId"))));
+        assertEquals(foreignCountId, stockCountService.get(otherTenant.principal(), foreignCountId)
+                .get("publicId"));
+
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> stockCountService.get(fixture.principal(), foreignCountId));
+        assertThrows(com.zirocraft.zirologistics.wms.application.WmsResourceNotFoundException.class,
+                () -> stockCountService.plan(fixture.principal(), foreignCountId));
+
+        assertEquals("PLANNED", stockCountService.get(otherTenant.principal(), foreignCountId).get("status"));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM stock_counts
+                WHERE tenant_id = ? AND public_id = ? AND status = 'PLANNED'
+                """, otherTenant.tenantId(), foreignCountId));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM stock_counts
+                WHERE tenant_id = ? AND public_id = ? AND status = 'PLANNED'
+                """, fixture.tenantId(), ownCountId));
+    }
+
+    @Test
     void inventoryAdjustmentReadApisAreTenantScoped() {
         Fixture foreign = fixture();
         String ownAdjustment = insertDraftAdjustment(fixture);
