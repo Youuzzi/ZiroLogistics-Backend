@@ -135,4 +135,86 @@ class WmsLivePermissionRevocationMySqlIntegrationTest {
                 "role demotion must remove all permissions on the next resolution");
         assertEquals(membershipPublicId, afterRoleDemotion.membershipPublicId());
     }
+    @Test
+    void aggregatesDistinctPermissionsAcrossMultiplePersistedRoles() {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();
+
+        UserEntity user = new UserEntity();
+        user.setEmail("a3-multi-" + suffix.toLowerCase() + "@example.test");
+        user.setUsername("a3-multi-" + suffix.toLowerCase());
+        user.setFullName("A3 Multi Role Test");
+        user.setPasswordHash(passwordEncoder.encode("TestPassword123"));
+        user.setStatus(UserStatus.ACTIVE);
+        user = userRepository.saveAndFlush(user);
+
+        TenantEntity tenant = new TenantEntity();
+        tenant.setTenantCode("A3MULTI" + suffix);
+        tenant.setLegalName("A3 Multi Role Test");
+        tenant.setDisplayName("A3 Multi " + suffix);
+        tenant.setStatus(TenantStatus.ACTIVE);
+        tenant = tenantRepository.saveAndFlush(tenant);
+
+        TenantMembershipEntity membership = new TenantMembershipEntity();
+        membership.setTenantId(tenant.getId());
+        membership.setUserId(user.getId());
+        membership.setStatus(MembershipStatus.ACTIVE);
+        membership = membershipRepository.saveAndFlush(membership);
+
+        String firstRoleCode = "A3_MULTI_A_" + suffix;
+        String secondRoleCode = "A3_MULTI_B_" + suffix;
+        jdbc.update("""
+                INSERT INTO roles (public_id, tenant_id, role_code, role_name, is_system_role, status)
+                VALUES (?, ?, ?, 'A3 Multi Role A', 0, 'ACTIVE'),
+                       (?, ?, ?, 'A3 Multi Role B', 0, 'ACTIVE')
+                """,
+                UUID.randomUUID().toString(), tenant.getId(), firstRoleCode,
+                UUID.randomUUID().toString(), tenant.getId(), secondRoleCode);
+        Long firstRoleId = jdbc.queryForObject(
+                "SELECT id FROM roles WHERE tenant_id = ? AND role_code = ?", Long.class,
+                tenant.getId(), firstRoleCode);
+        Long secondRoleId = jdbc.queryForObject(
+                "SELECT id FROM roles WHERE tenant_id = ? AND role_code = ?", Long.class,
+                tenant.getId(), secondRoleCode);
+
+        String firstPermission = "WMS_A3_MULTI_READ_" + suffix;
+        String sharedPermission = "WMS_A3_MULTI_SHARED_" + suffix;
+        String secondPermission = "WMS_A3_MULTI_PICK_" + suffix;
+        for (String permissionCode : java.util.List.of(
+                firstPermission, sharedPermission, secondPermission)) {
+            jdbc.update("""
+                    INSERT INTO permissions (permission_code, module, description)
+                    VALUES (?, 'A3_MULTI_ROLE', 'Multi-role integration permission')
+                    """, permissionCode);
+        }
+        Long firstPermissionId = jdbc.queryForObject(
+                "SELECT id FROM permissions WHERE permission_code = ?", Long.class, firstPermission);
+        Long sharedPermissionId = jdbc.queryForObject(
+                "SELECT id FROM permissions WHERE permission_code = ?", Long.class, sharedPermission);
+        Long secondPermissionId = jdbc.queryForObject(
+                "SELECT id FROM permissions WHERE permission_code = ?", Long.class, secondPermission);
+
+        jdbc.update("INSERT INTO membership_roles (tenant_id, membership_id, role_id) VALUES (?, ?, ?)",
+                tenant.getId(), membership.getId(), firstRoleId);
+        jdbc.update("INSERT INTO membership_roles (tenant_id, membership_id, role_id) VALUES (?, ?, ?)",
+                tenant.getId(), membership.getId(), secondRoleId);
+        jdbc.update("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
+                firstRoleId, firstPermissionId);
+        jdbc.update("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
+                firstRoleId, sharedPermissionId);
+        jdbc.update("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
+                secondRoleId, sharedPermissionId);
+        jdbc.update("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
+                secondRoleId, secondPermissionId);
+
+        WmsMembershipAccess access = accessService.resolve(user.getPublicId(), membership.getPublicId());
+
+        assertEquals(3, access.permissionCodes().size(),
+                "permissions from both active roles must be combined and overlapping permissions deduplicated");
+        assertTrue(access.hasPermission(firstPermission));
+        assertTrue(access.hasPermission(sharedPermission));
+        assertTrue(access.hasPermission(secondPermission));
+        assertEquals(tenant.getId(), access.tenantId());
+        assertEquals(tenant.getPublicId(), access.tenantPublicId());
+    }
+
 }
