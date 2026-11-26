@@ -249,7 +249,7 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                     SELECT id FROM replenishment_confirmations WHERE tenant_id=? AND public_id=?
                 )
                 """, fixture.tenantId(), fixture.tenantId(), firstConfirmation));
-        assertThrows(IllegalStateException.class, () -> taskService.reverse(fixture.principal(),
+        assertThrows(IllegalStateException.class, () -> taskService.reverse(independentActor,
                 firstConfirmation, new WmsReplenishmentTaskService.ReverseCommand(
                         UUID.randomUUID(), "Duplicate reversal")));
     }
