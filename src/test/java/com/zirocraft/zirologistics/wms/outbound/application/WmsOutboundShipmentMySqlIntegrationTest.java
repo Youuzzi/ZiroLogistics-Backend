@@ -783,11 +783,12 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                         List.of(new WmsInterWarehouseTransferService.ReceiveAllocation(allocationId,
                                 new BigDecimal("2.0000"), BigDecimal.ZERO, BigDecimal.ZERO,
                                 List.of(), List.of(), List.of())), null);
-        transferService.receive(independentShippingPrincipal(fixture), transferId, receive);
+        WmsAuthenticatedPrincipal receiver = independentShippingPrincipal(fixture);
+        transferService.receive(receiver, transferId, receive);
         assertEquals(new BigDecimal("2.0000"), balanceAt(fixture, destination.warehousePublicId(),
                 destination.locationPublicId(), "AVAILABLE"));
         assertThrows(IllegalStateException.class,
-                () -> transferService.receive(fixture.principal(), transferId, receive));
+                () -> transferService.receive(receiver, transferId, receive));
         assertEquals(new BigDecimal("2.0000"), balanceAt(fixture, destination.warehousePublicId(),
                 destination.locationPublicId(), "AVAILABLE"));
         assertEquals(1, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_RECEIPT'",
