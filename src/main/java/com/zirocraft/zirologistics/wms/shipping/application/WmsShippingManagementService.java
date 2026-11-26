@@ -88,6 +88,10 @@ public class WmsShippingManagementService {
         lockTenant(principal);
         Access a = access(principal, "WMS_SHIPPING_SHIP");
         Map<String, Object> shipment = shipmentForUpdate(a.tenantId(), shipmentPublicId);
+        if (number(shipment, "created_by_membership_id") == a.membershipId()) {
+            throw new AccessDeniedException(
+                    "Final shipping must be performed by a membership other than the shipment creator");
+        }
         if (!"PACKED".equals(shipment.get("status"))) {
             throw new IllegalStateException("Only packed shipments can be shipped");
         }
