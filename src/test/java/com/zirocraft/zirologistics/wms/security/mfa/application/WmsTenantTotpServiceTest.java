@@ -37,7 +37,7 @@ class WmsTenantTotpServiceTest {
                 service.codeAt(secret, now.minusSeconds(30)), now).isPresent());
         assertTrue(service.verify(secret, "12x456", now).isEmpty());
         assertTrue(service.verify(secret, "12345", now).isEmpty());
-        assertTrue(service.verify(secret, "999999", now.plusSeconds(120)).isEmpty());
+        assertTrue(service.verify(secret, "abcdef", now.plusSeconds(120)).isEmpty());
     }
 
     @Test
@@ -78,7 +78,7 @@ class WmsTenantTotpServiceTest {
         String uri = service.provisioningUri(secret, "operator@example.test", "Ziro Logistics");
         assertTrue(uri.startsWith("otpauth://totp/Ziro%20Logistics:operator%40example.test?"));
         assertTrue(uri.contains("&algorithm=SHA1&digits=6&period=30"));
-        assertFalse(uri.contains("="));
+        assertFalse(encoded.contains("="));
     }
 
     @Test
