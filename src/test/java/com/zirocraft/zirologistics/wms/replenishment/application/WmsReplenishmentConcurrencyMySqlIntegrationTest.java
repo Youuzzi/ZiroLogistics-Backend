@@ -110,9 +110,10 @@ class WmsReplenishmentConcurrencyMySqlIntegrationTest {
                 WHERE tenant_id=? AND confirmation_type='MOVE'
                 """, String.class, f.tenantId());
 
+        WmsAuthenticatedPrincipal independentActor = independentActor(f);
         List<Boolean> outcomes = race(
-                () -> reverse(f, confirmationPublicId),
-                () -> reverse(f, confirmationPublicId));
+                () -> reverse(independentActor, confirmationPublicId),
+                () -> reverse(independentActor, confirmationPublicId));
 
         assertEquals(1, successes(outcomes), "Exactly one reversal may win for a confirmation");
         assertEquals(1, count("""
@@ -173,9 +174,34 @@ class WmsReplenishmentConcurrencyMySqlIntegrationTest {
                         UUID.randomUUID(), 1, new BigDecimal(quantity), List.of(), "Concurrent confirmation test"));
     }
 
-    private void reverse(Fixture f, String confirmationPublicId) {
-        taskService.reverse(f.principal(), confirmationPublicId,
+    private void reverse(WmsAuthenticatedPrincipal actor, String confirmationPublicId) {
+        taskService.reverse(actor, confirmationPublicId,
                 new WmsReplenishmentTaskService.ReverseCommand(UUID.randomUUID(), "Concurrent reversal test"));
+    }
+
+    private WmsAuthenticatedPrincipal independentActor(Fixture f) {
+        String userPublicId = uuid();
+        String membershipPublicId = uuid();
+        jdbc.update("""
+                INSERT INTO users (public_id, email, password_hash, full_name, status)
+                VALUES (?, ?, 'test-hash-not-used', 'Independent Replenishment Actor', 'ACTIVE')
+                """, userPublicId, "replenishment-concurrency-independent-" + userPublicId + "@example.test");
+        long userId = jdbc.queryForObject("SELECT id FROM users WHERE public_id=?", Long.class, userPublicId);
+        jdbc.update("""
+                INSERT INTO tenant_memberships (public_id, tenant_id, user_id, status, joined_at)
+                VALUES (?, ?, ?, 'ACTIVE', UTC_TIMESTAMP(6))
+                """, membershipPublicId, f.tenantId(), userId);
+        long membershipId = jdbc.queryForObject(
+                "SELECT id FROM tenant_memberships WHERE tenant_id=? AND public_id=?",
+                Long.class, f.tenantId(), membershipPublicId);
+        long roleId = jdbc.queryForObject("""
+                SELECT role_id FROM membership_roles
+                WHERE tenant_id=? AND membership_id=? LIMIT 1
+                """, Long.class, f.tenantId(), f.principal().membershipId());
+        jdbc.update("INSERT INTO membership_roles (tenant_id, membership_id, role_id) VALUES (?, ?, ?)",
+                f.tenantId(), membershipId, roleId);
+        return new WmsAuthenticatedPrincipal(userPublicId, f.tenantId(),
+                f.principal().tenantPublicId(), membershipId, membershipPublicId, Set.of());
     }
 
     private String startManualTask(Fixture f, String destinationPublicId, String quantity) {

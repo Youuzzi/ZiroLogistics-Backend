@@ -368,8 +368,12 @@ public class WmsReplenishmentTaskService {
                        w.public_id AS warehouse_public_id,
                        sl.public_id AS source_location_public_id,
                        dl.public_id AS destination_location_public_id,
-                       lot.public_id AS lot_public_id
+                       lot.public_id AS lot_public_id,
+                       cm.public_id AS confirmed_by_membership_public_id,
+                       cu.public_id AS confirmed_by_user_public_id
                 FROM replenishment_confirmations c
+                JOIN tenant_memberships cm ON cm.id=c.confirmed_by_membership_id AND cm.tenant_id=c.tenant_id
+                JOIN users cu ON cu.id=cm.user_id
                 JOIN replenishment_task_lines l ON l.id=c.replenishment_task_line_id AND l.tenant_id=c.tenant_id
                 JOIN replenishment_tasks t ON t.id=c.replenishment_task_id AND t.tenant_id=c.tenant_id
                 JOIN items i ON i.id=c.item_id AND i.tenant_id=c.tenant_id
@@ -381,6 +385,16 @@ public class WmsReplenishmentTaskService {
                 FOR UPDATE
                 """, a.tenantId(), required(confirmationPublicId, "Confirmation public ID"));
         long originalId = number(original, "id");
+        String originalMembershipPublicId = string(original, "confirmed_by_membership_public_id");
+        String originalUserPublicId = string(original, "confirmed_by_user_public_id");
+        if (originalMembershipPublicId == null || originalUserPublicId == null) {
+            throw new IllegalStateException("Original confirmation actor evidence is unavailable");
+        }
+        if (Objects.equals(originalMembershipPublicId, a.principal().membershipPublicId())
+                || Objects.equals(originalUserPublicId, a.userPublicId())) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Replenishment reversal requires an independent actor from the original confirmation");
+        }
         if (jdbc.queryForObject("""
                 SELECT COUNT(*) FROM replenishment_confirmations
                 WHERE tenant_id=? AND reverses_confirmation_id=?
