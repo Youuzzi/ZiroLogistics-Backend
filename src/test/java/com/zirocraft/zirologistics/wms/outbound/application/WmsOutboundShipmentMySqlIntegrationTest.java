@@ -255,6 +255,13 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         assertEquals(new BigDecimal("5.0000"),onHand(fixture));
 
         int ledgerBeforeShipping=count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?",fixture.tenantId());
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> shippingService.ship(fixture.principal(), shipmentId,
+                        new WmsShippingManagementService.ShipCommand(
+                                UUID.randomUUID(), null, "SAME-ACTOR-" + UUID.randomUUID(), null)));
+        assertEquals("PACKED", shipmentStatus(fixture, shipmentId));
+        assertEquals(ledgerBeforeShipping,
+                count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?",fixture.tenantId()));
         UUID shippingRequestId = UUID.randomUUID();
         Map<String,Object> shipped=shippingService.ship(independentShippingPrincipal(fixture),shipmentId,
                 new WmsShippingManagementService.ShipCommand(shippingRequestId,null,"TRACK-"+UUID.randomUUID(),null));
@@ -266,7 +273,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 SELECT COUNT(*) FROM inventory_ledger
                 WHERE tenant_id=? AND movement_type='ISSUE' AND quantity_delta<0
                 """,fixture.tenantId()));
-        assertThrows(IllegalStateException.class,()->shippingService.ship(fixture.principal(),shipmentId,
+        assertThrows(IllegalStateException.class,()->shippingService.ship(independentShippingPrincipal(fixture),shipmentId,
                 new WmsShippingManagementService.ShipCommand(shippingRequestId,null,null,null)));
 
         long actorMembershipId = jdbc.queryForObject(
