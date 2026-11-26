@@ -340,6 +340,9 @@ public class WmsStockCountManagementService {
                 WHERE tenant_id = ? AND stock_count_line_id = ? AND result_status = 'SUBMITTED'
                 ORDER BY count_round DESC LIMIT 1
                 """, access.tenantId(), number(line, "id"));
+        if (number(latest, "counted_by_membership_id") == access.membershipId()) {
+            throw new AccessDeniedException("A stock count counter cannot review the same count line");
+        }
         int changedLine = jdbc.update("""
                 UPDATE stock_count_lines
                 SET line_status = 'REVIEWED', reviewed_by_membership_id = ?,

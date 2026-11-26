@@ -732,6 +732,38 @@ class WmsStockCountMySqlIntegrationTest {
     }
 
     @Test
+    void counterCannotReviewOwnSubmittedCountLine() {
+        receive(fixture, "3.0000");
+        String countPublicId = createAndPlan(fixture);
+        Map<String, Object> started = stockCountService.start(fixture.principal(), countPublicId);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> lines = (List<Map<String, Object>>) started.get("lines");
+        String linePublicId = (String) lines.getFirst().get("publicId");
+        stockCountService.recordResult(fixture.principal(), countPublicId, linePublicId,
+                new WmsStockCountManagementService.RecordCountResultCommand(
+                        new BigDecimal("3.0000"), List.of(), "Physical count by creator"));
+        stockCountService.submit(fixture.principal(), countPublicId);
+
+        assertThrows(AccessDeniedException.class,
+                () -> stockCountService.reviewLine(fixture.principal(), countPublicId, linePublicId));
+        assertEquals("COUNTED", jdbc.queryForObject("""
+                SELECT line_status FROM stock_count_lines WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), linePublicId));
+        assertNull(jdbc.queryForObject("""
+                SELECT reviewed_by_membership_id FROM stock_count_lines
+                WHERE tenant_id = ? AND public_id = ?
+                """, Long.class, fixture.tenantId(), linePublicId));
+
+        WmsAuthenticatedPrincipal independentReviewer = secondCounter(fixture);
+        Map<String, Object> reviewed = stockCountService.reviewLine(
+                independentReviewer, countPublicId, linePublicId);
+        assertEquals("UNDER_REVIEW", reviewed.get("status"));
+        assertEquals("REVIEWED", jdbc.queryForObject("""
+                SELECT line_status FROM stock_count_lines WHERE tenant_id = ? AND public_id = ?
+                """, String.class, fixture.tenantId(), linePublicId));
+    }
+
+    @Test
     void approvedCountWithoutVarianceCompletesAndReleasesLocationFreeze() {
         receive(fixture, "3.0000");
         String countPublicId = createAndPlan(fixture);
