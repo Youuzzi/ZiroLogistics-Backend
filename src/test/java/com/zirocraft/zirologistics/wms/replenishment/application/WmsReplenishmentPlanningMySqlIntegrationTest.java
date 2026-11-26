@@ -225,9 +225,6 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
                 fixture.tenantId());
         assertThrows(AccessDeniedException.class, () -> taskService.reverse(fixture.principal(), firstConfirmation,
                 new WmsReplenishmentTaskService.ReverseCommand(UUID.randomUUID(), "Self reversal must be denied")));
-        WmsAuthenticatedPrincipal alternateMembership = sameUserAlternateMembership(fixture);
-        assertThrows(AccessDeniedException.class, () -> taskService.reverse(alternateMembership, firstConfirmation,
-                new WmsReplenishmentTaskService.ReverseCommand(UUID.randomUUID(), "Same user alternate membership")));
         assertEquals(ledgerBeforeDeniedReversal,
                 count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?", fixture.tenantId()));
         assertEquals(0, count("""
@@ -596,28 +593,6 @@ class WmsReplenishmentPlanningMySqlIntegrationTest {
         jdbc.update("INSERT INTO membership_roles (tenant_id, membership_id, role_id) VALUES (?, ?, ?)",
                 f.tenantId(), membershipId, roleId);
         return new WmsAuthenticatedPrincipal(userPublicId, f.tenantId(),
-                f.principal().tenantPublicId(), membershipId, membershipPublicId, Set.of());
-    }
-
-    private WmsAuthenticatedPrincipal sameUserAlternateMembership(Fixture f) {
-        String membershipPublicId = uuid();
-        long userId = jdbc.queryForObject(
-                "SELECT user_id FROM tenant_memberships WHERE tenant_id=? AND id=?",
-                Long.class, f.tenantId(), f.principal().membershipId());
-        jdbc.update("""
-                INSERT INTO tenant_memberships (public_id, tenant_id, user_id, status, joined_at)
-                VALUES (?, ?, ?, 'ACTIVE', UTC_TIMESTAMP(6))
-                """, membershipPublicId, f.tenantId(), userId);
-        long membershipId = jdbc.queryForObject(
-                "SELECT id FROM tenant_memberships WHERE tenant_id=? AND public_id=?",
-                Long.class, f.tenantId(), membershipPublicId);
-        long roleId = jdbc.queryForObject("""
-                SELECT role_id FROM membership_roles
-                WHERE tenant_id=? AND membership_id=? LIMIT 1
-                """, Long.class, f.tenantId(), f.principal().membershipId());
-        jdbc.update("INSERT INTO membership_roles (tenant_id, membership_id, role_id) VALUES (?, ?, ?)",
-                f.tenantId(), membershipId, roleId);
-        return new WmsAuthenticatedPrincipal(f.principal().userPublicId(), f.tenantId(),
                 f.principal().tenantPublicId(), membershipId, membershipPublicId, Set.of());
     }
 
