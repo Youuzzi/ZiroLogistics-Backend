@@ -94,7 +94,7 @@ class WmsV11InventoryCoreMigrationIntegrationTest {
             assertTrue(checkClause.contains("ITEM_CREATED"));
             assertTrue(checkClause.contains("INVENTORY_SERIAL_STATUS_CHANGED"));
             assertEquals(18, scalar(statement, "SELECT COUNT(*) FROM units_of_measure"));
-            assertEquals(71, tableCount(statement));
+            assertEquals(77, tableCount(statement));
         }
     }
 
@@ -104,7 +104,7 @@ class WmsV11InventoryCoreMigrationIntegrationTest {
              Statement statement = connection.createStatement()) {
             assertInventoryPermissions(statement);
             assertEquals(18, scalar(statement, "SELECT COUNT(*) FROM units_of_measure"));
-            assertEquals(71, tableCount(statement));
+            assertEquals(77, tableCount(statement));
         }
     }
 

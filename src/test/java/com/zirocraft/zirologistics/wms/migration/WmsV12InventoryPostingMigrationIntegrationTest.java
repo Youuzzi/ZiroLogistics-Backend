@@ -171,7 +171,7 @@ class WmsV12InventoryPostingMigrationIntegrationTest {
                     """);
             assertTrue(checkClause.contains("INVENTORY_MOVEMENT_POSTED"));
             assertTrue(checkClause.contains("INVENTORY_SERIAL_STATUS_CHANGED"));
-            assertEquals(71, tableCount(statement));
+            assertEquals(77, tableCount(statement));
         }
     }
 
@@ -188,7 +188,7 @@ class WmsV12InventoryPostingMigrationIntegrationTest {
                       AND constraint_name = 'chk_tenant_audit_events_type'
                     """);
             assertTrue(checkClause.contains("INVENTORY_MOVEMENT_POSTED"));
-            assertEquals(71, tableCount(statement));
+            assertEquals(77, tableCount(statement));
         }
     }
 
