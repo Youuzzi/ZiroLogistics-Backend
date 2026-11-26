@@ -140,7 +140,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
         return transferService.receive(receiver, transferPublicId,
                 new WmsInterWarehouseTransferService.ReceiveCommand(UUID.randomUUID(), List.of(
                         new WmsInterWarehouseTransferService.ReceiveAllocation(
-                                allocationPublicId, new BigDecimal("1.0000"), BigDecimal.ZERO,
+                                allocationPublicId, new BigDecimal("2.0000"), BigDecimal.ZERO,
                                 BigDecimal.ZERO, List.of(), List.of(), List.of())), "SoD receipt"));
     }
 
@@ -166,7 +166,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
         jdbc.update("INSERT INTO membership_roles (tenant_id, membership_id, role_id) VALUES (?, ?, ?)",
                 f.tenantId(), membershipId, roleId);
         return new WmsAuthenticatedPrincipal(userPublicId, f.tenantId(), f.tenantPublicId(),
-                membershipId, membershipPublicId, f.principal().permissions());
+                membershipId, membershipPublicId, f.principal().permissionCodes());
     }
 
     @Test
