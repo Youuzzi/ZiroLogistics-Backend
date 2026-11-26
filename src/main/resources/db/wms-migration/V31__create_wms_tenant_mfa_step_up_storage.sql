@@ -157,6 +157,28 @@ CREATE TABLE wms_tenant_mfa_step_up_proofs (
         CHECK (consumed_at IS NULL OR revoked_at IS NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE wms_tenant_mfa_throttle_buckets (
+    id bigint NOT NULL AUTO_INCREMENT,
+    bucket_type varchar(20) NOT NULL,
+    key_version int unsigned NOT NULL,
+    bucket_key_hash binary(32) NOT NULL,
+    window_started_at datetime(6) NOT NULL,
+    attempt_count int unsigned NOT NULL DEFAULT 0,
+    blocked_until datetime(6) DEFAULT NULL,
+    created_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_wms_tenant_mfa_throttle_window
+        (bucket_type, key_version, bucket_key_hash, window_started_at),
+    KEY idx_wms_tenant_mfa_throttle_blocked (bucket_type, blocked_until),
+    CONSTRAINT chk_wms_tenant_mfa_throttle_bucket_type
+        CHECK (bucket_type IN ('ACCOUNT', 'FACTOR', 'SOURCE')),
+    CONSTRAINT chk_wms_tenant_mfa_throttle_key_version
+        CHECK (key_version > 0),
+    CONSTRAINT chk_wms_tenant_mfa_throttle_attempts
+        CHECK (attempt_count <= 1000000)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- Tenant-user security events are separate from the older organization audit
 -- table's fixed event-type allowlist. This table records no secrets or OTP data.
 CREATE TABLE tenant_security_audit_events (
