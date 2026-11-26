@@ -171,7 +171,7 @@ class WmsStockCountMySqlIntegrationTest {
         String foreignCountId = createAndPlan(otherTenant);
 
         assertTrue(stockCountService.list(fixture.principal()).stream()
-                .anyMatch(row -> ownCountId.equals(row.get("publicId"))));
+                .anyMatch(row -> ownCountId.equals(row.get("public_id"))));
         assertFalse(stockCountService.list(fixture.principal()).stream()
                 .anyMatch(row -> foreignCountId.equals(row.get("publicId"))));
         assertEquals(foreignCountId, stockCountService.get(otherTenant.principal(), foreignCountId)
