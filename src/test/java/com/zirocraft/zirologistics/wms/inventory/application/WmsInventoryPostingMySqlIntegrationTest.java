@@ -1136,7 +1136,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
 
     private boolean reconcileSerialAsShortageSucceeds(Fixture f, TransferFixture transfer, String serialPublicId) {
         try {
-            transferService.receive(f.principal(), transfer.transferPublicId(),
+            transferService.receive(independentTransferPrincipal(f), transfer.transferPublicId(),
                     new WmsInterWarehouseTransferService.ReceiveCommand(UUID.randomUUID(), List.of(
                             new WmsInterWarehouseTransferService.ReceiveAllocation(
                                     transfer.allocationPublicId(), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ONE,
