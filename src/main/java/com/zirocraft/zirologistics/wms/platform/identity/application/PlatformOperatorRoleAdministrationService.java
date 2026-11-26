@@ -84,8 +84,13 @@ public class PlatformOperatorRoleAdministrationService {
         if (exceedsDelegation == null || exceedsDelegation != 0) {
             throw new PlatformOperatorRoleAdministrationRejectedException();
         }
-        if (expiresAtUtc != null && !expiresAtUtc.isAfter(LocalDateTime.now(java.time.Clock.systemUTC()))) {
-            throw new PlatformOperatorRoleAdministrationRejectedException();
+        if (expiresAtUtc != null) {
+            Integer expiryIsFuture = jdbc.queryForObject(
+                    "SELECT CASE WHEN ? > UTC_TIMESTAMP(6) THEN 1 ELSE 0 END",
+                    Integer.class, expiresAtUtc);
+            if (!Integer.valueOf(1).equals(expiryIsFuture)) {
+                throw new PlatformOperatorRoleAdministrationRejectedException();
+            }
         }
 
         Integer alreadyAssigned = jdbc.queryForObject("""
