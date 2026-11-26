@@ -21,12 +21,13 @@ class WmsMembershipAccessServiceTest {
     void combinesDistinctPermissionsReturnedForMultipleAssignedRoles() {
         // The repository query returns one row per distinct permission across all active
         // membership_roles -> roles -> role_permissions relationships.
-        when(repository.findActiveAccess("user-1", "membership-1")).thenReturn(List.of(
+        List<WmsMembershipAccessProjection> rows = List.of(
                 row("WMS_INBOUND_RECEIPT_READ"),
                 row("WMS_INBOUND_RECEIPT_CREATE"),
                 row("WMS_INVENTORY_READ"),
                 row("WMS_INVENTORY_READ"), // overlap between two assigned roles
-                row("WMS_PICKING_START")));
+                row("WMS_PICKING_START"));
+        when(repository.findActiveAccess("user-1", "membership-1")).thenReturn(rows);
 
         WmsMembershipAccess access = service.resolve("user-1", "membership-1");
 
