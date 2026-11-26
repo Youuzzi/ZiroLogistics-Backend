@@ -67,6 +67,109 @@ class WmsInventoryPostingMySqlIntegrationTest {
     }
 
     @Test
+    void transferReceiptRejectsEveryMembershipThatDispatchedAnyPartialQuantity() {
+        post(fixture, UUID.randomUUID(), "RECEIPT",
+                leg(fixture, null, null, "AVAILABLE", "2.0000"));
+
+        String destinationWarehousePublicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO warehouses (public_id, tenant_id, warehouse_code, warehouse_name, status)
+                VALUES (?, ?, ?, 'Transfer SoD Destination Warehouse', 'ACTIVE')
+                """, destinationWarehousePublicId, fixture.tenantId(),
+                "WH_SOD_" + UUID.randomUUID().toString().substring(0, 8));
+        long destinationWarehouseId = jdbc.queryForObject(
+                "SELECT id FROM warehouses WHERE tenant_id = ? AND public_id = ?",
+                Long.class, fixture.tenantId(), destinationWarehousePublicId);
+        String destinationLocationPublicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO warehouse_locations
+                  (public_id, tenant_id, warehouse_id, location_code, location_name, location_type, status)
+                VALUES (?, ?, ?, ?, 'Transfer SoD Destination Bin', 'BIN', 'ACTIVE')
+                """, destinationLocationPublicId, fixture.tenantId(), destinationWarehouseId,
+                "BIN_SOD_" + UUID.randomUUID().toString().substring(0, 8));
+
+        Map<String, Object> created = transferService.create(fixture.principal(),
+                new WmsInterWarehouseTransferService.TransferCommand(UUID.randomUUID(),
+                        fixture.warehousePublicId(), destinationWarehousePublicId,
+                        "TR-SOD-" + UUID.randomUUID().toString().substring(0, 10),
+                        null, "STANDARD", null, "partial dispatch SoD integration test",
+                        List.of(new WmsInterWarehouseTransferService.LineCommand(
+                                fixture.itemPublicId(), new BigDecimal("2.0000"), null,
+                                List.of(new WmsInterWarehouseTransferService.AllocationCommand(
+                                        fixture.locationPublicId(), destinationLocationPublicId, null,
+                                        new BigDecimal("2.0000"), List.of()))))));
+        String transferPublicId = Objects.toString(created.get("public_id"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> line = (Map<String, Object>) ((List<?>) created.get("lines")).getFirst();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> allocation = (Map<String, Object>) ((List<?>) line.get("allocations")).getFirst();
+        String allocationPublicId = Objects.toString(allocation.get("public_id"));
+        transferService.release(fixture.principal(), transferPublicId, UUID.randomUUID());
+
+        WmsAuthenticatedPrincipal firstDispatcher = fixture.principal();
+        WmsAuthenticatedPrincipal secondDispatcher = independentTransferPrincipal(fixture);
+        transferService.dispatch(firstDispatcher, transferPublicId,
+                new WmsInterWarehouseTransferService.DispatchCommand(UUID.randomUUID(), List.of(
+                        new WmsInterWarehouseTransferService.DispatchAllocation(
+                                allocationPublicId, BigDecimal.ONE, List.of())), "first partial dispatch"));
+        transferService.dispatch(secondDispatcher, transferPublicId,
+                new WmsInterWarehouseTransferService.DispatchCommand(UUID.randomUUID(), List.of(
+                        new WmsInterWarehouseTransferService.DispatchAllocation(
+                                allocationPublicId, BigDecimal.ONE, List.of())), "second partial dispatch"));
+
+        long ledgerBeforeReceive = count(
+                "SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId());
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> receiveTransfer(fixture.principal(), transferPublicId, allocationPublicId));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> receiveTransfer(secondDispatcher, transferPublicId, allocationPublicId));
+        assertEquals(ledgerBeforeReceive,
+                count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId()));
+        assertEquals("IN_TRANSIT", transferStatus(fixture, transferPublicId));
+
+        WmsAuthenticatedPrincipal independentReceiver = independentTransferPrincipal(fixture);
+        Map<String, Object> received = receiveTransfer(independentReceiver, transferPublicId, allocationPublicId);
+        assertEquals("RECEIVED", received.get("status"));
+        assertEquals(new BigDecimal("2.0000"),
+                bucketBalance(fixture, destinationLocationPublicId, "AVAILABLE"));
+        assertEquals("RECEIVED", transferStatus(fixture, transferPublicId));
+    }
+
+    private Map<String, Object> receiveTransfer(WmsAuthenticatedPrincipal receiver,
+                                                String transferPublicId, String allocationPublicId) {
+        return transferService.receive(receiver, transferPublicId,
+                new WmsInterWarehouseTransferService.ReceiveCommand(UUID.randomUUID(), List.of(
+                        new WmsInterWarehouseTransferService.ReceiveAllocation(
+                                allocationPublicId, new BigDecimal("1.0000"), BigDecimal.ZERO,
+                                BigDecimal.ZERO, List.of(), List.of(), List.of())), "SoD receipt"));
+    }
+
+    private WmsAuthenticatedPrincipal independentTransferPrincipal(Fixture f) {
+        String userPublicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO users (public_id, email, password_hash, full_name, status)
+                VALUES (?, ?, 'test-hash-not-used', 'Independent Transfer User', 'ACTIVE')
+                """, userPublicId, "transfer-independent-" + UUID.randomUUID() + "@example.test");
+        long userId = jdbc.queryForObject("SELECT id FROM users WHERE public_id = ?",
+                Long.class, userPublicId);
+        String membershipPublicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO tenant_memberships (public_id, tenant_id, user_id, status, joined_at)
+                VALUES (?, ?, ?, 'ACTIVE', UTC_TIMESTAMP(6))
+                """, membershipPublicId, f.tenantId(), userId);
+        long membershipId = jdbc.queryForObject("SELECT id FROM tenant_memberships WHERE public_id = ?",
+                Long.class, membershipPublicId);
+        long roleId = jdbc.queryForObject("""
+                SELECT role_id FROM membership_roles
+                WHERE tenant_id = ? AND membership_id = ? ORDER BY role_id LIMIT 1
+                """, Long.class, f.tenantId(), f.membershipId());
+        jdbc.update("INSERT INTO membership_roles (tenant_id, membership_id, role_id) VALUES (?, ?, ?)",
+                f.tenantId(), membershipId, roleId);
+        return new WmsAuthenticatedPrincipal(userPublicId, f.tenantId(), f.tenantPublicId(),
+                membershipId, membershipPublicId, f.principal().permissions());
+    }
+
+    @Test
     void crossTenantInventoryPostingRejectsForeignAndMixedOwnershipReferencesWithoutSideEffects() {
         Fixture tenantB = fixture("NONE");
         long ledgerBeforeA = count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id = ?", fixture.tenantId());
