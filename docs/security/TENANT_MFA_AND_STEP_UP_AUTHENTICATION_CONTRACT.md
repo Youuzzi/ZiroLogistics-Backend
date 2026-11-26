@@ -159,7 +159,7 @@ A later implementation PR must add reviewed additive migration(s), not edit V1â€
 - step-up challenge records: challenge digest, user/tenant/membership binding, credential version, purpose, expiry, attempt count, consumed/revoked timestamps;
 - step-up proof records: proof digest, full identity binding, purpose, verified/expiry timestamps, consumed/revoked timestamps.
 
-Use foreign keys to existing user, tenant, and membership identities, with composite tenant-membership constraints where supported by the established schema. Add unique constraints and indexes for digest lookup, active factor lookup, expiry cleanup, and bounded abuse counters. Enforce terminal-state and binding invariants with database constraints where practical.
+Use foreign keys to existing user, tenant, and membership identities, with composite tenant-membership constraints where supported by the established schema. Add unique constraints and indexes for digest lookup, active factor lookup, expiry cleanup, and bounded abuse counters. Do not reuse the credential-login throttle buckets for MFA verification; MFA has its own independent account/factor/source bucket namespace. Enforce terminal-state and binding invariants with database constraints where practical.
 
 Do not store raw TOTP seeds, raw recovery codes, raw challenge nonces, or raw proof handles. Use UTC `DATETIME(6)` persistence conventions already established by WMS migrations. Add migration clean-install and upgrade verification against disposable MySQL 8.4 Testcontainers.
 
