@@ -128,11 +128,12 @@ class WmsTenantTotpServiceTest {
         Arrays.fill(key, (byte) 7);
         WmsTenantMfaKeyRing ring = new WmsTenantMfaKeyRing("v1", Map.of("v1", key));
         Arrays.fill(key, (byte) 0);
-        assertArrayEquals(new byte[32], ring.keyFor("v1").length == 32
-                ? new byte[32] : new byte[0]);
+        byte[] expected = new byte[32];
+        Arrays.fill(expected, (byte) 7);
+        assertArrayEquals(expected, ring.keyFor("v1"));
         byte[] exposed = ring.keyFor("v1");
         Arrays.fill(exposed, (byte) 0);
-        assertTrue(Arrays.stream(toUnsignedInts(ring.keyFor("v1"))).allMatch(value -> value == 7));
+        assertArrayEquals(expected, ring.keyFor("v1"));
 
         assertThrows(IllegalArgumentException.class,
                 () -> new WmsTenantMfaKeyRing("missing", Map.of("v1", new byte[32])));
@@ -140,10 +141,5 @@ class WmsTenantTotpServiceTest {
                 () -> new WmsTenantMfaKeyRing("v1", Map.of("v1", new byte[31])));
         assertThrows(IllegalArgumentException.class,
                 () -> ring.keyFor("unknown"));
-    }
-
-    private static int[] toUnsignedInts(byte[] bytes) {
-        return java.util.stream.IntStream.range(0, bytes.length)
-                .map(index -> bytes[index] & 0xff).toArray();
     }
 }\n
