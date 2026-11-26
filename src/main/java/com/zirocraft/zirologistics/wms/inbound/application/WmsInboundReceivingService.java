@@ -220,6 +220,10 @@ public class WmsInboundReceivingService {
         if (!"DRAFT".equals(receipt.get("status")) && !"IN_PROGRESS".equals(receipt.get("status"))) {
             throw new IllegalStateException("Receipt is not eligible for posting");
         }
+        if (number(receipt, "created_by_membership_id") == access.membershipId()) {
+            throw new AccessDeniedException(
+                    "Inbound receipt posting must be performed by a membership other than the receipt creator");
+        }
 
         List<Map<String, Object>> storedLines = jdbc.queryForList("""
                 SELECT l.id, l.public_id, l.item_id, l.expected_qty, l.status,
@@ -399,7 +403,8 @@ public class WmsInboundReceivingService {
     private Map<String, Object> receipt(long tenantId, String publicId) {
         return requiredRow("""
                 SELECT r.id, r.public_id, r.document_number, r.external_reference, r.receipt_type,
-                       r.status, r.expected_at, r.received_at, r.posted_at, r.notes, r.version,
+                       r.status, r.expected_at, r.received_at, r.posted_at, r.notes,
+                       r.created_by_membership_id, r.version,
                        r.created_at, r.updated_at, w.public_id AS warehouse_public_id,
                        w.warehouse_code, w.warehouse_name, loc.public_id AS receiving_location_public_id,
                        bp.public_id AS supplier_public_id, bp.partner_code AS supplier_code,

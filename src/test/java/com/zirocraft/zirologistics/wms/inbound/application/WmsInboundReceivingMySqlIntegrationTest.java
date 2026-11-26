@@ -57,7 +57,14 @@ class WmsInboundReceivingMySqlIntegrationTest {
         String receiptId = createReceipt(fixture);
         String lineId = addLine(fixture, receiptId, fixture.itemPublicId(), "10.0000");
 
-        receivingService.post(fixture.principal(), receiptId,
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> receivingService.post(fixture.principal(), receiptId,
+                        new WmsInboundReceivingService.PostReceiptCommand(UUID.randomUUID(), List.of(
+                                new WmsInboundReceivingService.LineReceiptCommand(
+                                        lineId, new BigDecimal("8.0000"), new BigDecimal("7.0000"),
+                                        new BigDecimal("1.0000"), "Damaged outer carton", List.of(), List.of())))));
+        assertEquals("DRAFT", receiptStatus(fixture, receiptId));
+        receivingService.post(independentReceivingPrincipal(fixture), receiptId,
                 new WmsInboundReceivingService.PostReceiptCommand(UUID.randomUUID(), List.of(
                         new WmsInboundReceivingService.LineReceiptCommand(
                                 lineId, new BigDecimal("8.0000"), new BigDecimal("7.0000"),
@@ -81,7 +88,7 @@ class WmsInboundReceivingMySqlIntegrationTest {
         String receiptId = createReceipt(fixture);
         String lineId = addLine(fixture, receiptId, fixture.itemPublicId(), "5.0000");
 
-        receivingService.post(fixture.principal(), receiptId,
+        receivingService.post(independentReceivingPrincipal(fixture), receiptId,
                 new WmsInboundReceivingService.PostReceiptCommand(UUID.randomUUID(), List.of(
                         new WmsInboundReceivingService.LineReceiptCommand(
                                 lineId, new BigDecimal("5.0000"), BigDecimal.ZERO,
@@ -111,7 +118,7 @@ class WmsInboundReceivingMySqlIntegrationTest {
         String receiptId = createReceipt(fixture);
         String lineId = addLine(fixture, receiptId, fixture.itemPublicId(), "5.0000");
 
-        assertThrows(IllegalArgumentException.class, () -> receivingService.post(fixture.principal(), receiptId,
+        assertThrows(IllegalArgumentException.class, () -> receivingService.post(independentReceivingPrincipal(fixture), receiptId,
                 new WmsInboundReceivingService.PostReceiptCommand(UUID.randomUUID(), List.of(
                         new WmsInboundReceivingService.LineReceiptCommand(
                                 lineId, new BigDecimal("5.0000"), new BigDecimal("3.0000"),
@@ -140,7 +147,7 @@ class WmsInboundReceivingMySqlIntegrationTest {
         String first = "IN-" + UUID.randomUUID();
         String second = "IN-" + UUID.randomUUID();
 
-        receivingService.post(fixture.principal(), receiptId,
+        receivingService.post(independentReceivingPrincipal(fixture), receiptId,
                 new WmsInboundReceivingService.PostReceiptCommand(UUID.randomUUID(), List.of(
                         new WmsInboundReceivingService.LineReceiptCommand(
                                 lineId, new BigDecimal("2.0000"), new BigDecimal("2.0000"),
@@ -167,7 +174,7 @@ class WmsInboundReceivingMySqlIntegrationTest {
         String lineId = addLine(fixture, receiptId, serialItem, "2.0000");
         String duplicate = "DUP-" + UUID.randomUUID();
 
-        assertThrows(IllegalArgumentException.class, () -> receivingService.post(fixture.principal(), receiptId,
+        assertThrows(IllegalArgumentException.class, () -> receivingService.post(independentReceivingPrincipal(fixture), receiptId,
                 new WmsInboundReceivingService.PostReceiptCommand(UUID.randomUUID(), List.of(
                         new WmsInboundReceivingService.LineReceiptCommand(
                                 lineId, new BigDecimal("2.0000"), new BigDecimal("2.0000"),
@@ -354,6 +361,33 @@ class WmsInboundReceivingMySqlIntegrationTest {
                 tenantPublicId, membershipId, membershipPublicId, Set.of());
         return new Fixture(tenantId, warehousePublicId, locationPublicId, supplierPublicId,
                 itemPublicId, principal);
+    }
+
+    private WmsAuthenticatedPrincipal independentReceivingPrincipal(Fixture fixture) {
+        String userPublicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO users (public_id, email, password_hash, full_name, status)
+                VALUES (?, ?, 'test-hash-not-used', 'Independent Receiving User', 'ACTIVE')
+                """, userPublicId, "inbound-independent-" + UUID.randomUUID() + "@example.test");
+        long userId = jdbc.queryForObject("SELECT id FROM users WHERE public_id = ?",
+                Long.class, userPublicId);
+        String membershipPublicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO tenant_memberships (public_id, tenant_id, user_id, status, joined_at)
+                VALUES (?, ?, ?, 'ACTIVE', UTC_TIMESTAMP(6))
+                """, membershipPublicId, fixture.tenantId(), userId);
+        long membershipId = jdbc.queryForObject("SELECT id FROM tenant_memberships WHERE public_id = ?",
+                Long.class, membershipPublicId);
+        long roleId = jdbc.queryForObject("""
+                SELECT role_id FROM membership_roles
+                WHERE tenant_id = ? AND membership_id = ? ORDER BY role_id LIMIT 1
+                """, Long.class, fixture.tenantId(), fixture.principal().membershipId());
+        jdbc.update("INSERT INTO membership_roles (tenant_id, membership_id, role_id) VALUES (?, ?, ?)",
+                fixture.tenantId(), membershipId, roleId);
+        String tenantPublicId = jdbc.queryForObject(
+                "SELECT public_id FROM tenants WHERE id = ?", String.class, fixture.tenantId());
+        return new WmsAuthenticatedPrincipal(userPublicId, fixture.tenantId(), tenantPublicId,
+                membershipId, membershipPublicId, Set.of());
     }
 
     private record Fixture(long tenantId, String warehousePublicId, String locationPublicId,
