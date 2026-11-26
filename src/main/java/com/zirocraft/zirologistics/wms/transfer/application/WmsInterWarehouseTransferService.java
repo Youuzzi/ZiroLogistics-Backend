@@ -395,6 +395,7 @@ public class WmsInterWarehouseTransferService {
         Map<String,Object> h=header(a.tenantId(),transferPublicId,true);
         if(!Set.of("IN_TRANSIT","PARTIALLY_RECEIVED").contains(h.get("status")))
             throw new IllegalStateException("Transfer has no in-transit stock to receive");
+        ensureIndependentTransferReceiver(a, transferPublicId, number(h,"id"));
         recordCommand(a,number(h,"id"),command.requestId(),"RECEIVE");
         List<WmsInventoryPostingService.PostingLeg> postingLegs=new ArrayList<>();
         List<ReceiptUpdate> updates=new ArrayList<>();
@@ -543,6 +544,26 @@ public class WmsInterWarehouseTransferService {
                 """,tenantId,allocationId,required(serialPublicId,"serial public ID"),status);
         if(rows.isEmpty())throw new IllegalArgumentException("Serial is not assigned to this allocation in the required state");
         return rows.getFirst();
+    }
+
+    private void ensureIndependentTransferReceiver(Access a, String transferPublicId, long transferId) {
+        Long matchingDispatches = jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM stock_transfer_commands c
+                JOIN tenant_audit_events e
+                  ON e.tenant_id = c.tenant_id
+                 AND e.operation_ref = c.request_id
+                 AND e.subject_public_id = ?
+                WHERE c.tenant_id = ?
+                  AND c.stock_transfer_id = ?
+                  AND c.command_type = 'DISPATCH'
+                  AND e.actor_type = 'TENANT_MEMBER'
+                  AND e.actor_membership_id = ?
+                """, Long.class, transferPublicId, a.tenantId(), transferId, a.membershipId());
+        if (matchingDispatches != null && matchingDispatches > 0) {
+            throw new AccessDeniedException(
+                    "Transfer receipt must be performed by a membership that did not dispatch this transfer");
+        }
     }
 
     private void recordCommand(Access a,long transferId,UUID requestId,String type){
