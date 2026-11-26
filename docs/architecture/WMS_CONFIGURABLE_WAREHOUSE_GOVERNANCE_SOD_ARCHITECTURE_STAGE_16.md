@@ -1,6 +1,6 @@
 # Stage 16 — Configurable Warehouse Governance, Multi-Role and SoD Architecture
 
-**Status: PROPOSED ARCHITECTURE — no runtime behavior is changed by this document.**  
+**Status: PROPOSED ARCHITECTURE — no runtime behavior is changed by this document.**
 **Review date:** 2026-11-26
 
 ## 1. Product requirement
