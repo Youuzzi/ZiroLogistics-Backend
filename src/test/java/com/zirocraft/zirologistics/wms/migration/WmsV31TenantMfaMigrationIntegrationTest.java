@@ -51,8 +51,8 @@ class WmsV31TenantMfaMigrationIntegrationTest {
         current.validate();
 
         try (Connection connection = connection(); Statement statement = connection.createStatement()) {
-            assertEquals(tablesBefore + 5, nonPlatformTableCount(statement),
-                    "V31 must add exactly five tenant MFA/security tables");
+            assertEquals(tablesBefore + 6, nonPlatformTableCount(statement),
+                    "V31 must add exactly six tenant MFA/security tables");
             assertEquals(1, scalar(statement, """
                     SELECT COUNT(*) FROM information_schema.statistics
                     WHERE table_schema = DATABASE()
@@ -60,7 +60,7 @@ class WmsV31TenantMfaMigrationIntegrationTest {
                       AND index_name = 'uk_membership_identity_scope'
                       AND non_unique = 0
                     """));
-            assertEquals(5, scalar(statement, """
+            assertEquals(6, scalar(statement, """
                     SELECT COUNT(*) FROM information_schema.tables
                     WHERE table_schema = DATABASE()
                       AND table_type = 'BASE TABLE'
@@ -69,9 +69,29 @@ class WmsV31TenantMfaMigrationIntegrationTest {
                         'wms_tenant_mfa_recovery_codes',
                         'wms_tenant_mfa_step_up_challenges',
                         'wms_tenant_mfa_step_up_proofs',
+                        'wms_tenant_mfa_throttle_buckets',
                         'tenant_security_audit_events'
                       )
                     """));
+
+            try (PreparedStatement insert = connection.prepareStatement("""
+                    INSERT INTO wms_tenant_mfa_throttle_buckets
+                      (bucket_type, key_version, bucket_key_hash, window_started_at, attempt_count)
+                    VALUES ('FACTOR', 1, ?, UTC_TIMESTAMP(6), 1)
+                    """)) {
+                insert.setBytes(1, randomDigest());
+                assertEquals(1, insert.executeUpdate());
+            }
+            assertThrows(SQLException.class, () -> {
+                try (PreparedStatement insert = connection.prepareStatement("""
+                        INSERT INTO wms_tenant_mfa_throttle_buckets
+                          (bucket_type, key_version, bucket_key_hash, window_started_at, attempt_count)
+                        VALUES ('UNKNOWN', 1, ?, UTC_TIMESTAMP(6), 1)
+                        """)) {
+                    insert.setBytes(1, randomDigest());
+                    insert.executeUpdate();
+                }
+            }, "Only reviewed MFA throttle bucket types are accepted");
 
             String tenantA = UUID.randomUUID().toString();
             String tenantB = UUID.randomUUID().toString();
