@@ -142,4 +142,4 @@ class WmsTenantTotpServiceTest {
         assertThrows(IllegalArgumentException.class,
                 () -> ring.keyFor("unknown"));
     }
-}\n
+}
