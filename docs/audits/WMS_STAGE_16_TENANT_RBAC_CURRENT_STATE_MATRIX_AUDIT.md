@@ -1,7 +1,7 @@
 # Stage 16 — Tenant RBAC Current-State and Role/Permission Matrix Audit
 
-**Status: AUDIT BASELINE — not a certification and not an authorization change.**  
-**Reviewed against:** `main` at `be1722e74b537c9ef02c4d192974d258754f4bd7`  
+**Status: AUDIT BASELINE — not a certification and not an authorization change.**
+**Reviewed against:** `main` at `be1722e74b537c9ef02c4d192974d258754f4bd7`
 **Review date:** 2026-11-26
 
 ## 1. Purpose
