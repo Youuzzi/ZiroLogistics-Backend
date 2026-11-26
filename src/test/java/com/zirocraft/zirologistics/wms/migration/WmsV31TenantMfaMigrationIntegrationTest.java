@@ -105,20 +105,20 @@ class WmsV31TenantMfaMigrationIntegrationTest {
                     """.formatted(hex(recoveryDigest))));
 
             String challengePublicId = UUID.randomUUID().toString();
-            insertChallenge(connection, challengePublicId, UUID.randomUUID().toString(),
+            insertChallenge(connection, challengePublicId, randomDigest(),
                     userAId, tenantAId, membershipAId, "SINGLE_OPERATOR_ACTIVATION");
             assertEquals(1, scalar(statement, """
                     SELECT COUNT(*) FROM wms_tenant_mfa_step_up_challenges
                     WHERE public_id = '%s'
                     """.formatted(challengePublicId)));
 
-            insertProof(connection, UUID.randomUUID().toString(), userAId, tenantAId,
+            insertProof(connection, randomDigest(), userAId, tenantAId,
                     membershipAId, "SINGLE_OPERATOR_ACTIVATION");
             insertAuditEvent(connection, UUID.randomUUID().toString(), tenantAId,
                     membershipAId, userAId, userAId);
 
             assertThrows(SQLException.class, () -> insertChallenge(connection,
-                    UUID.randomUUID().toString(), UUID.randomUUID().toString(),
+                    UUID.randomUUID().toString(), randomDigest(),
                     userAId, tenantBId, membershipAId, "SINGLE_OPERATOR_ACTIVATION"),
                     "A challenge cannot bind a membership to another tenant");
 
@@ -127,7 +127,7 @@ class WmsV31TenantMfaMigrationIntegrationTest {
                     "A recovery code cannot bind a factor to another user");
 
             assertThrows(SQLException.class, () -> insertChallenge(connection,
-                    UUID.randomUUID().toString(), UUID.randomUUID().toString(),
+                    UUID.randomUUID().toString(), randomDigest(),
                     userAId, tenantAId, membershipAId, "UNREVIEWED_PURPOSE"),
                     "Only reviewed step-up purposes are accepted");
 
@@ -262,7 +262,7 @@ class WmsV31TenantMfaMigrationIntegrationTest {
     }
 
     private static void insertChallenge(
-            Connection connection, String publicId, String digest, long userId,
+            Connection connection, String publicId, byte[] digest, long userId,
             long tenantId, long membershipId, String purpose) throws SQLException {
         try (PreparedStatement insert = connection.prepareStatement("""
                 INSERT INTO wms_tenant_mfa_step_up_challenges
@@ -271,7 +271,7 @@ class WmsV31TenantMfaMigrationIntegrationTest {
                 VALUES (?, UNHEX(?), ?, ?, ?, 0, ?, DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 2 MINUTE))
                 """)) {
             insert.setString(1, publicId);
-            insert.setString(2, hex(digest.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            insert.setString(2, hex(digest));
             insert.setLong(3, userId);
             insert.setLong(4, tenantId);
             insert.setLong(5, membershipId);
@@ -281,7 +281,7 @@ class WmsV31TenantMfaMigrationIntegrationTest {
     }
 
     private static void insertProof(
-            Connection connection, String digest, long userId,
+            Connection connection, byte[] digest, long userId,
             long tenantId, long membershipId, String purpose) throws SQLException {
         try (PreparedStatement insert = connection.prepareStatement("""
                 INSERT INTO wms_tenant_mfa_step_up_proofs
@@ -290,7 +290,7 @@ class WmsV31TenantMfaMigrationIntegrationTest {
                 VALUES (UNHEX(?), ?, ?, ?, 0, ?, UTC_TIMESTAMP(6),
                         DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 5 MINUTE))
                 """)) {
-            insert.setString(1, hex(digest.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            insert.setString(1, hex(digest));
             insert.setLong(2, userId);
             insert.setLong(3, tenantId);
             insert.setLong(4, membershipId);
@@ -316,6 +316,12 @@ class WmsV31TenantMfaMigrationIntegrationTest {
             insert.setString(6, UUID.randomUUID().toString());
             assertEquals(1, insert.executeUpdate());
         }
+    }
+
+    private static byte[] randomDigest() {
+        byte[] digest = new byte[32];
+        new java.security.SecureRandom().nextBytes(digest);
+        return digest;
     }
 
     private static String hex(byte[] bytes) {
