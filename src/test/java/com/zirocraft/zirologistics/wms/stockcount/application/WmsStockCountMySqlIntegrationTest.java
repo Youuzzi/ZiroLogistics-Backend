@@ -804,6 +804,14 @@ class WmsStockCountMySqlIntegrationTest {
                 () -> adjustmentService.approve(fixture.principal(), adjustmentId, "Creator cannot self-approve"));
         WmsAuthenticatedPrincipal approver = secondCounter(fixture);
         adjustmentService.approve(approver, adjustmentId, "Evidence reviewed independently");
+        assertThrows(AccessDeniedException.class,
+                () -> adjustmentService.post(fixture.principal(), adjustmentId),
+                "The adjustment creator must not post after another membership approves it");
+        assertEquals("APPROVED", adjustmentService.get(fixture.principal(), adjustmentId).get("status"));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM inventory_ledger
+                WHERE tenant_id = ? AND reference_type = 'INVENTORY_ADJUSTMENT'
+                """, fixture.tenantId()));
         Map<String, Object> posted = adjustmentService.post(approver, adjustmentId);
 
         assertEquals("POSTED", posted.get("status"));
