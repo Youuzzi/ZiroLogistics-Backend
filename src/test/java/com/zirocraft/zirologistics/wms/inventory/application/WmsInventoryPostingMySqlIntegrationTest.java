@@ -1123,7 +1123,7 @@ class WmsInventoryPostingMySqlIntegrationTest {
 
     private boolean receiveSerialSucceeds(Fixture f, TransferFixture transfer, String serialPublicId) {
         try {
-            transferService.receive(f.principal(), transfer.transferPublicId(),
+            transferService.receive(independentTransferPrincipal(f), transfer.transferPublicId(),
                     new WmsInterWarehouseTransferService.ReceiveCommand(UUID.randomUUID(), List.of(
                             new WmsInterWarehouseTransferService.ReceiveAllocation(
                                     transfer.allocationPublicId(), BigDecimal.ONE, BigDecimal.ZERO, BigDecimal.ZERO,
