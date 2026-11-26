@@ -21,8 +21,8 @@ class PlatformPermissionRiskMySqlIntegrationTest {
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
             .withDatabaseName("zirowms_mfa_risk_test")
-            .withUsername("wms_platform_permission_risk_test")
-            .withPassword("wms_platform_permission_risk_test");
+            .withUsername("wms_mfa_risk_test")
+            .withPassword("wms_mfa_risk_test");
 
     @Test
     void appliesMfaFreshnessAccordingToPersistedPermissionRisk() {
