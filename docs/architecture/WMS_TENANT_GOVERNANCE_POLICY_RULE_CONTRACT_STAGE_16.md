@@ -75,7 +75,7 @@ These defaults preserve a workable operating model for small warehouses without 
 - Platform/tenant identity, token issuer, audience and security-chain separation.
 - Fresh MFA for protected platform and tenant critical actions as currently defined.
 - Atomic inventory ledger/balance posting, idempotency, locking and rollback.
-- Mandatory maker-checker rules in Section 3.
+- Mandatory maker-checker rules in Section 3, plus every configurable/threshold-driven rule that is active in the resolved tenant policy.
 - Durable audit evidence for state transitions and reversals.
 - No wildcard, implicit superuser, profile-derived permission grants, or self-approval.
 - No tenant setting may rewrite historical actor evidence.
