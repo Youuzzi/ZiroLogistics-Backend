@@ -71,8 +71,6 @@ CREATE TABLE wms_tenant_mfa_recovery_codes (
     CONSTRAINT fk_wms_tenant_mfa_recovery_factor
         FOREIGN KEY (factor_id, user_id)
         REFERENCES wms_tenant_mfa_factors (id, user_id) ON DELETE RESTRICT,
-    CONSTRAINT chk_wms_tenant_mfa_recovery_consumption
-        CHECK (consumed_at IS NULL OR consumed_at >= created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE wms_tenant_mfa_step_up_challenges (
@@ -154,7 +152,7 @@ CREATE TABLE wms_tenant_mfa_step_up_proofs (
             'MFA_FACTOR_RECOVERY'
         )),
     CONSTRAINT chk_wms_tenant_mfa_proof_expiry
-        CHECK (expires_at > verified_at AND verified_at <= created_at),
+        CHECK (expires_at > verified_at),
     CONSTRAINT chk_wms_tenant_mfa_proof_terminal_state
         CHECK (consumed_at IS NULL OR revoked_at IS NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
