@@ -255,8 +255,17 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         assertEquals(new BigDecimal("5.0000"),onHand(fixture));
 
         int ledgerBeforeShipping=count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?",fixture.tenantId());
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> shippingService.ship(fixture.principal(), shipmentId,
+                        new WmsShippingManagementService.ShipCommand(
+                                UUID.randomUUID(), null, "SAME-ACTOR-" + UUID.randomUUID(), null)));
+        assertEquals("PACKED", shipmentStatus(fixture, shipmentId));
+        assertEquals(ledgerBeforeShipping,
+                count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?",fixture.tenantId()));
+        WmsAuthenticatedPrincipal shippingPrincipal = independentShippingPrincipal(fixture);
+        long shippingActorMembershipId = shippingPrincipal.membershipId();
         UUID shippingRequestId = UUID.randomUUID();
-        Map<String,Object> shipped=shippingService.ship(fixture.principal(),shipmentId,
+        Map<String,Object> shipped=shippingService.ship(shippingPrincipal,shipmentId,
                 new WmsShippingManagementService.ShipCommand(shippingRequestId,null,"TRACK-"+UUID.randomUUID(),null));
         assertEquals("SHIPPED",shipped.get("status"));
         assertEquals("SHIPPED",shipmentStatus(fixture,shipmentId));
@@ -266,7 +275,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 SELECT COUNT(*) FROM inventory_ledger
                 WHERE tenant_id=? AND movement_type='ISSUE' AND quantity_delta<0
                 """,fixture.tenantId()));
-        assertThrows(IllegalStateException.class,()->shippingService.ship(fixture.principal(),shipmentId,
+        assertThrows(IllegalStateException.class,()->shippingService.ship(independentShippingPrincipal(fixture),shipmentId,
                 new WmsShippingManagementService.ShipCommand(shippingRequestId,null,null,null)));
 
         long actorMembershipId = jdbc.queryForObject(
@@ -277,7 +286,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 WHERE tenant_id=? AND subject_public_id=? AND event_type='OUTBOUND_SHIPMENT_SHIPPED'
                   AND actor_type='TENANT_MEMBER' AND actor_membership_id=?
                   AND JSON_UNQUOTE(JSON_EXTRACT(change_payload,'$.requestId'))=?
-                """, fixture.tenantId(), shipmentId, actorMembershipId, shippingRequestId.toString()));
+                """, fixture.tenantId(), shipmentId, shippingActorMembershipId, shippingRequestId.toString()));
         assertEquals(1, count("""
                 SELECT COUNT(*) FROM tenant_audit_events
                 WHERE tenant_id=? AND subject_public_id=? AND event_type='PICKING_CONFIRMED'
@@ -388,7 +397,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         assertEquals("COMPLETED",packingService.complete(serialFixture.principal(),sessionId).get("status"));
         assertEquals("PACKED",shipmentStatus(serialFixture,shipmentId));
 
-        Map<String,Object> shipped=shippingService.ship(serialFixture.principal(),shipmentId,
+        Map<String,Object> shipped=shippingService.ship(independentShippingPrincipal(serialFixture),shipmentId,
                 new WmsShippingManagementService.ShipCommand(UUID.randomUUID(),null,null,null));
         assertEquals("SHIPPED",shipped.get("status"));
         assertEquals(2,count("""
@@ -688,7 +697,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 + "CHECK (event_type <> 'OUTBOUND_SHIPMENT_SHIPPED' OR subject_public_id <> '"
                 + shipmentId + "')");
         try {
-            assertThrows(org.springframework.jdbc.UncategorizedSQLException.class, () -> shippingService.ship(fixture.principal(), shipmentId,
+            assertThrows(org.springframework.jdbc.UncategorizedSQLException.class, () -> shippingService.ship(independentShippingPrincipal(fixture), shipmentId,
                     new WmsShippingManagementService.ShipCommand(UUID.randomUUID(), null, "ROLLBACK-TRACK", null)));
         } finally {
             jdbc.execute("ALTER TABLE tenant_audit_events DROP CHECK chk_test_block_outbound_ship_audit");
@@ -1240,6 +1249,36 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 WHERE tenant_id = ? AND subject_public_id = ?
                   AND event_type = 'OUTBOUND_SHIPMENT_RELEASED'
                 """, fixture.tenantId(), shipmentId));
+    }
+
+    private WmsAuthenticatedPrincipal independentShippingPrincipal(Fixture fixture) {
+        String userPublicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO users (public_id, email, password_hash, full_name, status)
+                VALUES (?, ?, 'test-hash-not-used', 'Independent Shipping User', 'ACTIVE')
+                """, userPublicId, "shipping-independent-" + UUID.randomUUID() + "@example.test");
+        long userId = jdbc.queryForObject("SELECT id FROM users WHERE public_id = ?",
+                Long.class, userPublicId);
+        String membershipPublicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO tenant_memberships (public_id, tenant_id, user_id, status, joined_at)
+                VALUES (?, ?, ?, 'ACTIVE', UTC_TIMESTAMP(6))
+                """, membershipPublicId, fixture.tenantId(), userId);
+        long membershipId = jdbc.queryForObject("SELECT id FROM tenant_memberships WHERE public_id = ?",
+                Long.class, membershipPublicId);
+        long creatorMembershipId = jdbc.queryForObject(
+                "SELECT id FROM tenant_memberships WHERE tenant_id = ? AND public_id = ?",
+                Long.class, fixture.tenantId(), fixture.membershipPublicId());
+        long roleId = jdbc.queryForObject("""
+                SELECT role_id FROM membership_roles
+                WHERE tenant_id = ? AND membership_id = ? ORDER BY role_id LIMIT 1
+                """, Long.class, fixture.tenantId(), creatorMembershipId);
+        jdbc.update("INSERT INTO membership_roles (tenant_id, membership_id, role_id) VALUES (?, ?, ?)",
+                fixture.tenantId(), membershipId, roleId);
+        String tenantPublicId = jdbc.queryForObject(
+                "SELECT public_id FROM tenants WHERE id = ?", String.class, fixture.tenantId());
+        return new WmsAuthenticatedPrincipal(userPublicId, fixture.tenantId(), tenantPublicId,
+                membershipId, membershipPublicId, Set.of());
     }
 
     private record Fixture(long tenantId, String warehousePublicId, String receivingLocationPublicId,
