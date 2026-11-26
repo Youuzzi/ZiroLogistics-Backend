@@ -189,6 +189,33 @@ class WmsPutawayManagementMySqlIntegrationTest {
         assertEquals("IN_PROGRESS", taskStatus(serialFixture, taskId));
     }
 
+    private WmsAuthenticatedPrincipal independentReceivingPrincipal(Fixture fixture) {
+        String userPublicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO users (public_id, email, password_hash, full_name, status)
+                VALUES (?, ?, 'test-hash-not-used', 'Independent Receiving User', 'ACTIVE')
+                """, userPublicId, "putaway-independent-" + UUID.randomUUID() + "@example.test");
+        long userId = jdbc.queryForObject("SELECT id FROM users WHERE public_id = ?",
+                Long.class, userPublicId);
+        String membershipPublicId = UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO tenant_memberships (public_id, tenant_id, user_id, status, joined_at)
+                VALUES (?, ?, ?, 'ACTIVE', UTC_TIMESTAMP(6))
+                """, membershipPublicId, fixture.tenantId(), userId);
+        long membershipId = jdbc.queryForObject("SELECT id FROM tenant_memberships WHERE public_id = ?",
+                Long.class, membershipPublicId);
+        long roleId = jdbc.queryForObject("""
+                SELECT role_id FROM membership_roles
+                WHERE tenant_id = ? AND membership_id = ? ORDER BY role_id LIMIT 1
+                """, Long.class, fixture.tenantId(), fixture.principal().membershipId());
+        jdbc.update("INSERT INTO membership_roles (tenant_id, membership_id, role_id) VALUES (?, ?, ?)",
+                fixture.tenantId(), membershipId, roleId);
+        String tenantPublicId = jdbc.queryForObject(
+                "SELECT public_id FROM tenants WHERE id = ?", String.class, fixture.tenantId());
+        return new WmsAuthenticatedPrincipal(userPublicId, fixture.tenantId(), tenantPublicId,
+                membershipId, membershipPublicId, Set.of());
+    }
+
     private Receipt receive(Fixture f, String tracking, String qty, List<String> serialNumbers) {
         String receiptId = (String) inboundService.create(f.principal(),
                 new WmsInboundReceivingService.ReceiptCommand(
@@ -200,7 +227,7 @@ class WmsPutawayManagementMySqlIntegrationTest {
                         f.itemPublicId(), new BigDecimal(qty), null)).get("public_id");
         List<WmsInboundReceivingService.SerialReceipt> serials = serialNumbers.stream()
                 .map(value -> new WmsInboundReceivingService.SerialReceipt(value, null)).toList();
-        inboundService.post(f.principal(), receiptId,
+        inboundService.post(independentReceivingPrincipal(f), receiptId,
                 new WmsInboundReceivingService.PostReceiptCommand(UUID.randomUUID(), List.of(
                         new WmsInboundReceivingService.LineReceiptCommand(
                                 lineId, new BigDecimal(qty), new BigDecimal(qty), BigDecimal.ZERO,
