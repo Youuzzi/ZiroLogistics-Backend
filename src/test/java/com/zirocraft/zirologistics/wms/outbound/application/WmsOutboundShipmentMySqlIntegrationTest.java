@@ -726,7 +726,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         assertEquals(BigDecimal.ZERO.setScale(4), balanceAt(fixture, destination.warehousePublicId(),
                 destination.locationPublicId(), "AVAILABLE"));
 
-        transferService.receive(fixture.principal(), transferId,
+        transferService.receive(independentShippingPrincipal(fixture), transferId,
                 new WmsInterWarehouseTransferService.ReceiveCommand(UUID.randomUUID(),
                         List.of(new WmsInterWarehouseTransferService.ReceiveAllocation(allocationId,
                                 new BigDecimal("2.0000"), new BigDecimal("1.0000"),
@@ -741,7 +741,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 new WmsInterWarehouseTransferService.DispatchCommand(UUID.randomUUID(),
                         List.of(new WmsInterWarehouseTransferService.DispatchAllocation(
                                 allocationId, new BigDecimal("1.0000"), List.of())), null));
-        transferService.receive(fixture.principal(), transferId,
+        transferService.receive(independentShippingPrincipal(fixture), transferId,
                 new WmsInterWarehouseTransferService.ReceiveCommand(UUID.randomUUID(),
                         List.of(new WmsInterWarehouseTransferService.ReceiveAllocation(allocationId,
                                 new BigDecimal("1.0000"), BigDecimal.ZERO, BigDecimal.ZERO,
@@ -783,11 +783,12 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                         List.of(new WmsInterWarehouseTransferService.ReceiveAllocation(allocationId,
                                 new BigDecimal("2.0000"), BigDecimal.ZERO, BigDecimal.ZERO,
                                 List.of(), List.of(), List.of())), null);
-        transferService.receive(fixture.principal(), transferId, receive);
+        WmsAuthenticatedPrincipal receiver = independentShippingPrincipal(fixture);
+        transferService.receive(receiver, transferId, receive);
         assertEquals(new BigDecimal("2.0000"), balanceAt(fixture, destination.warehousePublicId(),
                 destination.locationPublicId(), "AVAILABLE"));
         assertThrows(IllegalStateException.class,
-                () -> transferService.receive(fixture.principal(), transferId, receive));
+                () -> transferService.receive(receiver, transferId, receive));
         assertEquals(new BigDecimal("2.0000"), balanceAt(fixture, destination.warehousePublicId(),
                 destination.locationPublicId(), "AVAILABLE"));
         assertEquals(1, count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=? AND movement_type='TRANSFER_RECEIPT'",
@@ -823,7 +824,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
 
         assertEquals(3, count("SELECT COUNT(*) FROM inventory_serials WHERE tenant_id=? AND status='IN_TRANSIT' AND current_warehouse_id IS NULL AND current_location_id IS NULL",
                 serialFixture.tenantId()));
-        transferService.receive(serialFixture.principal(), transferId,
+        transferService.receive(independentShippingPrincipal(serialFixture), transferId,
                 new WmsInterWarehouseTransferService.ReceiveCommand(UUID.randomUUID(),
                         List.of(new WmsInterWarehouseTransferService.ReceiveAllocation(allocationId,
                                 BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE,
