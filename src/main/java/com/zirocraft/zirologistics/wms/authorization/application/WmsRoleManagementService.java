@@ -98,7 +98,7 @@ public class WmsRoleManagementService {
         Access access = access(principal, "WMS_ROLE_UPDATE");
         lockTenant(access.tenantId());
         Map<String, Object> before = requireRole(access.tenantId(), rolePublicId);
-        if (number(before, "is_system_role") != 0) {
+        if (flag(before, "is_system_role")) {
             throw new AccessDeniedException("System roles cannot be changed");
         }
         if (number(before, "version") != expectedVersion) {
@@ -122,7 +122,7 @@ public class WmsRoleManagementService {
         Access access = access(principal, "WMS_ROLE_DEACTIVATE");
         lockTenant(access.tenantId());
         Map<String, Object> before = requireRole(access.tenantId(), rolePublicId);
-        if (number(before, "is_system_role") != 0
+        if (flag(before, "is_system_role")
                 || "TENANT_OWNER".equals(before.get("role_code"))) {
             throw new AccessDeniedException("System and owner roles cannot be deactivated");
         }
@@ -155,7 +155,7 @@ public class WmsRoleManagementService {
         Access access = access(principal, "WMS_ROLE_PERMISSION_MANAGE");
         lockTenant(access.tenantId());
         Map<String, Object> role = requireRole(access.tenantId(), rolePublicId);
-        if (number(role, "is_system_role") != 0) {
+        if (flag(role, "is_system_role")) {
             throw new AccessDeniedException("System role grants are protected");
         }
         if (number(role, "version") != expectedVersion) throw new IllegalStateException("Role version conflict");
@@ -369,8 +369,17 @@ public class WmsRoleManagementService {
         return normalized;
     }
 
+    private static boolean flag(Map<String, Object> row, String key) {
+        Object value = row.get(key);
+        if (value instanceof Boolean flag) return flag;
+        if (value instanceof Number number) return number.intValue() != 0;
+        throw new IllegalStateException("Expected boolean database value for " + key);
+    }
+
     private static long number(Map<String, Object> row, String key) {
-        return ((Number) row.get(key)).longValue();
+        Object value = row.get(key);
+        if (value instanceof Number number) return number.longValue();
+        throw new IllegalStateException("Expected numeric database value for " + key);
     }
 
     private record Access(Long tenantId, Long membershipId, String userPublicId, Set<String> permissions) {}
