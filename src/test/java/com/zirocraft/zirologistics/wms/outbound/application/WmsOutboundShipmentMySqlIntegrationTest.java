@@ -262,8 +262,10 @@ class WmsOutboundShipmentMySqlIntegrationTest {
         assertEquals("PACKED", shipmentStatus(fixture, shipmentId));
         assertEquals(ledgerBeforeShipping,
                 count("SELECT COUNT(*) FROM inventory_ledger WHERE tenant_id=?",fixture.tenantId()));
+        WmsAuthenticatedPrincipal shippingPrincipal = independentShippingPrincipal(fixture);
+        long shippingActorMembershipId = shippingPrincipal.membershipId();
         UUID shippingRequestId = UUID.randomUUID();
-        Map<String,Object> shipped=shippingService.ship(independentShippingPrincipal(fixture),shipmentId,
+        Map<String,Object> shipped=shippingService.ship(shippingPrincipal,shipmentId,
                 new WmsShippingManagementService.ShipCommand(shippingRequestId,null,"TRACK-"+UUID.randomUUID(),null));
         assertEquals("SHIPPED",shipped.get("status"));
         assertEquals("SHIPPED",shipmentStatus(fixture,shipmentId));
@@ -284,7 +286,7 @@ class WmsOutboundShipmentMySqlIntegrationTest {
                 WHERE tenant_id=? AND subject_public_id=? AND event_type='OUTBOUND_SHIPMENT_SHIPPED'
                   AND actor_type='TENANT_MEMBER' AND actor_membership_id=?
                   AND JSON_UNQUOTE(JSON_EXTRACT(change_payload,'$.requestId'))=?
-                """, fixture.tenantId(), shipmentId, actorMembershipId, shippingRequestId.toString()));
+                """, fixture.tenantId(), shipmentId, shippingActorMembershipId, shippingRequestId.toString()));
         assertEquals(1, count("""
                 SELECT COUNT(*) FROM tenant_audit_events
                 WHERE tenant_id=? AND subject_public_id=? AND event_type='PICKING_CONFIRMED'
