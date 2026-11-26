@@ -32,12 +32,12 @@ The rule identifiers below are stable policy concepts proposed for implementatio
 
 | Rule code | Workflow / actor comparison | Classification | Initial default |
 |---|---|---|---|
-| `INBOUND_RECEIPT_CREATOR_POSTER` | Receipt creator user must differ from posting user. | Mandatory | Enforced |
-| `OUTBOUND_SHIPMENT_CREATOR_SHIPPER` | Shipment creator user must differ from final shipper user. | Mandatory | Enforced |
-| `TRANSFER_DISPATCHER_RECEIVER` | Receiver user must differ from every membership/user that dispatched any quantity on that transfer. | Mandatory | Enforced |
-| `STOCK_COUNT_COUNTER_REVIEWER` | Reviewer user must differ from the latest final counter user for the reviewed line. | Mandatory | Enforced |
-| `STOCK_COUNT_CREATOR_APPROVER` | Approver user must differ from count creator. | Mandatory | Enforced |
-| `STOCK_COUNT_REVIEWER_APPROVER` | Approver user must differ from header/line reviewers and all latest final counters. | Mandatory | Enforced |
+| `INBOUND_RECEIPT_CREATOR_POSTER` | Receipt creator user versus posting user. | Configurable | UMKM may allow one operator with fresh MFA, mandatory audit and strict discrepancy controls; Enterprise requires separation. |
+| `OUTBOUND_SHIPMENT_CREATOR_SHIPPER` | Shipment creator user versus final shipper user. | Configurable | UMKM may allow one operator only after all required picking/packing reconciliation; fresh MFA and audit remain mandatory. Enterprise requires separation. |
+| `TRANSFER_DISPATCHER_RECEIVER` | Receiver user versus every user that dispatched any quantity on the transfer. | Configurable / threshold-driven | UMKM may allow one operator for controlled internal transfers with complete transit and discrepancy evidence; shortages, damage or high-value transfers require independent review. Enterprise requires separation. |
+| `STOCK_COUNT_COUNTER_REVIEWER` | Reviewer user versus latest final counter user for the reviewed line. | Threshold-driven | UMKM may self-submit routine counts within configured variance tolerance; a variance above tolerance or sensitive/serial discrepancy requires independent review. Enterprise requires independent review. |
+| `STOCK_COUNT_CREATOR_APPROVER` | Approver user versus count creator when approval is required. | Mandatory | Any adjustment-producing variance approval must be independent; no self-approval. |
+| `STOCK_COUNT_REVIEWER_APPROVER` | Approver user versus header/line reviewers and all latest final counters when approval is required. | Mandatory | Variance approval remains independent; routine no-variance counts need not invent an approval step. |
 | `INVENTORY_ADJUSTMENT_CREATOR_APPROVER` | Approver user must differ from adjustment creator. | Mandatory | Enforced |
 | `INVENTORY_ADJUSTMENT_CREATOR_POSTER` | Poster user must differ from adjustment creator. | Mandatory | Enforced |
 | `INVENTORY_ADJUSTMENT_APPROVER_POSTER` | Whether approver and poster must differ. | Configurable | Two-person default: approver may also post after independent approval; Enterprise profile may require a third actor. |
@@ -56,16 +56,16 @@ The rule identifiers below are stable policy concepts proposed for implementatio
 
 | Rule family | Small / UMKM | Medium | Enterprise |
 |---|---|---|---|
-| Inbound creator/poster | Mandatory | Mandatory | Mandatory |
-| Shipment creator/shipper | Mandatory | Mandatory | Mandatory |
-| Transfer dispatcher/receiver | Mandatory | Mandatory | Mandatory |
-| Stock-count independent review/approval | Mandatory | Mandatory | Mandatory |
+| Inbound creator/poster | Configurable: single operator with compensating controls | Separate for discrepancies / configured thresholds | Mandatory separation |
+| Shipment creator/shipper | Configurable: same operator after complete pick/pack reconciliation | Separate for high-risk shipments | Mandatory separation |
+| Transfer dispatcher/receiver | Configurable: controlled internal transfer only | Separate for high-risk / exception transfers | Mandatory separation |
+| Stock-count independent review/approval | Threshold-driven: routine counts may self-submit; variance approval independent | Independent review above configured variance threshold | Mandatory independent review / approval |
 | Adjustment creator/approver and creator/poster | Mandatory | Mandatory | Mandatory |
 | Adjustment approver/poster | Same approver may post after an independent approval | Configurable, default separate for high-value adjustments | Separate by default |
 | Replenishment reversal | Mandatory independent actor | Mandatory independent actor | Mandatory independent actor |
 | Replenishment assignee/confirmer | Same operator permitted | Same operator permitted | Configurable |
 
-These defaults preserve a workable two-person control for small warehouses. They do not require every task step to be performed by a different person. A single operator may receive, put away, pick, pack, or confirm routine tasks when the workflow permits; the operator cannot self-approve a mandatory independent approval boundary.
+These defaults preserve a workable operating model for small warehouses without turning the product into an uncontrolled single-user ledger. A small operator may complete routine receiving, dispatch and controlled internal transfer when the tenant explicitly selects the bounded single-operator mode. Fresh MFA, exact permissions, mandatory audit, inventory reconciliation, idempotency and exception thresholds remain in force. Variance approvals, adjustment approvals and replenishment reversals remain independent. Enterprise tenants can require stricter separation throughout the workflow.
 
 ## 5. Invariants that profiles cannot change
 
