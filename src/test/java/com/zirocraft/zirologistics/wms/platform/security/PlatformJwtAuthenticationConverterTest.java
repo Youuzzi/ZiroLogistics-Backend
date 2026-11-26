@@ -42,7 +42,7 @@ class PlatformJwtAuthenticationConverterTest {
 
         assertThat(authentication.isAuthenticated()).isTrue();
         assertThat(authentication.getPrincipal())
-                .isEqualTo(new PlatformAuthenticatedPrincipal("operator-public-id"));
+                .isEqualTo(new PlatformAuthenticatedPrincipal("operator-public-id", Instant.parse("2026-11-25T11:59:00Z")));
         assertThat(authentication.getAuthorities()).isEmpty();
     }
 

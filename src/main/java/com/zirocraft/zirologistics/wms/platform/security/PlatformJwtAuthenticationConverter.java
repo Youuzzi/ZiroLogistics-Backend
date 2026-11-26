@@ -69,7 +69,7 @@ public class PlatformJwtAuthenticationConverter implements Converter<Jwt, Abstra
                         && candidate.getCredentialVersion().longValue() == credentialVersion.longValue())
                 .orElseThrow(PlatformJwtAuthenticationConverter::invalidToken);
 
-        PlatformAuthenticatedPrincipal principal = new PlatformAuthenticatedPrincipal(operator.getPublicId());
+        PlatformAuthenticatedPrincipal principal = new PlatformAuthenticatedPrincipal(operator.getPublicId(), Instant.ofEpochSecond(mfaAtEpochSeconds.longValue()));
         // No platform permissions are granted by this slice. Permission loading is a later, explicit step.
         return UsernamePasswordAuthenticationToken.authenticated(principal, null, List.of());
     }
