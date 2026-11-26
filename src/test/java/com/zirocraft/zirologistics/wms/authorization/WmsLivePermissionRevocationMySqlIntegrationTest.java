@@ -3,6 +3,8 @@ package com.zirocraft.zirologistics.wms.authorization;
 import com.zirocraft.zirologistics.wms.WmsRuntimeApplication;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccess;
 import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsRoleManagementService;
+import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import com.zirocraft.zirologistics.wms.identity.domain.MembershipStatus;
 import com.zirocraft.zirologistics.wms.identity.domain.UserStatus;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.TenantMembershipEntity;
@@ -51,6 +53,7 @@ class WmsLivePermissionRevocationMySqlIntegrationTest {
     }
 
     @Autowired private WmsMembershipAccessService accessService;
+    @Autowired private WmsRoleManagementService roleManagementService;
     @Autowired private UserRepository userRepository;
     @Autowired private TenantRepository tenantRepository;
     @Autowired private TenantMembershipRepository membershipRepository;
@@ -215,6 +218,116 @@ class WmsLivePermissionRevocationMySqlIntegrationTest {
         assertTrue(access.hasPermission(secondPermission));
         assertEquals(tenant.getId(), access.tenantId());
         assertEquals(tenant.getPublicId(), access.tenantPublicId());
+    }
+
+    @Test
+    void customRolePermissionReplacementIsTenantScopedAuditedAndRejectsPrivilegeEscalation() {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();
+        UserEntity user = new UserEntity();
+        user.setEmail("a3-role-mgmt-" + suffix.toLowerCase() + "@example.test");
+        user.setUsername("a3-role-mgmt-" + suffix.toLowerCase());
+        user.setFullName("A3 Role Management Test");
+        user.setPasswordHash(passwordEncoder.encode("TestPassword123"));
+        user.setStatus(UserStatus.ACTIVE);
+        user = userRepository.saveAndFlush(user);
+
+        TenantEntity tenant = new TenantEntity();
+        tenant.setTenantCode("A3ROLE" + suffix);
+        tenant.setLegalName("A3 Role Management Test");
+        tenant.setDisplayName("A3 Role " + suffix);
+        tenant.setStatus(TenantStatus.ACTIVE);
+        tenant = tenantRepository.saveAndFlush(tenant);
+
+        TenantMembershipEntity membership = new TenantMembershipEntity();
+        membership.setTenantId(tenant.getId());
+        membership.setUserId(user.getId());
+        membership.setStatus(MembershipStatus.ACTIVE);
+        membership = membershipRepository.saveAndFlush(membership);
+
+        String actorRoleCode = "A3_ROLE_ACTOR_" + suffix;
+        String targetRoleCode = "A3_ROLE_TARGET_" + suffix;
+        jdbc.update("""
+                INSERT INTO roles (public_id, tenant_id, role_code, role_name, is_system_role, status)
+                VALUES (?, ?, ?, 'A3 Role Manager', 0, 'ACTIVE'),
+                       (?, ?, ?, 'A3 Custom Target', 0, 'ACTIVE')
+                """, UUID.randomUUID().toString(), tenant.getId(), actorRoleCode,
+                UUID.randomUUID().toString(), tenant.getId(), targetRoleCode);
+        Long actorRoleId = jdbc.queryForObject(
+                "SELECT id FROM roles WHERE tenant_id=? AND role_code=?", Long.class,
+                tenant.getId(), actorRoleCode);
+        String targetRolePublicId = jdbc.queryForObject(
+                "SELECT public_id FROM roles WHERE tenant_id=? AND role_code=?", String.class,
+                tenant.getId(), targetRoleCode);
+        Long targetRoleId = jdbc.queryForObject(
+                "SELECT id FROM roles WHERE tenant_id=? AND role_code=?", Long.class,
+                tenant.getId(), targetRoleCode);
+
+        jdbc.update("INSERT INTO membership_roles (tenant_id, membership_id, role_id) VALUES (?, ?, ?)",
+                tenant.getId(), membership.getId(), actorRoleId);
+        jdbc.update("""
+                INSERT INTO role_permissions (role_id, permission_id)
+                SELECT ?, id FROM permissions
+                WHERE permission_code IN ('WMS_ROLE_PERMISSION_MANAGE', 'WMS_ITEM_CREATE')
+                """, actorRoleId);
+        jdbc.update("""
+                INSERT INTO role_permissions (role_id, permission_id)
+                SELECT ?, id FROM permissions WHERE permission_code='WMS_ITEM_READ'
+                """, targetRoleId);
+
+        WmsAuthenticatedPrincipal principal = new WmsAuthenticatedPrincipal(
+                user.getPublicId(), tenant.getId(), tenant.getPublicId(),
+                membership.getId(), membership.getPublicId(), java.util.Set.of());
+
+        var replaced = roleManagementService.replaceRolePermissions(
+                principal, targetRolePublicId, java.util.List.of("WMS_ITEM_CREATE"), 0L);
+        assertEquals(java.util.List.of("WMS_ITEM_CREATE"), replaced);
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT version FROM roles WHERE tenant_id=? AND public_id=?",
+                Integer.class, tenant.getId(), targetRolePublicId));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM role_permissions rp
+                JOIN permissions p ON p.id=rp.permission_id
+                WHERE rp.role_id=? AND p.permission_code='WMS_ITEM_CREATE'
+                """, Integer.class, targetRoleId));
+        assertEquals(0, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM role_permissions rp
+                JOIN permissions p ON p.id=rp.permission_id
+                WHERE rp.role_id=? AND p.permission_code='WMS_ITEM_READ'
+                """, Integer.class, targetRoleId));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id=? AND actor_membership_id=? AND event_type='ROLE_PERMISSIONS_REPLACED'
+                  AND subject_public_id=?
+                """, Integer.class, tenant.getId(), membership.getId(), targetRolePublicId));
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class, () ->
+                roleManagementService.replaceRolePermissions(principal, targetRolePublicId,
+                        java.util.List.of("WMS_INVENTORY_POST"), 1L));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT version FROM roles WHERE tenant_id=? AND public_id=?",
+                Integer.class, tenant.getId(), targetRolePublicId));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM role_permissions rp
+                JOIN permissions p ON p.id=rp.permission_id
+                WHERE rp.role_id=? AND p.permission_code='WMS_ITEM_CREATE'
+                """, Integer.class, targetRoleId));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM tenant_audit_events
+                WHERE tenant_id=? AND actor_membership_id=? AND event_type='ROLE_PERMISSIONS_REPLACED'
+                  AND subject_public_id=?
+                """, Integer.class, tenant.getId(), membership.getId(), targetRolePublicId));
+
+        jdbc.update("""
+                DELETE FROM role_permissions WHERE role_id=? AND permission_id=(
+                    SELECT id FROM permissions WHERE permission_code='WMS_ITEM_CREATE'
+                )
+                """, actorRoleId);
+        assertThrows(org.springframework.security.access.AccessDeniedException.class, () ->
+                roleManagementService.replaceRolePermissions(principal, targetRolePublicId,
+                        java.util.List.of("WMS_ITEM_CREATE"), 1L));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT version FROM roles WHERE tenant_id=? AND public_id=?",
+                Integer.class, tenant.getId(), targetRolePublicId));
     }
 
 }
