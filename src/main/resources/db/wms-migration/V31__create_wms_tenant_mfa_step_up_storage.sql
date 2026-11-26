@@ -70,7 +70,7 @@ CREATE TABLE wms_tenant_mfa_recovery_codes (
     KEY idx_wms_tenant_mfa_recovery_factor (factor_id, user_id, consumed_at),
     CONSTRAINT fk_wms_tenant_mfa_recovery_factor
         FOREIGN KEY (factor_id, user_id)
-        REFERENCES wms_tenant_mfa_factors (id, user_id) ON DELETE RESTRICT,
+        REFERENCES wms_tenant_mfa_factors (id, user_id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE wms_tenant_mfa_step_up_challenges (
