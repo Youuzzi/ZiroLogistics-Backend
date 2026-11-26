@@ -462,6 +462,9 @@ public class WmsInventoryAdjustmentService {
         if (!"APPROVED".equals(string(header, "status"))) {
             throw new IllegalStateException("Only an approved inventory adjustment can be posted");
         }
+        if (number(header, "created_by_membership_id") == access.membershipId()) {
+            throw new AccessDeniedException("The adjustment creator cannot post their own document");
+        }
         long adjustmentId = number(header, "id");
         long countLinks = requiredLong("""
                 SELECT COUNT(*) FROM stock_count_adjustment_links
@@ -584,6 +587,9 @@ public class WmsInventoryAdjustmentService {
         Map<String, Object> header = header(access.tenantId(), adjustmentPublicId, true);
         if (!"APPROVED".equals(string(header, "status"))) {
             throw new IllegalStateException("Only an approved manual adjustment can be posted");
+        }
+        if (number(header, "created_by_membership_id") == access.membershipId()) {
+            throw new AccessDeniedException("The adjustment creator cannot post their own document");
         }
         long adjustmentId = number(header, "id");
         if (requiredLong("""
