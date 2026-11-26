@@ -53,7 +53,7 @@ class WmsV31TenantMfaMigrationIntegrationTest {
         try (Connection connection = connection(); Statement statement = connection.createStatement()) {
             assertEquals(tablesBefore + 6, nonPlatformTableCount(statement),
                     "V31 must add exactly six tenant MFA/security tables");
-            assertEquals(1, scalar(statement, """
+            assertEquals(3, scalar(statement, """
                     SELECT COUNT(*) FROM information_schema.statistics
                     WHERE table_schema = DATABASE()
                       AND table_name = 'tenant_memberships'
