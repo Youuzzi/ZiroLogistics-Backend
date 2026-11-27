@@ -25,7 +25,7 @@ Architecture references cover identity, tenant context, authorization, role gove
 - [Security and QA baseline](audits/security-qa-baseline.md)
 - [Security and QA verification status](audits/security-qa-closure-criteria.md)
 - [Historical QA closure evidence archive](audits/security-qa-evidence-history-2026-11-23.md) — detailed PR/CI/artifact evidence retained for provenance; not current status.
-- [Historical QA/security baseline archive](audits/security-qa-initial-baseline-history-2026-11-22.md) — original test inventory and staged QA plan retained as a dated snapshot.
+- [Historical QA/security baseline archive](audits/security-qa-initial-baseline-history-2026-11-20.md) — original test inventory and staged QA plan retained as a dated snapshot.
 - [Platform control-plane review](audits/platform-control-plane-review-2026-11-27.md)
 - [Tenant isolation review](audits/tenant-isolation-review-2026-11-27.md)
 - [Outbound tenant-isolation review](audits/outbound-tenant-isolation-review-2026-11-27.md)
