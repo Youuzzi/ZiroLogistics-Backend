@@ -5,6 +5,7 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import com.zirocraft.zirologistics.wms.security.config.WmsJwtProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +26,14 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 @ConditionalOnProperty(prefix = "wms.platform.security.jwt", name = "enabled", havingValue = "true")
 @EnableConfigurationProperties(PlatformJwtProperties.class)
 public class PlatformJwtConfiguration {
+    @Bean
+    @ConditionalOnProperty(prefix = "wms.security.jwt", name = "enabled", havingValue = "true")
+    PlatformTenantJwtTrustDomainGuard platformTenantJwtTrustDomainGuard(
+            PlatformJwtProperties platform, WmsJwtProperties tenant) {
+        PlatformTenantJwtTrustDomainGuard.validate(platform, tenant);
+        return new PlatformTenantJwtTrustDomainGuard();
+    }
+
     @Bean
     PlatformRsaKeyMaterial platformRsaKeyMaterial(PlatformJwtProperties properties) {
         return PlatformRsaKeyMaterial.fromPem(properties.getPublicKeyPem(), properties.getPrivateKeyPem());
