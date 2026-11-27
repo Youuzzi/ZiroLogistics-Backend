@@ -82,7 +82,7 @@ These defaults preserve a workable operating model for small warehouses without 
 
 ## 6. Proposed policy data contract
 
-The first implementation should use a typed, versioned policy representation rather than arbitrary JSON interpreted at runtime.
+Any future persisted tenant-configurable policy should use a typed, versioned representation rather than arbitrary JSON interpreted at runtime. The pure typed resolver already exists; persistence and workflow integration remain open.
 
 Minimum conceptual fields:
 
