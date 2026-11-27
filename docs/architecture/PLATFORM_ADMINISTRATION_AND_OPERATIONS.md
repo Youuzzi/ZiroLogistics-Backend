@@ -30,7 +30,7 @@ The following facts are verified in the current source:
 - `PlatformOperatorRoleAdministrationService`, `PlatformSupportGrantService`, and `PlatformTenantLifecycleApplicationService` provide service-layer governance boundaries. No platform HTTP controllers were found in the current source tree, and support-grant scope consumption by tenant data services is not established.
 - `WmsTenantLifecycleService` supports suspend, reactivate, and close transitions with an operation reference, reason, and audit event. `WmsTenantLifecycleCommandRunner` is enabled only in an explicitly invoked non-web command mode. The supplied `operatorReference` is currently a validated audit label, not a reference to an authenticated platform identity.
 - Tenant lifecycle audit events currently record actor type `PLATFORM_OPERATOR` and a string actor reference. This is not proof of operator authentication or authorization.
-- `application-wms.properties` has one WMS JWT issuer, tenant-selection audience, access audience, and key-material configuration. There is no separate platform token audience or platform security chain.
+- `application-wms.properties` defines separate tenant and platform JWT configuration namespaces, audiences, key IDs, and RSA key-material settings. Platform JWT is disabled by default and requires separately provisioned platform secrets. `PlatformSecurityConfiguration` installs a dedicated stateless chain for `/api/platform/v1/**`; no platform HTTP controllers were found, so a protected matcher is not evidence that a complete route surface exists.
 
 These existing controls are useful foundations, but they must not be mistaken for a complete SaaS control plane.
 

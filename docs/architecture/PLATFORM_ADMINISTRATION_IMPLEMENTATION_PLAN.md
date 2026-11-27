@@ -30,23 +30,23 @@ Tenant lifecycle/provisioning code can record `actor_type = PLATFORM_OPERATOR` a
 V29 adds platform operators, platform roles, platform permissions, operator-role assignments, role-permission grants, MFA/recovery persistence, and platform authentication events. A controlled first-operator provisioning operation remains open. Use opaque public IDs, normalized unique email, adaptive password hashes, lifecycle status, credential version, and UTC audit timestamps.
 
 ### Slice 2 — Platform authentication
-Implement platform-specific credential authentication and token profile with a distinct audience and purpose. Require MFA enrollment before privileged permissions are usable. Keep existing tenant token claims and tenant auth flow unchanged.
+**Partially implemented.** `PlatformCredentialAuthenticationService`, `PlatformJwtTokenService`, `PlatformJwtAuthenticationConverter`, and a separate platform JWT/security configuration exist. The credential use case is not composed into an HTTP adapter and has no confirmed concrete throttle implementation. The token issuer requires a recent successful MFA timestamp, but TOTP enrollment/verification, recovery, challenge orchestration, and login controllers remain open. Keep existing tenant token claims and tenant auth flow unchanged.
 
 ### Slice 3 — Platform authorization boundary
-Add a dedicated `/api/platform/v1/**` security chain with explicit ordering and deny-by-default behavior. Tenant tokens must be rejected by platform routes; platform tokens must be rejected by tenant routes. Add HTTP integration tests for both directions.
+**Partially implemented.** A dedicated `/api/platform/v1/**` security chain, separate decoder, token-purpose validation, and cross-trust-domain rejection primitives exist. `PlatformPermissionEvaluator` reads current persisted grants and fails closed. No platform HTTP controllers were found, so endpoint-level authorization and HTTP integration coverage remain open.
 
 ### Slice 4 — Tenant lifecycle integration
-Replace untrusted operator labels on authenticated lifecycle paths with a resolved platform operator identity. Preserve explicit command-mode bootstrap only as a separately controlled execution mode and make its identity provenance clear. Require action-specific permissions, reason, operation reference, and audit.
+**Service layer implemented; HTTP boundary open.** `PlatformTenantLifecycleApplicationService` derives the actor from Spring Security and applies action-specific permissions before invoking tenant lifecycle transitions. The separate command-mode lifecycle runner still uses a validated operator reference as audit attribution, not authenticated identity. No platform lifecycle controller is present.
 
 ### Slice 5 — Support access and break-glass
-Implement a time-limited support grant model with tenant, purpose, requested scope, approver, expiry, and revocation. Do not allow warehouse transaction access unless a separate approved workflow explicitly grants it. Record every access and mutation.
+**Governance implemented; scoped access consumer open.** V30 and `PlatformSupportGrantService` implement request, approval/rejection, revocation, audit, a four-hour maximum, and a fixed read-only scope allowlist. No tenant data-service consumer is established that turns an approved grant into scoped access; no warehouse transaction or impersonation access is granted by the schema/service alone.
 
 ### Slice 6 — Platform role and permission governance
-Start from the approved least-privilege role proposals in the architecture document. Seed only permissions needed by implemented platform endpoints. Avoid wildcard grants and do not seed future billing permissions as active capabilities before billing workflows exist.
+**Persistence and role-administration foundation implemented.** V29 seeds the six platform role definitions and permission catalogue; `PlatformOperatorRoleAdministrationService` enforces actor permission, delegation ceilings, no self-assignment, no routine `PLATFORM_OWNER` assignment, expiry, and audit. A complete platform HTTP administration surface and final role-to-permission product policy remain open. Billing role presence is not evidence that billing capabilities are implemented.
 
-## 4. Initial implementation roles
+## 4. Seeded platform role catalogue
 
-The proposed roles are separate from tenant system-role templates:
+V29 seeds the following role codes, separate from tenant system-role templates. Their presence does not mean an initial operator has been provisioned or assigned them:
 - `PLATFORM_OWNER`
 - `PLATFORM_ADMIN`
 - `PLATFORM_SUPPORT`
@@ -54,7 +54,7 @@ The proposed roles are separate from tenant system-role templates:
 - `PLATFORM_SECURITY_ADMIN`
 - `PLATFORM_AUDITOR`
 
-These are platform control-plane roles, not warehouse job titles. Each role must have an explicit permission matrix and risk classification. Billing permissions remain dormant until subscription and invoice workflows are implemented.
+These are platform control-plane roles, not warehouse job titles. The permission catalogue carries risk levels, but the complete operational role-to-permission matrix and externally reachable administration workflow remain subject to implementation and verification. Billing permissions remain dormant until subscription and invoice workflows are implemented.
 
 ## 5. Verification gates
 
