@@ -1,6 +1,6 @@
 # WMS Trusted Proxy Client Address Resolution
 
-**Status:** Implemented resolver foundation; not wired into an HTTP login endpoint.  
+**Status:** Implemented and wired into the WMS credential-authentication throttle flow. `WmsCredentialAuthenticationConfiguration` composes the resolver, and the authentication controller supplies the socket peer and forwarded-for metadata.  
 **Scope:** Resolve a numeric source address safely before HMAC bucket hashing.  
 **Schema:** No database migration. Frozen WMS V1 remains unchanged.
 
@@ -18,8 +18,8 @@
 - Configure only reverse proxies controlled by the deployment. Do not trust broad private ranges merely because they are private.
 - The edge proxy must overwrite or safely append forwarding metadata according to a documented deployment policy.
 - The resolver accepts the raw header only as input; callers must pass the resolved numeric address to `WmsThrottleKeyHasher.hashSourceAddress`.
-- The resolver is not yet connected to a servlet filter/controller or login flow.
-- Proxy CIDRs, header policy, and maximum hop count must be reviewed against the actual ingress topology before production enablement.
+- The resolver is called by `WmsLoginThrottleService` before source-address HMAC hashing; the credential-authentication use case supplies the socket peer and forwarded-for header.
+- Proxy CIDRs, header policy, and maximum hop count must be configured and reviewed against the actual ingress topology before production enablement.
 
 ## Defensive bounds
 
@@ -32,4 +32,4 @@
 
 Unit tests cover untrusted direct peers, trusted proxy resolution, right-to-left chain traversal, spoofed values beyond an untrusted hop, malformed and oversized chains, IPv6 CIDRs, invalid configuration, and invalid socket peers.
 
-No servlet integration, database persistence, rate thresholds, login endpoint, or V2 migration is included.
+This document covers the resolver boundary only. Shared throttle persistence and credential-authentication integration are documented separately; this resolver does not own threshold policy, persistence, or allow/deny decisions.
