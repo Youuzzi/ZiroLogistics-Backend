@@ -52,3 +52,18 @@ No concrete platform-to-tenant privilege escalation was confirmed in this source
 - **MySQL integration verified:** actual MySQL behavior exercised by the referenced test.
 - **HTTP boundary verified:** request/authentication/principal forwarding exercised.
 - **Not covered:** no sufficient evidence.
+
+
+## Follow-up verification — trust-domain and async boundary
+
+### JWT trust-domain verification refinement
+- `PlatformJwtConfigurationTest` signs a tenant-shaped token with the platform test encoder and confirms the platform decoder rejects its tenant audience and `token_use`. This verifies claim-profile rejection, but it does not prove rejection of a token signed by an independently generated tenant private key.
+- `WmsJwtConfigurationTest` verifies tenant selection/access profile separation, but the inspected test suite does not yet demonstrate that a genuine platform-signed token is rejected by the tenant access decoder.
+- Platform and tenant RSA key material, issuer, key ID and audiences are configured through distinct property namespaces. No cross-domain startup guard was found that rejects accidentally reused RSA key pairs or overlapping issuer/audience/key identifiers when both domains are enabled. This is a configuration-hardening gap, not evidence that deployed values currently overlap.
+- Follow-up: add a startup trust-domain validator and tests using independently generated platform and tenant key pairs. Assert each decoder rejects a token signed by the other domain even when claim values are crafted to resemble its expected profile; assert startup fails if the same RSA key material or overlapping trust identifiers are configured.
+
+### Identity email worker boundary
+- `WmsEmailOutboxDeliveryWorker` is property-gated and only delivers identity action emails; it does not execute warehouse commands or accept ambient tenant HTTP authentication.
+- `MySqlWmsEmailOutboxStorageAdapter` claims bounded batches with `FOR UPDATE SKIP LOCKED`, increments attempt count under lock, and fences sent/retry updates by message ID, PROCESSING state and attempt count. Stale leases are recovered in bounded batches.
+- The worker decrypts payloads only for rendering, checks action-token expiry before SMTP send, validates purpose/token/recipient against the outbox envelope, clears plaintext bytes after rendering, and avoids logging tokens, recipients, ciphertext or provider exception details.
+- No concrete cross-tenant warehouse access path was identified in this worker. Remaining checks are configuration/secret rotation, SMTP transport requirements, malformed payload handling, and MySQL integration coverage for expired-token terminal behavior and worker recovery races.
