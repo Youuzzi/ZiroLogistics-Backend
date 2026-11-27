@@ -24,7 +24,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 @Configuration(proxyBeanMethods = false)
 @Profile("wms")
 @ConditionalOnProperty(prefix = "wms.platform.security.jwt", name = "enabled", havingValue = "true")
-@EnableConfigurationProperties({PlatformJwtProperties.class, WmsJwtProperties.class})
+@EnableConfigurationProperties(PlatformJwtProperties.class)
 public class PlatformJwtConfiguration {
     @Bean
     @ConditionalOnProperty(prefix = "wms.security.jwt", name = "enabled", havingValue = "true")
