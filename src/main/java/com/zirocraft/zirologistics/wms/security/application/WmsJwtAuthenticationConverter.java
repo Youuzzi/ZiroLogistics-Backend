@@ -63,6 +63,7 @@ public class WmsJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
                 access.tenantPublicId(),
                 access.membershipId(),
                 access.membershipPublicId(),
+                access.credentialVersion(),
                 access.permissionCodes());
 
         var authorities = access.permissionCodes().stream()
