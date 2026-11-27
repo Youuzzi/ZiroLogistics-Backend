@@ -94,21 +94,17 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Make Maven Wrapper executable
-        if: steps.scope.outputs.run_backend_tests == 'true'
-        run: chmod +x mvnw
-
       - name: Validate WMS Compose configuration
         if: steps.scope.outputs.run_backend_tests == 'true'
         run: docker compose --env-file .env.example -f compose.yml config --quiet
 
       - name: Capture resolved Maven dependency tree
         if: steps.scope.outputs.run_backend_tests == 'true'
-        run: ./mvnw --batch-mode --no-transfer-progress dependency:tree -Dverbose -DoutputFile=dependency-tree.txt
+        run: mvn --settings .docker/maven/settings.xml --batch-mode --no-transfer-progress dependency:tree -Dverbose -DoutputFile=dependency-tree.txt
 
       - name: Run full regression and package WMS runtime
         if: steps.scope.outputs.run_backend_tests == 'true'
-        run: ./mvnw --batch-mode --no-transfer-progress -Pwms-runtime clean verify
+        run: mvn --settings .docker/maven/settings.xml --batch-mode --no-transfer-progress -Pwms-runtime clean verify
 
       - name: Upload resolved dependency tree
         if: always() && steps.scope.outputs.run_backend_tests == 'true'
