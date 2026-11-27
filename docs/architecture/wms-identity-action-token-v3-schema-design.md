@@ -154,9 +154,9 @@ The MySQL 8.4 Testcontainers migration gate verifies:
 
 The PR #53 CI and the post-merge main CI passed. These checks use disposable Testcontainers databases only. Never run Flyway, integration tests, or schema-changing commands against `zirowms_v1` or `zirologistics_db`.
 
-## 9. Open decisions for application-level implementation
+## 9. Original open decisions at the V3 design checkpoint
 
-The migration is complete; the following policy and runtime decisions remain before the full account-provisioning workflow is production-ready:
+The following questions were open when this schema design was written. Subsequent implementation has closed the core application-flow items; operational readiness and deployment-specific email/key configuration remain separate release gates.
 1. Whether email verification is required before first login, and how invitation acceptance satisfies it.
 2. Exact invitation, verification, and reset token lifetimes.
 3. Which tenant statuses permit invitations and acceptance.

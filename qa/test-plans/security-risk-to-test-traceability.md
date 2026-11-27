@@ -52,6 +52,6 @@
 9. Error responses must not reveal secrets, token values, stack traces, or tenant existence.
 10. CORS preflight and denied-origin paths for both relevant security configurations.
 
-## Next step
+## Historical next step
 
-Inspect existing test assertions for P0 topics above, record precise evidence and gaps, and only then add narrowly scoped tests where a concrete risk remains. No coverage percentage or release threshold is assigned in this document.
+This was the recommended next step when this filename-based inventory was created. Subsequent security and QA work is recorded in the dated current security coverage inventory and CI evidence. Re-run assertion-level verification before using any row here to make a present-day coverage claim.

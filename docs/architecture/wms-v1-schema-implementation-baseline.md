@@ -1,12 +1,12 @@
-> **Historical schema baseline:** This document records the initial V1 schema import. Backend implementation Stages 1–12 have since been completed; current runtime and API instructions are maintained in the README, WMS Runtime Boundary, and Stage 13 API reference.
+ > **Historical schema baseline:** This document records the initial V1 schema import and its original 63-table structure. The original database name `zirowms_v1` is historical schema provenance, not the current runtime target. The supported runtime now uses the dedicated `zirologistics_wms` database, Java 21, Spring Boot 3.5.16, MySQL 8.4, Flyway 11.20.3, and additive migrations V1–V32. See the [Runtime Boundary](../runtime/wms-runtime-boundary.md), [WMS API v1 Reference](../api/wms-api-v1-reference.md), and [Backend Maintenance Handoff](../project/backend-maintenance-handoff-2026-11-27.md).
 
 # WMS V1 — Actual Schema Implementation Baseline
 
 - **Status:** Schema source frozen; migration passed the main-branch CI gate after PR #11 merge
-- **Database:** `zirowms_v1`
+- **Historical import database:** `zirowms_v1` (not the current runtime database)
 - **Ownership model:** tenant-based
 - **Target compatibility:** MySQL 8.4 (must pass the dedicated Testcontainers gate)
-- **Application:** Java 21 / Spring Boot 3.5.13
+- **Original application baseline:** Java 21 / Spring Boot 3.5.13 (historical)
 - **Migration location:** `classpath:db/wms-migration`
 
 ## 1. Source of truth

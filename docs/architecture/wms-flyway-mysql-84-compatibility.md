@@ -1,67 +1,48 @@
 # WMS Flyway and MySQL 8.4 Compatibility
 
-> **Current warning distinction:** The earlier Flyway/MySQL compatibility warning was addressed by aligning Flyway core and MySQL module to 11.20.3. A separate MySQL 8.4 integer display-width DDL deprecation warning remains (513 instances were counted in the Stage 13 audit); it originates from frozen migration statements, not from Flyway version compatibility. See [MySQL Integer Display Width Deprecation Audit](mysql-integer-display-width-deprecation-audit.md) and the [Stage 13 WP11 repository audit](../audits/api-and-repository-audit.md).
+**Status:** Current dependency alignment is implemented; WMS migrations V1–V32 are the current runtime checkpoint.
+**Current runtime:** Java 21, Spring Boot 3.5.16, Flyway 11.20.3, MySQL 8.4.
+**Runtime database:** `zirologistics_wms`; automated migration tests use disposable MySQL 8.4 Testcontainers databases.
+**Scope:** Flyway/MySQL compatibility and migration safety, not a production database migration approval.
 
-**Status:** implemented; PR CI #187 passed  
-**Baseline:** Spring Boot 3.5.13, Java 21, MySQL 8.4 Testcontainers  
-**Scope:** Flyway dependency alignment only
+## 1. Current compatibility position
 
-## Finding
+The WMS runtime uses matching `flyway-core` and `flyway-mysql` modules at version 11.20.3. The Flyway/MySQL 8.4 compatibility warning from the earlier dependency baseline was addressed by aligning both modules.
 
-The local Testcontainers run recorded in `hasiltest.md` used MySQL 8.4 and emitted:
+The current runtime migration location is `classpath:db/wms-migration`. The applied migration history is V1–V32 and is immutable. Any future schema change must be an additive migration beginning at V33; do not edit or regenerate an applied migration.
 
-```text
-Flyway upgrade recommended: MySQL 8.4 is newer than this version of Flyway and support has not been tested. The latest supported version of MySQL is 8.1.
-```
+A separate MySQL 8.4 integer display-width deprecation warning remains in historical V1 DDL. It is distinct from Flyway's former MySQL support-range warning and is not, by itself, a failed migration. See [MySQL Integer Display Width Deprecation Audit](mysql-integer-display-width-deprecation-audit.md).
 
-The Spring Boot 3.5.13 dependency-management BOM manages Flyway 11.7.2. The project already includes both `flyway-core` and the required `flyway-mysql` module, so the warning is not caused by a missing MySQL module.
+## 2. Dependency alignment
 
-Flyway's MySQL 8.4 compatibility warning is resolved in the 11.15.0 line; this change aligns the application to Flyway 11.20.3, the latest 11.x release selected for this compatibility update. Keeping the override within Flyway 11 avoids an unnecessary major-version jump while retaining the Spring Boot 3.5.13 application baseline.
-
-## Change
-
-The Maven property `flyway.version` is explicitly set to `11.20.3`. Spring Boot dependency management uses that property for both:
+The Maven property `flyway.version` is explicitly set to `11.20.3` and is used for both:
 
 - `org.flywaydb:flyway-core`
 - `org.flywaydb:flyway-mysql`
 
-The two Flyway modules must always resolve to the same version.
+The two modules must always resolve to the same version. Do not independently override one module.
 
-## Verification
+## 3. Runtime and database safety
 
-CI must be supplemented by a local dependency-tree check after syncing the change:
+- The supported application runtime is `WmsRuntimeApplication` under the `wms` Spring profile.
+- The dedicated local Compose stack targets `zirologistics_wms`.
+- Flyway is disabled by default in the WMS runtime configuration and enabled only by the controlled migration/deployment configuration.
+- Hibernate uses schema validation; it must not silently generate or mutate the schema.
+- Historical databases `zirowms_v1` and `zirologistics_db` are not migration targets.
+- Automated integration tests must use disposable MySQL 8.4 Testcontainers databases only.
+- Never test migration behavior against a developer, staging, or production database.
 
-```powershell
-.\\mvnw.cmd dependency:tree "-Dincludes=org.flywaydb"
-```
+## 4. Verification evidence and limits
 
-Expected: both `flyway-core` and `flyway-mysql` resolve to `11.20.3`.
+The original dependency-alignment change passed its recorded CI verification on PR #187. That historical run proved the then-current V1/V2 migration path and dependency alignment; it is not the complete current V1–V32 evidence set.
 
-Run the full suite with Docker Desktop running:
+Current migration correctness is verified through the repository's versioned MySQL 8.4 Testcontainers migration/integration tests and the Backend CI run on the exact commit under review. Do not reuse the old PR #187 test count as a current test-suite total.
 
-```powershell
-.\\mvnw.cmd test
-```
+The integer display-width audit records a separate warning emitted by frozen migration DDL. Do not edit V1 merely to silence that warning; any schema modernization requires an explicit additive compatibility decision.
 
-## Safety boundaries
+## 5. Related references
 
-- No SQL migration files are modified.
-- Frozen WMS V1 remains byte-for-byte unchanged.
-- WMS V2 remains unchanged.
-- Flyway remains disabled by default for the WMS runtime and continues to use only `classpath:db/wms-migration` when explicitly enabled.
-- Hibernate remains configured with `ddl-auto=validate`.
-- Automated integration tests continue to use disposable Testcontainers databases, never the user's local databases.
-
-## Verification status
-
-GitHub Actions Backend CI run #187 completed successfully on PR head commit `7d39b6e7b2d9ecb5f04eb840d308a6eec2bc335c`.
-
-Observed in the CI job log:
-
-- Flyway connected to disposable MySQL 8.4 databases for WMS identity, throttle adapter, credential authentication, membership projection, WMS V1/V2 migrations, and the legacy initial migration test.
-- The previous Flyway warning stating that MySQL 8.4 was newer than the tested range ending at 8.1 did not appear in the CI log.
-- WMS V1 and V2 migrations were successfully applied in the integration-test databases.
-- Maven reported `Tests run: 101, Failures: 0, Errors: 0, Skipped: 2` and `BUILD SUCCESS`.
-- The two skipped tests are the opt-in Argon2id benchmark and concurrency probes; they are intentionally excluded from ordinary CI.
-
-The CI log confirms successful MySQL 8.4 migrations and removal of the prior compatibility warning. The explicit dependency-tree output remains a local verification step; do not mark that separate check complete until it has been run.
+- [Runtime Boundary](../runtime/wms-runtime-boundary.md)
+- [Local Docker Deployment](../deployment/wms-local-docker-deployment.md)
+- [MySQL Integer Display Width Deprecation Audit](mysql-integer-display-width-deprecation-audit.md)
+- [WMS V1 Schema Implementation Baseline](wms-v1-schema-implementation-baseline.md)
