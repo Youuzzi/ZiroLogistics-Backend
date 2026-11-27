@@ -1,7 +1,7 @@
 # WMS Credential Authentication MySQL Integration Evidence
 
-**Status:** Historical integration-test evidence. The test merged and Main CI run #645 passed at that checkpoint (352 tests, 0 failures, 0 errors, 2 skipped); this is not the current repository test-suite total.  
-**Scope:** Internal credential-authentication use case against disposable MySQL 8.4.  
+**Status:** Historical integration-test evidence. The test merged and Main CI run #645 passed at that checkpoint (352 tests, 0 failures, 0 errors, 2 skipped); this is not the current repository test-suite total.
+**Scope:** Internal credential-authentication use case against disposable MySQL 8.4.
 **Database safety:** Testcontainers creates an isolated database and applies the repository's WMS Flyway migrations. No developer, staging, or production database is configured or accessed.
 
 ## What this test composes
