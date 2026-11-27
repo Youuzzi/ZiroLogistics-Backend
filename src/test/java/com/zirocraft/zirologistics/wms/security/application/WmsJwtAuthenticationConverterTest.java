@@ -48,6 +48,7 @@ class WmsJwtAuthenticationConverterTest {
         assertThat(principal.tenantPublicId()).isEqualTo("tenant-public-id");
         assertThat(principal.membershipId()).isEqualTo(33L);
         assertThat(principal.membershipPublicId()).isEqualTo("membership-public-id");
+        assertThat(principal.credentialVersion()).isZero();
         assertThat(principal.permissionCodes())
                 .containsExactlyInAnyOrder("inventory.balance.read", "outbound.shipment.create");
         assertThat(authentication.getAuthorities())
