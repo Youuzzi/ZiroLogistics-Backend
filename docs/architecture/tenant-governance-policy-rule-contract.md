@@ -102,8 +102,8 @@ No database migration should be added until the policy catalogue, override const
 
 ## 7. Enforcement and rollout sequence
 
-1. Add a typed rule catalogue and validator with unit tests for all rule codes and profile defaults.
-2. Add a read-only effective-policy resolver backed by immutable platform defaults; no tenant overrides initially.
+1. **Implemented foundation:** a typed rule catalogue and deterministic resolver with unit tests for rule codes, profile defaults, and bounded overrides. Remaining work is to persist approved tenant overrides and integrate selected resolutions into workflow services.
+2. **Implemented as a pure domain resolver:** immutable defaults and bounded in-memory overrides. Persisted tenant overrides are not implemented.
 3. Route existing hard-coded mandatory SoD checks through the resolver without changing their effective behavior.
 4. Add MySQL integration tests proving the resolver and actor checks are evaluated in the same tenant transaction.
 5. Add bounded tenant overrides only for CONFIGURABLE and THRESHOLD_DRIVEN rules, with optimistic versioning and audit.
