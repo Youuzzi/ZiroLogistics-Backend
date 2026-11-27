@@ -21,7 +21,7 @@
 - `WmsTenantProfileService`, `WmsTenantProvisioningService`, and `WmsPlatformBootstrapService`: all delegate to the shared policy; bootstrap parity is implemented by PR #290.
 
 ### Temporal API and service paths
-- `WMS_V1_API_REFERENCE_STAGE_13.md`: explicitly notes that some scheduled fields use `LocalDateTime` without timezone/offset and their business-local interpretation remains unresolved.
+- `wms-api-v1-reference.md`: explicitly notes that some scheduled fields use `LocalDateTime` without timezone/offset and their business-local interpretation remains unresolved.
 - `WmsInboundReceivingController` / `WmsInboundReceivingService`: inbound `expectedAt` is a `LocalDateTime`; persisted as `expected_at`.
 - `WmsOutboundShipmentController` / `WmsOutboundShipmentService`: outbound `scheduledAt` is a `LocalDateTime`; persisted as `scheduled_at`.
 - `WmsInterWarehouseTransferController` / `WmsInterWarehouseTransferService`: transfer `scheduledAt` is a `LocalDateTime`; persisted as `scheduled_at`.

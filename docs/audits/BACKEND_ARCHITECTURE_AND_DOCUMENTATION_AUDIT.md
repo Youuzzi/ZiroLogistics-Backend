@@ -34,11 +34,11 @@ The test inventory includes MySQL/Testcontainers integration coverage, HTTP auth
 There are 57 documentation files in `docs/`. Nineteen filenames contain stage-oriented naming such as `STAGE_10`, `STAGE_13`, or `STAGE_16_5`.
 
 Examples include:
-- `docs/api/WMS_V1_API_REFERENCE_STAGE_13.md`
-- `docs/architecture/WMS_INVENTORY_CONTROL_STAGE_10_ARCHITECTURE.md`
-- `docs/architecture/WMS_TRANSACTION_CONCURRENCY_INTEGRITY_STAGE_11_ARCHITECTURE.md`
-- `docs/audits/WMS_STAGE_16_5_SECURITY_VERIFICATION.md`
-- `docs/testing/WMS_V1_CONTROLLER_HTTP_CONTRACT_MATRIX_STAGE_13.md`
+- `docs/api/wms-api-v1-reference.md`
+- `docs/architecture/inventory-control-architecture.md`
+- `docs/architecture/transaction-concurrency-and-integrity.md`
+- `docs/audits/security-verification.md`
+- `docs/testing/v1-controller-http-contract-matrix.md`
 
 **Finding:** Stage names are useful as historical delivery metadata but are poor permanent document names. The target convention should describe the document's enduring function and domain. Rename work must be performed with a repository-wide reference update (README, docs links, workflow references, and internal Markdown links) to avoid broken navigation. Do not rename files blindly or remove historical evidence.
 
@@ -182,7 +182,7 @@ Primary repository evidence:
 - `docs/architecture/WMS_TENANT_ORGANIZATION_MANAGEMENT.md`
 - `docs/architecture/WMS_ROLE_PERMISSION_MANAGEMENT_DESIGN.md`
 - `docs/architecture/WMS_TENANT_CONTEXT_AND_AUTHORIZATION_RESOLUTION.md`
-- `docs/api/WMS_V1_API_REFERENCE_STAGE_13.md`
+- `docs/api/wms-api-v1-reference.md`
 - `src/main/resources/application-wms.properties`
 
 This document is the initial baseline, not the final sign-off for the full eight-part workstream. Each subsequent audit section must be updated with exact source, migration, and test evidence as it is completed.
