@@ -7,7 +7,7 @@
 
 ## Executive disposition
 
-PR #367 refreshes current-reference content; PR #368 completes repository-wide filename, title, and link standardization. The documentation tree contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. These materials are classified by purpose and evidence status rather than rewritten as though they describe one current implementation.
+PR #367 refreshes current-reference content; PR #368 completes repository-wide filename, title, and link standardization. The documentation tree contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. These materials are classified by purpose and evidence status rather than rewritten as though they describe one current implementation. The final follow-up reconciliation also archives the former 408-line QA closure evidence file under a descriptive historical filename instead of discarding its PR/CI/artifact history.
 
 
 
@@ -40,7 +40,7 @@ These updates do not convert historical design evidence into current test proof,
 - Dedicated runtime database: `zirologistics_wms`; migrations V1–V32. Applied migrations are immutable; future changes are additive from V33.
 - API prefix: `/api/wms/v1`. Existing endpoint-specific response shapes and successful status conventions are compatibility constraints.
 - Platform control-plane foundations now include V29 operator/role/permission/MFA persistence, V30 support-grant governance, platform JWT and permission services, role administration, tenant-lifecycle authorization, and support-grant administration. End-to-end platform MFA/login HTTP, initial Platform Administrator provisioning, platform controllers, and support-grant scope consumption remain incomplete.
-- PR #367 and PR #368 are merged. This audit records the resulting documentation checkpoint; final reconciliation of the remaining stale status and implementation claims is tracked separately. Frontend foundation may proceed with synthetic data behind replaceable adapters; real-account and privileged integration remain gated. This is not security completion or production-readiness certification.
+- PR #367 and PR #368 are merged. The final documentation reconciliation corrects the remaining stale status and implementation claims, preserves historical QA evidence, and keeps frontend mock-data work separate from real-account/privileged integration. This is not security completion or production-readiness certification.
 
 ## Security and integration boundaries
 
@@ -92,6 +92,8 @@ These updates do not convert historical design evidence into current test proof,
 - [x] Align README, docs index, runtime/deployment guidance, roadmap, and handoff with the documentation-first decision.
 - [x] Confirm PR #367 Backend CI, Authenticated WMS API DAST, and CodeQL pass on its current head.
 - [x] PR #367 and PR #368 merged into `main`; required PR checks passed and the final stacked diff was reviewed.
+- [x] Preserve the deleted detailed QA closure evidence as a clearly labelled historical archive.
+- [x] Reconcile registry/resolver/SoD implementation claims and update the post-merge handoff state.
 
 This two-PR documentation pass closes repository-wide Markdown naming, title, navigation, current-reference, and handoff cleanup once both PRs are merged. It does **not** replace the separate endpoint-by-endpoint API inventory, re-run every historical audit, certify tenant isolation, or approve production readiness.
 
