@@ -43,9 +43,9 @@ public class WmsTenantMfaRuntimeConfiguration {
         Map<String, byte[]> decoded = new LinkedHashMap<>();
         try {
             for (String entry : encodedKeys.split(",", -1)) {
-                int separator = entry.indexOf('=');
+                int separator = entry.indexOf(':');
                 if (separator <= 0 || separator == entry.length() - 1
-                        || entry.indexOf('=', separator + 1) >= 0) {
+                        || entry.indexOf(':', separator + 1) >= 0) {
                     throw new IllegalStateException("Tenant MFA key entry has invalid format");
                 }
                 String version = entry.substring(0, separator);
