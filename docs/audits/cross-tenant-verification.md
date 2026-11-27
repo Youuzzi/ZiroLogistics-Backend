@@ -22,10 +22,10 @@ This review inspects named MySQL/Testcontainers and service-level tests for tena
 | Reporting | `WmsOperationalReportingMySqlTenantIsolationTest.operationalInventorySummaryIncludesOnlyTheAuthenticatedTenantsInventory` | Tenant A summary excludes tenant B inventory. | Inventory summary report, not every report query. |
 | Transfer | `WmsOutboundShipmentMySqlIntegrationTest.interWarehouseTransfersAreIsolatedAcrossTenantsForReadAndCreation` | Transfer list/detail is tenant-scoped; foreign warehouse/item/location ownership prevents cross-tenant transfer creation. | Transfer paths represented in the test. |
 | Replenishment | `WmsReplenishmentPlanningMySqlIntegrationTest` manual-task tenant boundary cases | Tenant A cannot read a foreign task or create a task using foreign tenant resources/lot. | Manual task operations and represented resources. |
-| Stock count | `WmsStockCountMySqlIntegrationTest.inventoryAdjustmentReadApisAreTenantScoped` plus PR #334 | Existing adjustment read isolation; PR #334 adds count list/detail/workflow-command tenant A/B regression with unchanged-state assertions. | New PR evidence remains pending until CI passes. |
+| Stock count | `WmsStockCountMySqlIntegrationTest.inventoryAdjustmentReadApisAreTenantScoped` plus PR #334 | PR #334 adds count list/detail/workflow-command tenant A/B regression with unchanged-state assertions. PR #334 merged at `43ee38c39759d1c3fd88d86b1060ead70bd4e4a7`; Backend CI, CodeQL, OSV, and authenticated DAST all passed on head `6cf90c24be5b4748254f38c3fad6ca283d1051bc`. | Merged and CI-verified for the covered stock-count paths; not a route-wide certification. |
 | Tenant role authorization | `WmsRoleManagementServiceTest` | Tenant mismatch and missing permission are denied before protected JDBC work. | Mock/service-level evidence, not MySQL tenant A/B workflow. |
 
-## Stock count regression added in PR #334
+## Stock count regression merged in PR #334
 
 The new MySQL Testcontainers test `stockCountListDetailAndWorkflowCommandsAreIsolatedAcrossTenants` creates independent tenant fixtures and planned counts. It asserts:
 
