@@ -1,24 +1,24 @@
 # Tenant MFA and Step-Up Authentication Contract
 
-**Status:** Stage 16 architecture contract; implementation not yet enabled.
+**Status:** Architecture and persistence foundations are implemented; end-to-end tenant MFA orchestration is incomplete and MFA remains disabled by default.
 **Scope:** WMS tenant identities only. Platform operator MFA remains a separate security plane.
-**Schema:** Additive Flyway migration only. Frozen WMS V1–V30 migrations must not be edited.
+**Schema:** V31–V32 contain the current MFA factor/step-up and reauthentication-grant persistence foundations. All applied migrations are immutable; future changes must be additive from V33.
 **Purpose:** Establish a verifiable tenant MFA proof before enabling high-risk tenant governance actions, including UMKM single-operator activation.
 
 ## 1. Verified current-state findings
 
-The current WMS tenant authentication path is password-only:
+The current WMS tenant sign-in path still uses password verification followed by tenant selection. Tenant MFA is not yet part of the complete login or privileged-action flow.
 
 - `POST /api/wms/v1/auth/credentials` verifies a global user's password and returns a tenant-selection token plus selectable memberships.
 - `POST /api/wms/v1/auth/tenant-selection` exchanges that token and a selected membership for a tenant-bound access token.
-- The tenant access token contains the subject, membership reference, credential version, token profile, and standard time/audience/issuer/JWT ID claims. It does not contain MFA assurance.
-- `WmsAuthenticatedPrincipal` contains the resolved user, tenant, membership, and current permissions; it has no MFA timestamp or assurance field.
-- `WmsJwtAuthenticationConverter` resolves live membership and permission state but does not establish or validate MFA.
-- The current tenant identity action-token purposes are invitation, email verification, and password reset. They are not second-factor challenges and must not be repurposed as MFA.
+- The tenant access token contains the subject, membership reference, credential version, token profile, and standard time/audience/issuer/JWT ID claims. It does not provide authoritative MFA assurance.
+- `WmsAuthenticatedPrincipal` resolves the user, tenant, membership, and current permissions; it is not an authoritative persisted step-up proof.
+- Tenant MFA persistence is now present: V31 stores factor lifecycle, recovery/step-up-related records, dedicated throttling and audit structures; V32 stores purpose-bound, digest-only password reauthentication grants.
+- PR #358 adds the adapter lifecycle for pending, active, and revoked TOTP factors, replay watermark seeding at activation, and encrypted-seed erasure on revocation.
 - The platform operator security plane has its own MFA claims and principal. Those claims are not proof of tenant-user MFA and must never be accepted by tenant APIs.
-- No tenant TOTP, WebAuthn/passkey, authenticator enrollment, recovery-code, or tenant step-up implementation was found in the current WMS source.
+- Enrollment start, provisioning-secret delivery, TOTP confirmation, recovery-code orchestration, step-up verification, transactional proof consumption, and tenant MFA HTTP integration remain incomplete.
 
-This is a source audit, not a claim that all deployments have MFA disabled at an infrastructure layer. WMS application-level tenant MFA is not implemented.
+This is a source-state summary, not a production enablement claim. Tenant MFA remains disabled by default until the complete orchestration, key management, tests, and operational controls are ready.
 
 ## 2. Security-plane separation
 

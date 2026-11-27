@@ -1,8 +1,16 @@
 # Platform Authentication Contract
 
-**Status:** Design contract for Stage 16 platform-authentication implementation. This document does not claim that platform authentication, MFA, or platform HTTP endpoints are implemented.
+**Status:** Target authentication contract with partial primitives implemented. Platform operator persistence, password-authentication use case, platform JWT token issuer/converter, and a dedicated security chain exist; end-to-end MFA orchestration, concrete throttle composition, login HTTP adapter, and platform controllers remain incomplete.
 
 ## Purpose and boundaries
+
+### Current implementation boundary
+
+- V29 provides platform operator, role/permission, role assignment, MFA credential, recovery-code, and authentication-event persistence.
+- `PlatformCredentialAuthenticationService` verifies credentials against platform operators, but is a plain use case with no HTTP adapter or automatic Spring composition; its throttle port has no confirmed production adapter.
+- `PlatformJwtTokenService` issues a 10-minute platform token only when supplied a successful MFA timestamp no older than five minutes. `PlatformJwtAuthenticationConverter` revalidates operator status, email verification, credential version, and token MFA claims on each request.
+- The dedicated platform security chain and separate RSA/JWT configuration exist. No platform authentication controller or complete enrollment, TOTP verification, recovery, or challenge endpoint was found.
+
 
 The platform control plane authenticates SaaS operators independently of tenant users. A platform operator must never authenticate through tenant credential endpoints, tenant membership selection, or tenant permissions.
 

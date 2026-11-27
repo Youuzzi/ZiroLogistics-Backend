@@ -1,8 +1,9 @@
 # WMS v1 HTTP Semantics & Operational Limits — Stage 13 WP7
 
-**Baseline:** `7db6742a6e04794eb5b31d54cc58aea45713d026`
+**Document status:** Historical HTTP semantics audit. Use [WMS API v1 Reference](wms-api-v1-reference.md) for the current compatibility-oriented API entry point.
+**Audit baseline:** `7db6742a6e04794eb5b31d54cc58aea45713d026` (historical)
 **API prefix:** `/api/wms/v1`
-**Evidence:** source inspection and targeted MockMvc/unit-test additions; final runtime behavior is subject to CI and WP9 integration coverage.
+**Evidence:** source inspection and targeted tests at the recorded baseline; revalidate any disputed behavior against current controllers and tests.
 
 ## 1. Route and method conventions
 
@@ -12,7 +13,7 @@ The Stage 13 inventory identifies 19 WMS controllers, all under the `/api/wms/v1
 
 - Most WMS controller methods return their service result directly and do not declare `@ResponseStatus` or `ResponseEntity`. Spring MVC therefore uses HTTP 200 for successful responses, including many resource-creation POST operations.
 - Explicit 204 responses are used by selected identity/authentication endpoints that intentionally return no body.
-- No blanket conversion of creation endpoints from 200 to 201 is made in this WP. That would change the existing v1 contract and must be an explicit compatibility/versioning decision.
+- No blanket conversion of creation endpoints from 200 to 201 is made in this historical change set. That would change the existing v1 contract and must be an explicit compatibility/versioning decision.
 - Invalid request, authorization, conflict and internal-error responses use the WMS error contract established in WP3.
 
 ## 3. Missing-resource semantics

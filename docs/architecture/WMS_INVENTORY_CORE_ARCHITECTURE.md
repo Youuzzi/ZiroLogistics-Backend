@@ -1,16 +1,16 @@
 # WMS Inventory Core — Architecture & API Contract
 
-**Status:** Proposed implementation contract for roadmap Stage 8.  
+**Status:** Historical inventory foundation design. Item catalogue, inventory balances, and the posting ledger are present in the current WMS runtime; this document preserves the original architecture requirements and is not a complete statement of current feature coverage.  
 **Runtime:** WMS-only modular monolith.  
 **Schema authority:** Frozen WMS V1 plus additive migrations only (V11 onward).  
 **Verification:** Disposable MySQL 8.4 Testcontainers only.  
 **Scope:** Item/category master data, UOM and item conversions, item identifiers, lot/serial identity, inventory balance/ledger core and tenant-scoped inventory queries.
 
-## 1. Stage objective and boundaries
+## 1. Original objective and boundaries
 
-Stage 8 establishes the inventory domain foundation used by all later warehouse workflows. It must provide one authoritative item identity, one base stock UOM per item, traceable lot/serial identity, a single stock-balance model and an append-only movement ledger.
+The original design established the inventory domain foundation used by all later warehouse workflows. It must provide one authoritative item identity, one base stock UOM per item, traceable lot/serial identity, a single stock-balance model and an append-only movement ledger.
 
-This stage does **not** implement inbound receiving, putaway, stock transfer workflows, cycle counts, reservations as a business workflow, picking, packing, shipment, replenishment or reporting. Those belong to later roadmap stages. It must provide the domain services and invariants those workflows will call; later modules must not write inventory tables directly.
+This original design did **not** include inbound receiving, putaway, stock transfer workflows, cycle counts, reservations as a business workflow, picking, packing, shipment, replenishment or reporting. Those belong to later roadmap stages. It must provide the domain services and invariants those workflows will call; later modules must not write inventory tables directly.
 
 Do not create a second stock table, alternate stock ledger, or per-workflow stock balance. `inventory_balances` is the sole operational balance projection and `inventory_ledger` is the immutable movement history.
 

@@ -1,13 +1,14 @@
 # Tenant Isolation and Authorization
 
-**Status: AUDIT BASELINE — PARTIALLY VERIFIED; NOT A TENANT-ISOLATION CERTIFICATION**
-**Reviewed branch:** `main`
-**Reviewed commit:** `b95a98cde08492353e2d96f1de43fdb2da2d2b26`
+**Status: CURRENT SECURITY BASELINE — PARTIALLY VERIFIED; NOT A TENANT-ISOLATION CERTIFICATION**
+**Original source-review baseline:** `main` at `b95a98cde08492353e2d96f1de43fdb2da2d2b26` (historical)
+**Current code checkpoint:** `main` at `148177826c5eebd56b6134851e5d901809549448`
+**Follow-up evidence:** [Route-to-query verification plan](../audits/TENANT_ISOLATION_ROUTE_TO_QUERY_VERIFICATION_PLAN.md), [Tenant isolation review](../audits/tenant-isolation-review-2026-11-27.md), [Outbound fulfillment review](../audits/outbound-tenant-isolation-review-2026-11-27.md), and [Cross-tenant verification](../audits/cross-tenant-verification.md).
 **Scope:** WMS tenant identity resolution, HTTP authorization boundary, tenant-scoped operational services, persistence access patterns, and available isolation tests.
 
 ## 1. Purpose and assurance statement
 
-This document records the current source-level evidence for tenant isolation and authorization. It distinguishes implemented controls, tested behavior, and remaining verification work.
+This document is the canonical tenant-isolation security baseline. It combines the original source-review findings with the dated follow-up evidence linked above; it does not claim that every route, SQL query, nested resource, worker, or command path has been re-audited at the current code checkpoint. It distinguishes implemented controls, tested behavior, and remaining verification work.
 
 The current implementation has meaningful tenant-boundary controls: authenticated user identity is bound to an explicitly selected active membership; effective permissions are resolved from persisted role assignments; tenant-scoped application services receive the authenticated principal; and inspected operational queries commonly constrain resource access by the resolved tenant ID.
 

@@ -1,5 +1,7 @@
 # Backend Architecture and Documentation Audit
 
+> **Historical audit baseline:** This document records findings at the audited commit below. Use the current [Backend Maintenance Handoff](../project/backend-maintenance-handoff-2026-11-27.md), [Backend Improvement Roadmap](../roadmap/backend-improvement-roadmap.md), and [Documentation Content Audit](documentation-content-audit-2026-11-27.md) for the current checkpoint and remaining work.
+
 **Status:** Initial repository baseline completed; domain-by-domain verification remains in progress.
 **Audited branch:** `main`
 **Audited commit:** `90bc354c91c273a416a95352c3c242548a0c817e`
@@ -34,11 +36,11 @@ The test inventory includes MySQL/Testcontainers integration coverage, HTTP auth
 There are 57 documentation files in `docs/`. Nineteen filenames contain stage-oriented naming such as `STAGE_10`, `STAGE_13`, or `STAGE_16_5`.
 
 Examples include:
-- `docs/api/WMS_V1_API_REFERENCE_STAGE_13.md`
-- `docs/architecture/WMS_INVENTORY_CONTROL_STAGE_10_ARCHITECTURE.md`
-- `docs/architecture/WMS_TRANSACTION_CONCURRENCY_INTEGRITY_STAGE_11_ARCHITECTURE.md`
-- `docs/audits/WMS_STAGE_16_5_SECURITY_VERIFICATION.md`
-- `docs/testing/WMS_V1_CONTROLLER_HTTP_CONTRACT_MATRIX_STAGE_13.md`
+- `docs/api/wms-api-v1-reference.md`
+- `docs/architecture/inventory-control-architecture.md`
+- `docs/architecture/transaction-concurrency-and-integrity.md`
+- `docs/audits/security-verification.md`
+- `docs/testing/v1-controller-http-contract-matrix.md`
 
 **Finding:** Stage names are useful as historical delivery metadata but are poor permanent document names. The target convention should describe the document's enduring function and domain. Rename work must be performed with a repository-wide reference update (README, docs links, workflow references, and internal Markdown links) to avoid broken navigation. Do not rename files blindly or remove historical evidence.
 
@@ -182,7 +184,37 @@ Primary repository evidence:
 - `docs/architecture/WMS_TENANT_ORGANIZATION_MANAGEMENT.md`
 - `docs/architecture/WMS_ROLE_PERMISSION_MANAGEMENT_DESIGN.md`
 - `docs/architecture/WMS_TENANT_CONTEXT_AND_AUTHORIZATION_RESOLUTION.md`
-- `docs/api/WMS_V1_API_REFERENCE_STAGE_13.md`
+- `docs/api/wms-api-v1-reference.md`
 - `src/main/resources/application-wms.properties`
 
 This document is the initial baseline, not the final sign-off for the full eight-part workstream. Each subsequent audit section must be updated with exact source, migration, and test evidence as it is completed.
+
+
+## 12. Current-state update — 2026-11-27
+
+This section supersedes inventory counts and implementation conclusions above where they conflict. Sections 1–11 are a historical baseline captured on 2026-11-25 at commit `90bc354c91c273a416a95352c3c242548a0c817e`; they must not be read as the current mainline state.
+
+**Current checkpoint:** `148177826c5eebd56b6134851e5d901809549448`.
+
+Current repository inventory:
+- 194 production Java source files.
+- 136 Java test source files.
+- 32 WMS Flyway migrations (V1–V32).
+- 89 Markdown documents under `docs/` after this documentation refresh.
+
+Subsequent implementation changed several findings from the original audit:
+- Tenant Owner grants now come from the shared `WmsTenantPermissionPolicy.tenantOwnerTemplate()` used by controlled bootstrap and repeatable tenant provisioning; role templates are provisioned through `WmsTenantRoleTemplateProvisioner`. The old two-permission bootstrap discrepancy described in section 4.2 is historical and superseded.
+- Platform operator identity, separate platform JWT security configuration, persisted permission evaluation, tenant lifecycle governance, and support-grant governance have since been added. This does not mean a first Platform Administrator is provisioned or that support-grant access enforcement is complete.
+- Tenant credential-version enforcement, tenant MFA reauthentication grants, dedicated MFA throttling, and tenant MFA factor lifecycle persistence are merged.
+- JWT cross-signature boundary tests use real RSA keys and real configured decoders.
+- Tenant-scoped final-write predicates were added to selected inventory mutation paths.
+- Selected platform and tenant-isolation source reviews are recorded in the descriptive audit documents.
+
+Remaining conclusions:
+- Current tenant bootstrap creates a tenant owner and tenant role templates, not a Platform Administrator.
+- Tenant MFA orchestration and transactional step-up enforcement remain incomplete; MFA is disabled by default.
+- Support-grant governance records do not grant access; no runtime consumer/enforcement path was identified in the reviewed slice.
+- Full route-to-query tenant-isolation verification and MySQL negative/concurrency evidence remain incomplete.
+- The backend is not declared production-ready.
+
+See [Backend Maintenance Handoff](../project/backend-maintenance-handoff-2026-11-27.md), [Backend Improvement Roadmap](../roadmap/backend-improvement-roadmap.md), [Security and QA Baseline](security-qa-baseline.md), and [Security and QA Verification Status](security-qa-closure-criteria.md) for the current checkpoint and follow-up work.

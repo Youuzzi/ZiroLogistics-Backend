@@ -1,9 +1,10 @@
 # Temporal Field and Worker Inventory
 
 **Status:** Preliminary source-backed inventory; findings are not runtime certification.
-**Reviewed commit:** `a6524a56d13f3bc4ec13c584b01dea150f53227b`
+**Original reviewed commit:** `a6524a56d13f3bc4ec13c584b01dea150f53227b` (historical)
+**Current code checkpoint:** `main` at `148177826c5eebd56b6134851e5d901809549448`
 **Scope:** Identity expiry, outbox delivery leases/retries, login throttling, reporting timestamps, and representative WMS schedule fields.
-**Compatibility:** No V1–V28 migration changes, stored-value reinterpretation, or API v1 changes are proposed by this audit.
+**Compatibility:** V1–V32 are immutable. No stored-value reinterpretation or API v1 schedule-semantic change is proposed by this audit; future schema changes are additive from V33.
 
 ## 1. Evidence and implemented patterns
 
@@ -23,7 +24,7 @@
 ### Login throttling
 - `WmsLoginThrottleService` derives fixed windows from injected `Clock` and epoch seconds; this avoids dependence on JVM-local timezone for window boundaries.
 - `MySqlWmsThrottleStorageAdapter` writes window and cooldown instants as UTC `LocalDateTime` (microsecond precision), reads cooldown timestamps back as UTC, and compares against values supplied by application code.
-- Source-bucket and account-cooldown decisions are performed through transactional SQL storage. This audit does not yet prove behavior under a MySQL session configured to a non-UTC timezone.
+- Source-bucket and account-cooldown decisions are performed through transactional SQL storage. PR #295 verifies selected adapter round trips under a deliberately non-UTC MySQL session; PR #299 adds UTC session initialization to every Hikari-managed WMS connection. This remains bounded evidence, not proof for every direct SQL path.
 
 ### Reporting
 - `WmsOperationalReportingService` obtains `UTC_TIMESTAMP(6)` as `LocalDateTime` and explicitly converts it with `ZoneOffset.UTC` to `Instant` for `generatedAtUtc`.
@@ -38,7 +39,7 @@
 | ID | Area | Evidence-backed risk | Status |
 |---|---|---|---|
 | TEMP-01 | Business schedules | `LocalDateTime` is timezone-free; tenant-local schedule semantics and DST policy are not explicit in API v1 | Contract gap; no runtime bug confirmed |
-| TEMP-02 | MySQL session timezone | Selected identity action-token, outbox, and throttle adapter tests now execute with a Connector/J `+07:00` session; this does not prove every ORM/default/SQL path is session-independent | Partially verified; broader runtime verification needed |
+| TEMP-02 | MySQL session timezone | PR #299 applies `SET time_zone = '+00:00'` to Hikari-managed WMS connections; selected PR #295 adapter tests also verify round trips under a Connector/J `+07:00` session | Implemented for pooled sessions; direct SQL/ORM/default coverage remains bounded |
 | TEMP-03 | ORM audit timestamps | `UserEntity`/`TenantEntity` use `LocalDateTime` with Hibernate creation/update timestamps; interaction with server/session timezone is not verified | Test gap |
 | TEMP-04 | Reporting `generatedAtUtc` | Reporting service now exposes an explicit `Instant`; integration test verifies Java type and ISO-8601 `Z` serialization | Addressed for the operational summary path; other reporting paths remain in scope |
 | TEMP-05 | Outbox expired action token | Expired payload is sent through retry scheduling with current attempt count; examine whether repeated immediate retries until max attempts are desirable or should be terminalized immediately | Behavior review needed; not confirmed defect |
@@ -46,7 +47,7 @@
 
 ## 3. Recommended test scenarios before code changes
 
-1. Run MySQL Testcontainers with session timezone deliberately set to a non-UTC value and verify identity token insert/read/expiry/consume/revoke round trips preserve the intended instant.
+1. Extend MySQL Testcontainers coverage to remaining temporal adapters and direct SQL/ORM timestamp defaults under deliberately non-UTC sessions; selected identity/outbox/throttle round trips are already covered by PR #295.
 2. Verify outbox `available_at`, `locked_at`, `sent_at`, retry scheduling, and stale lease recovery with a non-UTC session; assert microsecond precision and attempt-count fencing.
 3. Verify login throttle window/cooldown boundaries at exact threshold instants and across a non-UTC session.
 4. Verify `generatedAtUtc` JSON output is an explicit UTC instant, not a JVM-local presentation of a JDBC timestamp. **Implemented and tested for `WmsOperationalReportingService.operationalSummary` in PR #296.**

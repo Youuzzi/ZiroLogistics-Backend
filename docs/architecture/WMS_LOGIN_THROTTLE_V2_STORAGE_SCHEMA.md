@@ -1,15 +1,15 @@
 # WMS Login Throttle V2 Storage Schema
 
-**Status:** Additive persistence foundation; not an active login throttle.  
+**Status:** Historical migration design record. The V2 persistence schema is now used by the implemented MySQL throttle adapter and credential-authentication flow; production numeric policy and operational readiness remain separate release gates.  
 **Migration:** `V2__create_wms_login_throttle_buckets.sql`  
 **Schema rule:** WMS V1 and its source DDL remain frozen.  
 **Database safety:** Integration tests use disposable MySQL 8.4 Testcontainers only. Never run migrations or tests against `zirowms_v1` or `zirologistics_db`.
 
 ## 1. Scope of this delivery
 
-This migration creates one WMS-owned table for the privacy-preserving account and source buckets already defined by the throttle-key foundation.
+This migration created the WMS-owned persistence table for privacy-preserving account and source buckets. The application storage port, MySQL adapter, and credential-flow integration were implemented in subsequent changes.
 
-It does **not** implement or enable:
+It did **not**, at the time of this migration, implement or enable:
 - credential login or tenant-selection endpoints;
 - request filtering or authentication throttling;
 - a storage port, repository, or MySQL adapter;

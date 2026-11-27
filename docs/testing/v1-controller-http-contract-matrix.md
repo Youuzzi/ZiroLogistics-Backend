@@ -1,4 +1,7 @@
-# WMS v1 Controller HTTP Contract Test Matrix — Stage 13 WP9
+# WMS v1 Controller HTTP Contract Test Matrix
+
+> **Historical test inventory:** This matrix records the HTTP test baseline at the commit shown below. Test names and historical coverage do not by themselves prove current route behavior or assertion completeness; use current CI and the API reference for present status.
+
 
 **Baseline:** `e3bbfc48cd987b549f1d240163cbde33892a28c5` (WP4 merged; WP7 pending)
 **Test style:** Spring MVC slice + Spring Security test authentication, with application services mocked.

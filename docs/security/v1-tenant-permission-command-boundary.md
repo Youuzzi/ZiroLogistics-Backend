@@ -1,4 +1,7 @@
-# WMS v1 Tenant, Permission & Command Boundary Audit — Stage 13 WP6
+# WMS v1 Tenant, Permission, and Command Boundary Audit
+
+> **Historical API boundary audit:** This document records source and test evidence at its stated baseline commit. Use the current [WMS API v1 Reference](../api/wms-api-v1-reference.md) and [Tenant Isolation and Authorization](tenant-isolation-and-authorization.md) for current navigation and policy.
+
 
 **Baseline:** `7db6742a6e04794eb5b31d54cc58aea45713d026`
 **Scope:** WMS v1 HTTP controllers, persisted membership access resolution and representative workflow service boundaries.

@@ -1,6 +1,6 @@
 # WMS Inventory Posting Core — Design Contract
 
-**Status:** Implementation contract for the Stage 8 inventory posting core.  
+**Status:** Implemented application-boundary design contract. The inventory posting service and MySQL integration coverage are present; this document records the intended invariants, while current behavior is defined by source and tests.  
 **Schema authority:** Frozen V1 plus additive V12 migration.  
 **Runtime:** WMS-only modular monolith.  
 **Verification:** Disposable MySQL 8.4 Testcontainers only.  
@@ -10,7 +10,7 @@
 
 All future stock-changing workflows (receiving, issuing, transfer, adjustment, returns, damage, opening balance and later reservations) must call one inventory posting application service. They must not write inventory_balances, inventory_ledger or inventory_serials directly.
 
-This service is an internal application boundary, not a generic public stock-delta API. HTTP controllers for receiving, shipping, transfer and adjustment belong to their respective workflow stages and must translate validated business commands into typed posting commands.
+This service is an internal application boundary, not a generic public stock-delta API. HTTP controllers for receiving, shipping, transfer and adjustment belong to their respective workflow modules and must translate validated business commands into typed posting commands.
 
 No stock mutation is exposed until a workflow owns its business authorization, reference validation and lifecycle.
 

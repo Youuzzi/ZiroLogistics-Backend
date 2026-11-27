@@ -1,8 +1,16 @@
 # Platform Authorization Contract
 
-**Status:** Architecture contract for Stage 16 control-plane authorization. This document defines the authorization boundary and implementation requirements; it does not claim that platform permission evaluation or endpoint grants are implemented.
+**Status:** Target authorization contract with partial service-layer enforcement implemented. Persisted platform roles/permissions, `PlatformPermissionEvaluator`, operator-role administration, support-grant governance, and platform tenant-lifecycle authorization exist; a complete HTTP endpoint surface and support-grant scope consumer remain incomplete.
 
-## 1. Security boundary
+## 1. Current implementation boundary
+
+- `PlatformPermissionEvaluator` reads current persisted operator-role-permission grants and denies on missing grants or data-access failure. HIGH/CRITICAL permissions require MFA no older than five minutes at use time.
+- `PlatformOperatorRoleAdministrationService` enforces actor permission, delegation ceiling, no self-assignment, no routine `PLATFORM_OWNER` assignment, and audit writes.
+- `PlatformTenantLifecycleApplicationService` derives the actor from Spring Security and checks action-specific platform permissions before lifecycle transitions.
+- V30 and `PlatformSupportGrantService` implement request/approve/reject/revoke governance with a four-hour maximum and a fixed read-only scope allowlist. A tenant data-service consumer that enforces those scopes is not established.
+- No platform HTTP controllers were found in the current source tree; service-layer tests do not prove a complete externally reachable platform API.
+
+## 2. Security boundary
 
 Platform authorization is independent from tenant WMS RBAC and SaaS plan entitlements.
 
@@ -15,7 +23,7 @@ Platform authorization is independent from tenant WMS RBAC and SaaS plan entitle
 
 The platform request principal remains tenant-free and must be revalidated against current operator status and credential version on every authenticated request.
 
-## 2. Permission model
+## 3. Permission model
 
 Use explicit, stable permission keys in the platform control plane. Permission keys describe an action on a platform resource, not a UI screen or a job title. Examples for future endpoint design include:
 

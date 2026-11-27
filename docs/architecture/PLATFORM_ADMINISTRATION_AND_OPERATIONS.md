@@ -1,6 +1,6 @@
 # Platform Administration and Operations
 
-**Status:** Target architecture approved for implementation planning; not implemented by this document.
+**Status:** Partial control-plane foundation implemented; the complete platform administration HTTP surface and controlled first-operator provisioning remain incomplete.
 **Scope:** Global control-plane identity, platform authorization, tenant lifecycle administration, privileged support access, and platform audit.
 **Runtime baseline:** WMS Spring Boot runtime, MySQL 8.4, Spring Security, RS256 JWT, Flyway.
 **Database boundary:** Additive WMS migrations only. Do not modify the frozen schema reference or legacy database.
@@ -14,7 +14,7 @@ ZiroLogistics WMS must operate with two distinct security planes:
 
 A platform operator is not a tenant owner, and a tenant owner must never become a platform administrator by virtue of a tenant role. Neither plane may silently inherit the other's authority.
 
-The current repository implements tenant-scoped membership authorization and a command-only tenant lifecycle foundation. It does **not** implement a persisted platform-operator identity, platform roles/permissions, platform authentication, or an authenticated platform HTTP boundary. The bootstrap implementation creates a tenant owner only. All platform capabilities described below are target design, not claims about current runtime behavior.
+The current repository has implemented meaningful control-plane foundations: V29 persists platform operators, platform roles, platform permissions, operator-role assignments, role-permission grants, MFA credentials, recovery codes, and authentication events; V30 adds time- and scope-limited support-grant governance. Source also contains platform credential-authentication and JWT token services, a platform JWT converter, a fail-closed persisted permission evaluator, operator-role administration, support-grant administration, and a platform tenant-lifecycle application service. However, these are not a complete operational control plane. There is no end-to-end platform MFA enrollment/verification/recovery flow, no composed platform login HTTP adapter or platform administration controllers, no controlled first Platform Administrator provisioning operation, and no confirmed support-grant consumer that applies the approved scopes to tenant data access. The bootstrap implementation creates a tenant owner only. Treat the remaining sections as target architecture unless a current source/test reference explicitly proves implementation.
 
 ## 2. Current implementation baseline
 
@@ -23,10 +23,14 @@ The following facts are verified in the current source:
 - `WmsSecurityConfiguration` installs a WMS servlet security chain matching `/**`. JWT is disabled by default and the disabled chain denies every request. When enabled, the chain authenticates bearer tokens and only explicitly configured authentication endpoints are public.
 - `WmsJwtTokenService` issues a five-minute tenant-selection token and a ten-minute tenant-bound access token. Access tokens carry the selected membership reference and credential version; tenant permissions are deliberately resolved from persisted database state rather than copied into token claims.
 - `WmsMembershipAccessService` resolves the authenticated global user and selected membership together, then derives effective permissions from persisted tenant role assignments.
-- `WmsPlatformBootstrapService` creates a tenant, global user, active membership, `TENANT_OWNER` role, two permission grants, and a completion marker. Its class contract explicitly says it creates a tenant owner, not a global superuser.
+- `WmsPlatformBootstrapService` creates a tenant, global user, active membership, `TENANT_OWNER` role, two permission grants, operational tenant role templates, and a completion marker. Its class contract explicitly says it creates a tenant owner, not a global platform administrator.
+- V29 persists the separate platform operator/role/permission model and platform MFA/recovery persistence; V30 persists support-grant governance. These migrations establish schema, not a complete onboarding or runtime support-access workflow.
+- `PlatformCredentialAuthenticationService` is a platform-specific password-authentication use case, but it has no HTTP adapter or Spring component composition. `PlatformJwtTokenService` can issue a platform access token only when supplied a recent successful MFA timestamp; the full MFA proof lifecycle is not implemented.
+- `PlatformJwtAuthenticationConverter` validates platform token claims and current operator state, then creates a platform principal without authorities. `PlatformPermissionEvaluator` resolves current persisted grants and fails closed on missing grants or data-access errors; HIGH/CRITICAL permissions require recent MFA.
+- `PlatformOperatorRoleAdministrationService`, `PlatformSupportGrantService`, and `PlatformTenantLifecycleApplicationService` provide service-layer governance boundaries. No platform HTTP controllers were found in the current source tree, and support-grant scope consumption by tenant data services is not established.
 - `WmsTenantLifecycleService` supports suspend, reactivate, and close transitions with an operation reference, reason, and audit event. `WmsTenantLifecycleCommandRunner` is enabled only in an explicitly invoked non-web command mode. The supplied `operatorReference` is currently a validated audit label, not a reference to an authenticated platform identity.
 - Tenant lifecycle audit events currently record actor type `PLATFORM_OPERATOR` and a string actor reference. This is not proof of operator authentication or authorization.
-- `application-wms.properties` has one WMS JWT issuer, tenant-selection audience, access audience, and key-material configuration. There is no separate platform token audience or platform security chain.
+- `application-wms.properties` defines separate tenant and platform JWT configuration namespaces, audiences, key IDs, and RSA key-material settings. Platform JWT is disabled by default and requires separately provisioned platform secrets. `PlatformSecurityConfiguration` installs a dedicated stateless chain for `/api/platform/v1/**`; no platform HTTP controllers were found, so a protected matcher is not evidence that a complete route surface exists.
 
 These existing controls are useful foundations, but they must not be mistaken for a complete SaaS control plane.
 

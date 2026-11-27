@@ -3,7 +3,7 @@
 **Review status:** PARTIALLY VERIFIED
 **Reviewed source branch:** `main`
 **Review snapshot:** main commit `d359b9db7131ec3a2b0f60783bb015248afbfc25` plus post-merge CI run #693
-**Related report:** [WMS_STAGE_16_5_SECURITY_VERIFICATION.md](WMS_STAGE_16_5_SECURITY_VERIFICATION.md)
+**Related report:** [security-verification.md](security-verification.md)
 
 ## 1. Scope and method
 

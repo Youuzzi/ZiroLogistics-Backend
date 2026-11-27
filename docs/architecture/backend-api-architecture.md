@@ -1,13 +1,13 @@
 # WMS Backend API Completion — Stage 13 Architecture & Delivery Contract
 
-**Status:** Proposed delivery contract; WP1 baseline audit in progress.
-**Starting baseline:** `0441d900f19c028bc5f413695205d04630e73226`.
-**Runtime:** Java 21, Spring Boot 3.5.13, WMS-only servlet runtime, MySQL 8.4.
+**Status:** Historical API completion plan. Its delivery workstreams are retained as implementation history; current API compatibility guidance is in [WMS API v1 Reference](../api/wms-api-v1-reference.md).
+**Starting baseline:** `0441d900f19c028bc5f413695205d04630e73226` (historical).
+**Current runtime:** Java 21, Spring Boot 3.5.16, WMS-only servlet runtime, MySQL 8.4.
 **API prefix:** `/api/wms/v1`.
 
 ## 1. Objective
 
-Complete the existing WMS HTTP API as a coherent, secure, versioned, documented and supportable contract for the backend delivered through Stages 1–12. This is API completion and hardening, not a new business-capability stage.
+Complete the existing WMS HTTP API as a coherent, secure, versioned, documented and supportable contract for the backend delivered through earlier WMS implementation milestones. This is API completion and hardening, not a new business-capability stage.
 
 The API must expose existing WMS workflows without bypassing application services, tenant membership resolution, persisted permissions, inventory posting boundaries, workflow state guards, transaction guarantees or audit behavior.
 
@@ -15,11 +15,13 @@ The API must expose existing WMS workflows without bypassing application service
 
 In scope: route inventory; controller registration and security; validation and public errors; bounded collection reads; DTO/status consistency; tenant, membership and permission checks; idempotency and optimistic concurrency at HTTP boundaries; API reference; controller-level HTTP tests.
 
-Out of scope: new warehouse workflows, duplicate endpoints, frontend implementation, business logic in controllers, weakened security or audit, automatic retry of non-idempotent commands, breaking changes without versioning, and schema changes unless proven essential. Any schema addition must be additive V27+; V1–V26 remain immutable.
+Out of scope: new warehouse workflows, duplicate endpoints, frontend implementation, business logic in controllers, weakened security or audit, automatic retry of non-idempotent commands, breaking changes without versioning, and schema changes unless proven essential. Any schema addition must be additive V33+; V1–V32 remain immutable.
 
 ## 3. Baseline inventory — source inspection
 
 ### 3.1 Existing route families
+
+> **Historical security note:** The controller-condition finding below belongs to the recorded baseline. Current runtime behavior is governed by the WMS security-chain implementation and the current API v1 reference: JWT enables protected WMS routes, while the separate public-auth switch controls only the exact anonymous POST allowlist. Do not use the old condition statement below as current configuration guidance.
 
 The WMS runtime has HTTP adapters for authentication/invitations; tenant profile and role/permission management; warehouse/location and item/category/identifier/UOM/lot master data; inventory posting/balances/ledger; inbound receiving/putaway; outbound shipment/picking/packing/shipping; inter-warehouse transfer; stock count/adjustment; replenishment; and operational reporting.
 

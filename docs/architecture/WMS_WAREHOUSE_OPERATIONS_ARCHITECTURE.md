@@ -1,6 +1,6 @@
 # WMS Warehouse Operations — Architecture & Delivery Contract
 
-**Status:** Proposed implementation contract for roadmap Stage 9.  
+**Status:** Historical warehouse workflow architecture. Receiving, putaway, outbound fulfillment, and inter-warehouse transfer modules have since been implemented in vertical slices; this document records design boundaries and is not a complete current-state feature checklist.  
 **Runtime:** WMS-only modular monolith (`wms` profile).  
 **Schema authority:** Frozen WMS V1 plus additive migrations only.  
 **Verification:** Disposable MySQL 8.4 Testcontainers only.  

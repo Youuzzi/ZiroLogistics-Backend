@@ -1,16 +1,16 @@
 # WMS Inventory Control — Stage 10 Architecture & API Contract
 
-**Status:** Proposed implementation contract for roadmap Stage 10.  
+**Status:** Historical implementation design. Stock count, inventory adjustment, and replenishment capabilities have since been implemented; use current source and tests for runtime behavior.  
 **Runtime:** WMS-only modular monolith.  
 **Schema authority:** Frozen WMS V1 plus additive migrations only (V20 onward).  
 **Verification:** Disposable MySQL 8.4 Testcontainers only.  
 **Scope:** Stock counts, cycle counting, variance review/approval, inventory adjustments and warehouse replenishment.
 
-## 1. Stage objective and boundaries
+## 1. Original objective and boundaries
 
-Stage 10 adds controlled inventory verification and correction workflows on top of the single inventory balance and immutable ledger established in Stage 8 and the warehouse operations established in Stage 9.
+The original design adds controlled inventory verification and correction workflows on top of the single inventory balance and immutable ledger established in Stage 8 and the warehouse operations established in Stage 9.
 
-The stage has four deliverables:
+The original design defined four deliverables:
 
 1. Physical stock count planning, location scopes, quantity snapshots, count rounds and recounts.
 2. Review and approval of count results, including a traceable variance decision.

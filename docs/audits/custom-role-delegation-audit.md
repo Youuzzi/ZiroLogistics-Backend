@@ -10,7 +10,7 @@
 - `src/main/java/com/zirocraft/zirologistics/wms/authorization/application/WmsRoleManagementService.java`
 - `src/main/java/com/zirocraft/zirologistics/wms/authorization/application/WmsMembershipAccessService.java`
 - `src/test/java/com/zirocraft/zirologistics/wms/authorization/WmsRoleManagementServiceTest.java`
-- `docs/audits/WMS_STAGE_16_TENANT_RBAC_CURRENT_STATE_MATRIX_AUDIT.md`
+- `docs/audits/tenant-role-permission-current-state.md`
 
 The canonical policy owns separate methods for tenant role-manager catalogue visibility, custom-role grantability, Tenant Owner baseline grants, self-assignment-restricted system roles, and the 13 operational system-role templates. The methods are separate policy concepts even where their current values happen to be equal.
 

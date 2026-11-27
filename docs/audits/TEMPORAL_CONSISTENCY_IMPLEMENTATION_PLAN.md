@@ -10,7 +10,7 @@
 - PR #299 changes seven ORM timestamp entities to database-sourced Hibernate creation/update timestamps and adds MySQL integration coverage for UTC session and timestamp behavior.
 - PR #296 makes reporting `generatedAtUtc` an explicit `Instant` and verifies ISO-8601 UTC serialization.
 - PR #295 verifies selected identity token, email outbox, and login-throttle adapter round trips under a deliberately non-UTC MySQL session.
-- PR #300 proposes tenant-IANA-timezone-based replenishment task-number dates using an injected `Clock`; its merge and post-merge verification remain separate gates at the time of this plan.
+- PR #300 implemented tenant-IANA-timezone-based replenishment task-number dates using an injected `Clock`; it merged and its MySQL integration verification passed. This closes that task-number date slice, not the broader WMS schedule/DST contract.
 
 These are bounded proofs for the tested paths. They do not certify every temporal field, SQL default, API response, or worker scenario.
 

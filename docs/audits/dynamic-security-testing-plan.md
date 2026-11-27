@@ -1,15 +1,19 @@
 # Stage 16.6 — ZAP DAST Baseline (initial perimeter scope)
 
-**Status:** PROPOSED / workflow prepared; scan not yet executed  
+**Status:** Proposed passive ZAP Baseline workflow; no execution of this specific workflow is verified by this document. The separate Authenticated WMS API DAST workflow is tracked in the current security/QA baseline.  
 **Workflow:** `.github/workflows/wms-dast-baseline.yml`  
 **Target:** Disposable local WMS Compose runtime in GitHub Actions  
 **Scanner:** ZAP Baseline Action `v0.15.0`
 
-## 1. Why this is a baseline only
+## 1. Workflow distinction
+
+This document describes the passive ZAP Baseline workflow only. A successful run of the separate Authenticated WMS API DAST workflow does not establish that this passive ZAP workflow has run, and neither workflow is a full penetration test or security certification.
+
+## 2. Why this is a baseline only
 
 ZAP Baseline runs spidering and passive analysis; it does not perform active attack requests. This is suitable as a cautious first DAST step, but it does not replace an authenticated API scan or a full active scan. See the [official ZAP Baseline documentation](https://www.zaproxy.org/docs/docker/baseline-scan/) and [official GitHub Action README](https://github.com/zaproxy/action-baseline).
 
-## 2. Disposable environment safety
+## 3. Disposable environment safety
 
 The workflow:
 
@@ -23,9 +27,9 @@ The workflow:
 
 It does not connect to `zirowms_v1`, `zirologistics_db`, or any external production system.
 
-## 3. Initial scan boundary
+## 4. Planned initial scan boundary
 
-The first run scans the protected warehouse route while JWT is disabled. The expected HTTP 403 is an explicit fail-closed smoke check. The ZAP scan therefore measures the unauthenticated perimeter response and passive HTTP metadata only.
+The planned first run scans the protected warehouse route while JWT is disabled. The expected HTTP 403 is an explicit fail-closed smoke check. The ZAP scan therefore measures the unauthenticated perimeter response and passive HTTP metadata only.
 
 **It does not prove that authenticated warehouse, inventory, picking, shipping, or other business routes are secure.** The route returns deny-by-default before business services execute. A later authenticated DAST phase would require disposable tenant/user fixtures, ephemeral RSA key material, a controlled token-issuance flow, and an OpenAPI/context-aware scan plan. That is not included in this first pass.
 
