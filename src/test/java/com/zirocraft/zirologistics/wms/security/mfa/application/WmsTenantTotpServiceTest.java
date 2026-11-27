@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -91,5 +92,54 @@ class WmsTenantTotpServiceTest {
                 () -> service.encodeBase32(new byte[10]));
         assertThrows(IllegalArgumentException.class,
                 () -> service.provisioningUri(service.generateSecret(), " ", "Ziro"));
+    }
+
+    @Test
+    void decryptsRetainedKeyVersionsAfterRotationAndEncryptsWithActiveVersion() {
+        byte[] oldKey = new byte[32];
+        byte[] newKey = new byte[32];
+        Arrays.fill(oldKey, (byte) 1);
+        Arrays.fill(newKey, (byte) 2);
+        UUID userId = UUID.randomUUID();
+        byte[] secret = service.generateSecret();
+
+        WmsTenantMfaKeyRing originalRing = new WmsTenantMfaKeyRing("mfa-v1", Map.of("mfa-v1", oldKey));
+        WmsTenantTotpService originalService = new WmsTenantTotpService(originalRing);
+        WmsTenantTotpService.EncryptedSecret oldCiphertext = originalService.encryptSecret(userId, secret);
+
+        WmsTenantMfaKeyRing rotatedRing = new WmsTenantMfaKeyRing(
+                "mfa-v2", Map.of("mfa-v1", oldKey, "mfa-v2", newKey));
+        WmsTenantTotpService rotatedService = new WmsTenantTotpService(rotatedRing);
+        assertArrayEquals(secret, rotatedService.decryptSecret(userId, oldCiphertext));
+
+        WmsTenantTotpService.EncryptedSecret newCiphertext = rotatedService.encryptSecret(userId, secret);
+        assertEquals("mfa-v2", newCiphertext.keyVersion());
+        assertArrayEquals(secret, rotatedService.decryptSecret(userId, newCiphertext));
+
+        WmsTenantTotpService withoutRetiredKey = new WmsTenantTotpService(
+                new WmsTenantMfaKeyRing("mfa-v2", Map.of("mfa-v2", newKey)));
+        assertThrows(IllegalArgumentException.class,
+                () -> withoutRetiredKey.decryptSecret(userId, oldCiphertext));
+    }
+
+    @Test
+    void keyRingDefensivelyCopiesKeysAndRejectsInvalidConfiguration() {
+        byte[] key = new byte[32];
+        Arrays.fill(key, (byte) 7);
+        WmsTenantMfaKeyRing ring = new WmsTenantMfaKeyRing("v1", Map.of("v1", key));
+        Arrays.fill(key, (byte) 0);
+        byte[] expected = new byte[32];
+        Arrays.fill(expected, (byte) 7);
+        assertArrayEquals(expected, ring.keyFor("v1"));
+        byte[] exposed = ring.keyFor("v1");
+        Arrays.fill(exposed, (byte) 0);
+        assertArrayEquals(expected, ring.keyFor("v1"));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> new WmsTenantMfaKeyRing("missing", Map.of("v1", new byte[32])));
+        assertThrows(IllegalArgumentException.class,
+                () -> new WmsTenantMfaKeyRing("v1", Map.of("v1", new byte[31])));
+        assertThrows(IllegalArgumentException.class,
+                () -> ring.keyFor("unknown"));
     }
 }

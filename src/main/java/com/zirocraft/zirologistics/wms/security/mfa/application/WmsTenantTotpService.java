@@ -11,7 +11,6 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.Objects;
 import java.util.OptionalLong;
 import java.util.UUID;
@@ -34,24 +33,19 @@ public final class WmsTenantTotpService {
     private static final long MAX_TIME_STEP = Long.MAX_VALUE >>> 1;
     private static final char[] BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".toCharArray();
 
-    private final byte[] encryptionKey;
-    private final String keyVersion;
+    private final WmsTenantMfaKeyRing keyRing;
     private final SecureRandom random;
 
     public WmsTenantTotpService(byte[] encryptionKey, String keyVersion) {
-        this(encryptionKey, keyVersion, new SecureRandom());
+        this(new WmsTenantMfaKeyRing(keyVersion, java.util.Map.of(keyVersion, encryptionKey)), new SecureRandom());
     }
 
-    WmsTenantTotpService(byte[] encryptionKey, String keyVersion, SecureRandom random) {
-        Objects.requireNonNull(encryptionKey, "encryptionKey must not be null");
-        if (encryptionKey.length != 32) {
-            throw new IllegalArgumentException("Tenant MFA AES-256 key must contain exactly 32 bytes");
-        }
-        if (keyVersion == null || !keyVersion.matches("[A-Za-z0-9._-]{1,64}")) {
-            throw new IllegalArgumentException("keyVersion must be a non-empty safe identifier");
-        }
-        this.encryptionKey = encryptionKey.clone();
-        this.keyVersion = keyVersion;
+    public WmsTenantTotpService(WmsTenantMfaKeyRing keyRing) {
+        this(keyRing, new SecureRandom());
+    }
+
+    WmsTenantTotpService(WmsTenantMfaKeyRing keyRing, SecureRandom random) {
+        this.keyRing = Objects.requireNonNull(keyRing, "keyRing must not be null");
         this.random = Objects.requireNonNull(random, "random must not be null");
     }
 
@@ -88,34 +82,36 @@ public final class WmsTenantTotpService {
             throw new IllegalArgumentException("TOTP secret must contain between 16 and 64 bytes");
         }
         byte[] nonce = new byte[NONCE_BYTES];
+        byte[] key = keyRing.keyFor(keyRing.activeKeyVersion());
         random.nextBytes(nonce);
         try {
             Cipher cipher = Cipher.getInstance(AES_GCM);
-            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(encryptionKey, "AES"),
+            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"),
                     new GCMParameterSpec(TAG_BITS, nonce));
-            cipher.updateAAD(associatedData(userId, keyVersion));
-            return new EncryptedSecret(keyVersion, nonce, cipher.doFinal(secret));
+            cipher.updateAAD(associatedData(userId, keyRing.activeKeyVersion()));
+            return new EncryptedSecret(keyRing.activeKeyVersion(), nonce, cipher.doFinal(secret));
         } catch (GeneralSecurityException failure) {
             throw new IllegalStateException("Unable to encrypt tenant MFA secret", failure);
         } finally {
             Arrays.fill(nonce, (byte) 0);
+            Arrays.fill(key, (byte) 0);
         }
     }
 
     public byte[] decryptSecret(UUID userId, EncryptedSecret encrypted) {
         Objects.requireNonNull(userId, "userId must not be null");
         Objects.requireNonNull(encrypted, "encrypted must not be null");
-        if (!keyVersion.equals(encrypted.keyVersion())) {
-            throw new IllegalArgumentException("Tenant MFA encryption key version is unavailable");
-        }
+        byte[] key = keyRing.keyFor(encrypted.keyVersion());
         try {
             Cipher cipher = Cipher.getInstance(AES_GCM);
-            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(encryptionKey, "AES"),
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"),
                     new GCMParameterSpec(TAG_BITS, encrypted.nonce()));
             cipher.updateAAD(associatedData(userId, encrypted.keyVersion()));
             return cipher.doFinal(encrypted.ciphertext());
         } catch (GeneralSecurityException failure) {
             throw new IllegalArgumentException("Tenant MFA secret authentication failed", failure);
+        } finally {
+            Arrays.fill(key, (byte) 0);
         }
     }
 
