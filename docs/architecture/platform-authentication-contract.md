@@ -62,7 +62,7 @@ MFA secret material must be encrypted at rest using the approved key-management 
 - **Slice 2A:** platform operator persistence repository and safe credential lookup; migration V29 is the schema foundation.
 - **Slice 2B:** password authentication, throttling, generic error behavior, credential-version lifecycle.
 - **Slice 2C:** platform JWT profile/decoder/issuer and cross-audience rejection tests.
-- **Slice 3:** ordered platform security chain and deny-by-default routes.
+- **Slice 3:** ordered platform security chain and deny-by-default routes are implemented; no platform login or administration controller is exposed.
 - **Slice 4:** authenticated platform identity replaces caller-supplied operator labels in tenant lifecycle actions.
 - **Slice 5:** scoped, time-limited support grants; separately designed and audited.
 - **Slice 6:** seed only role/permission grants for implemented endpoints, after permission review.
@@ -82,7 +82,7 @@ The first credential-authentication application slice is implemented without ena
 - Unknown email and malformed stored password hashes perform dummy password verification and return the same generic authentication failure.
 - A platform-specific throttling port is required by the use case; no tenant throttle key or storage namespace is reused.
 - Successful authentication metadata is written only through a conditional database update that rechecks operator status, email verification, and credential version.
-- The use case is deliberately not auto-wired as an HTTP service. A platform-specific throttle adapter, token issuer/decoder, ordered security chain, and MFA enforcement remain prerequisites before any route is exposed.
+- The credential-authentication use case is not yet composed into an HTTP login service. The platform token issuer/decoder and ordered deny-by-default security chain are implemented; the remaining prerequisites for exposing login are a concrete platform throttle adapter, complete MFA enrollment/verification/recovery orchestration, and a reviewed login HTTP adapter.
 - Unit tests cover successful authentication, unknown operators, inactive operators, and credential-version races; the MySQL integration test verifies the conditional timestamp update.
 
 This slice does not create operators, grant roles, issue platform tokens, or expose login endpoints.
