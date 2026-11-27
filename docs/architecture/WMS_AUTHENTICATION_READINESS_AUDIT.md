@@ -1,9 +1,9 @@
 # WMS Authentication Readiness Audit
 
-**Status:** Updated Stage 13 readiness review; production data provenance and deployment load evidence remain unverified.  
+**Status:** Historical authentication readiness review. Credential-authentication and tenant-selection adapters are implemented as opt-in WMS HTTP capabilities; production data provenance and deployment load evidence remain unverified.  
 **Runtime:** WMS-only runtime (`wms` profile)  
 **Schema:** Frozen V1; this audit makes no schema or runtime changes.  
-**Decision:** Do not expose credential login until the blockers below are resolved.
+**Decision:** Do not enable credential login for production until the blockers below are resolved.
 
 ## 1. Executive result
 
