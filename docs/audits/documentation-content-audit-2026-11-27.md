@@ -7,7 +7,7 @@
 
 ## Executive disposition
 
-PR #367 refreshes current-reference content; PR #368 completes repository-wide filename, title, and link standardization. The documentation tree contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. These materials are classified by purpose and evidence status rather than rewritten as though they describe one current implementation. The final follow-up reconciliation archives both deleted QA documents under descriptive historical filenames instead of discarding their evidence: the 408-line PR/CI/DAST/k6 closure record ([Historical QA Closure Evidence](security-qa-evidence-history-2026-11-23.md)) and the original test/tooling baseline ([Historical QA and Security Baseline](security-qa-initial-baseline-history-2026-11-22.md)).
+PR #367 refreshes current-reference content; PR #368 completes repository-wide filename, title, and link standardization. The documentation tree contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. These materials are classified by purpose and evidence status rather than rewritten as though they describe one current implementation. The final follow-up reconciliation archives both deleted QA documents under descriptive historical filenames instead of discarding their evidence: the 408-line PR/CI/DAST/k6 closure record ([Historical QA Closure Evidence](security-qa-evidence-history-2026-11-23.md)) and the original test/tooling baseline ([Historical QA and Security Baseline](security-qa-initial-baseline-history-2026-11-20.md)).
 
 
 
