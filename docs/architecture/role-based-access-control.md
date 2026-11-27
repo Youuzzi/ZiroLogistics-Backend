@@ -1,6 +1,6 @@
 # Tenant Role-Based Access Control
 
-**Status:** Current tenant RBAC foundation implemented; permission-risk metadata, tenant entitlement enforcement, and universal cross-workflow separation-of-duties coverage remain incomplete.
+**Status:** Current tenant RBAC foundation implemented. A 94-entry permission-risk metadata registry exists; universal action-level use of that metadata, tenant entitlement enforcement, and cross-workflow separation-of-duties coverage remain incomplete.
 **Canonical policy:** [Tenant Role Templates and Permission Governance Policy](tenant-role-templates-and-permission-governance-policy.md).
 **Implementation source:** `WmsTenantPermissionPolicy`, persisted permission/role repositories, membership-access resolution, and MySQL persisted-grant integration tests.
 **Scope:** Tenant-scoped roles, permission grants, membership-role assignments, delegation, and operational separation of duties.
@@ -70,7 +70,7 @@ Do not infer grantability from a permission-code prefix or from a role's display
 
 The following are not complete merely because the role templates and permission grants exist:
 
-- Machine-readable risk metadata for every permission is not yet implemented as a universal policy registry.
+- The immutable `WmsTenantPermissionRiskRegistry` contains 94 permission metadata entries. Its metadata is not authorization and is not yet wired into universal action-level MFA, audit, or SoD enforcement.
 - Universal cross-workflow separation-of-duties enforcement is incomplete. High-risk system-role self-assignment and selected stock-count/adjustment actor-separation paths are covered, but inbound, shipping, and transfer actor separation are not universally certified.
 - Tenant entitlement/plan enforcement remains a separate future capability and is not implemented by tenant RBAC.
 - Complete route-to-query and cross-tenant verification remains open; selected source reviews and MySQL tests are not a certification of every route, nested identifier, worker, or command.
