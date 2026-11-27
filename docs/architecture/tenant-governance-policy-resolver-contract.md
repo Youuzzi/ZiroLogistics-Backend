@@ -1,9 +1,9 @@
 # WMS Tenant Governance Policy Resolver Contract
 
-**Status:** Target policy-resolution contract. No runtime resolver or tenant-configurable governance enforcement is claimed by this document.
+**Status:** The pure deterministic `WmsTenantGovernancePolicyResolver` and its unit tests are implemented. Persisted tenant overrides and integration of resolved profile policy into operational workflow services are not implemented; this remains a target contract for those boundaries.
 
 ## Purpose
-Define a typed, deterministic policy resolution boundary before profile rules are wired into operational workflows. This contract is additive and does not authorize permissions or change the frozen V1 schema.
+Document the typed, deterministic policy-resolution boundary. The pure resolver currently provides immutable defaults and bounded in-memory overrides; it is not a persisted tenant-configurable policy engine and is not yet wired into operational workflows. This contract is additive and does not authorize permissions or change the frozen V1 schema.
 
 ## Policy dimensions
 - **MANDATORY**: cannot be disabled by tenant profile/configuration.
