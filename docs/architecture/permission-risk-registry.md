@@ -74,7 +74,7 @@ A SoD group is a review/enforcement key, not a blanket prohibition on assigning 
 4. Keep catalogue visibility, custom-role delegation, system-role templates, and risk metadata as separate policy dimensions.
 5. Add negative tests proving that a high-risk permission cannot be obtained through custom-role creation, role replacement, self-assignment, or platform/tenant principal confusion.
 6. Add action-level tests for fresh MFA and persisted actor separation; do not treat a registry unit test as proof of endpoint enforcement.
-7. Preserve existing migrations V1–V30. A metadata-only registry does not justify rewriting historical migrations or mutating a user database.
+7. Preserve existing migrations V1–V32. The metadata registry is code-owned and does not justify rewriting historical migrations or mutating a user database.
 
 ## 7. Out of scope
 
