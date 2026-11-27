@@ -1,4 +1,4 @@
-# Stage 16.5 — WMS HTTP Route and Tenant Boundary Review
+# WMS HTTP Route and Tenant Boundary Review
 
 **Review status:** PARTIALLY VERIFIED
 **Reviewed source branch:** `main`
@@ -121,7 +121,7 @@ CI evidence:
 
 The two skipped Argon2 benchmark/concurrency tests remain excluded from executed-test evidence. A successful CodeQL workflow run is not a statement that the repository has zero CodeQL alerts; alert review remains separate.
 
-## 5. Residual risks and work required before closing WP16.5
+## 5. Residual risks and work required before closure
 
 The source review did not reveal an obvious controller that directly accepts a tenant ID and performs tenant data access without passing through an application service. However, this is not proof that every object-level authorization path is safe.
 
@@ -137,7 +137,7 @@ Remaining runtime verification:
 
 A helper in `WmsReplenishmentPlanningService` named `requirePermission` performs a second permission lookup after the public `plan` method has already called the full tenant-context `access` check. This is currently redundant rather than an observed bypass in that call path; it should not be misreported as a confirmed vulnerability.
 
-## 6. WP16.5 disposition
+## 6. Review disposition
 
 **PARTIALLY VERIFIED — source route inventory completed; runtime route-wide cross-tenant proof remains open.**
 

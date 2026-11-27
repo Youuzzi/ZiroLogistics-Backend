@@ -1,4 +1,4 @@
-# UMKM Single-Operator Activation Contract
+# Single-Operator Tenant Activation Contract
 
 **Status:** Proposed tenant operating-mode contract only. No runtime activation feature or mode-derived role grants are implemented or enabled by this document. Activation requires separate approval, MFA enforcement, least-privilege policy, audit, and negative-path tests.
 

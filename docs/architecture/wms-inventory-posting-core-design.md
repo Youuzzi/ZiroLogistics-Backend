@@ -1,7 +1,7 @@
 # WMS Inventory Posting Core — Design Contract
 
 **Status:** Implemented application-boundary design contract. The inventory posting service and MySQL integration coverage are present; this document records the intended invariants, while current behavior is defined by source and tests.  
-**Schema authority:** Frozen V1 plus additive V12 migration.  
+**Original schema scope:** Frozen V1 plus additive V12 at the time this posting slice was delivered. The current WMS runtime migration history is V1–V32; later migrations are separate additions and do not change this original V12 design record.  
 **Runtime:** WMS-only modular monolith.  
 **Verification:** Disposable MySQL 8.4 Testcontainers only.  
 **Scope:** One transactional application boundary for stock balance, immutable ledger, serial lifecycle and tenant audit.
@@ -118,9 +118,9 @@ Ledger entries retain the same actor membership and server timestamp. Ledger row
 
 Balance and ledger reads always include the resolved tenant predicate. Responses expose public IDs and reference codes, never internal numeric primary keys. Ledger reads are bounded and ordered by occurred_at DESC, id DESC; clients cannot choose tenant IDs or unbounded page sizes. Balance reads use the same tenant-scoped filter model and never imply that available quantity is writable.
 
-## 10. Required verification before merge
+## 10. Original V12 delivery acceptance criteria
 
-Disposable MySQL 8.4 Testcontainers must verify:
+The following list records the acceptance criteria for the original V12 delivery. The posting service and MySQL integration coverage are present in the current repository; use current source and test results for any later changes. Tests must continue to use disposable MySQL 8.4 Testcontainers and must never target a user database.
 
 - Fresh V1→V12 migration and V11→V12 upgrade, without modifying V1–V11.
 - Permission catalogue and owner grant; audit CHECK contains the new event.

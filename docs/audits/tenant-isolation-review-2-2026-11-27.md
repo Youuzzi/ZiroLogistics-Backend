@@ -1,4 +1,4 @@
-# WMS Stage 16 — Tenant Isolation Source Review Slice 2
+# WMS Tenant Isolation Source Review — Inventory and Fulfillment Slice
 
 Date: 2026-11-27
 Scope: inventory reservation/posting, stock count, replenishment task workflows

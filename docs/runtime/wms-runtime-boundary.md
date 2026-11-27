@@ -68,6 +68,6 @@ The structural cleanup is merged in PR #162. The post-merge Main CI run `4465386
 
 ## Historical disposition
 
-The dedicated structural audit records the disposition of the former 63 production classes and 15 legacy-package tests in [Backend Structural Audit — Legacy Disposition](../audits/BACKEND_STRUCTURAL_AUDIT_LEGACY_DISPOSITION.md). Legacy-only code, configuration, tests, and executable migration resources were retired rather than moved wholesale into WMS. Relevant behavior was reimplemented using WMS tenant boundaries and domain models where required.
+The dedicated structural audit records the disposition of the former 63 production classes and 15 legacy-package tests in [Backend Structural Audit — Legacy Disposition](../audits/backend-structural-audit-legacy-disposition.md). Legacy-only code, configuration, tests, and executable migration resources were retired rather than moved wholesale into WMS. Relevant behavior was reimplemented using WMS tenant boundaries and domain models where required.
 
 The repository currently contains WMS migrations V1–V32. Treat every applied migration as immutable. Future schema changes must be additive beginning at V33; do not rename historical tables or map retired entities onto WMS tables.

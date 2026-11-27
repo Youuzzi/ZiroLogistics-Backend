@@ -1,6 +1,6 @@
-# Stage 13 WP11 — Final API and Repository Audit
+# WMS API and Repository Audit
 
-> **Historical audit snapshot:** The runtime/API delivery recorded here was subsequently integrated. All implementation findings below are frozen at the audit baseline and may have been resolved by later changes. In particular, current security-chain behavior separates JWT-protected route registration from the exact anonymous-auth POST allowlist. The pending-review wording below describes the original audit baseline, not the current PR state. Use [Runtime Boundary](../runtime/WMS_RUNTIME_BOUNDARY.md) and [WMS API v1 Reference](../api/wms-api-v1-reference.md) for current navigation.
+> **Historical audit snapshot:** The runtime/API delivery recorded here was subsequently integrated. All implementation findings below are frozen at the audit baseline and may have been resolved by later changes. In particular, current security-chain behavior separates JWT-protected route registration from the exact anonymous-auth POST allowlist. The pending-review wording below describes the original audit baseline, not the current PR state. Use [Runtime Boundary](../runtime/wms-runtime-boundary.md) and [WMS API v1 Reference](../api/wms-api-v1-reference.md) for current navigation.
 
 - **Status at the recorded audit baseline:** Implementation submitted for PR review; WP11 CI evidence pending.
 - **Audit baseline:** `a160b3ed0a52a9b9d98a8ac49b5e452af9e980ce`

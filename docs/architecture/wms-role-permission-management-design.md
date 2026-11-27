@@ -1,6 +1,6 @@
 # WMS Role & Permission Management Design
 
-**Status:** Partially implemented; remaining policy and coverage gaps are tracked in `ROLE_BASED_ACCESS_CONTROL.md`.
+**Status:** Partially implemented; remaining policy and coverage gaps are tracked in `role-based-access-control.md`.
 **Runtime:** WMS-only.
 **Schema:** Existing merged migrations are immutable. Any required schema change must be additive and justified by a concrete invariant.
 **Security:** Deny by default; tenant context and effective permissions are resolved from persisted membership state.
@@ -23,7 +23,7 @@ The frozen V1 schema already contains:
 
 The current authorization resolver calculates effective permissions from active user, membership, tenant, assigned active roles, and role-permission rows. It does not trust role or permission lists from JWT claims or client payloads.
 
-The repository now contains role-management permissions and service/API functionality introduced by later migrations and implementation work. The permission catalogue and delegation policy are not yet complete for all WMS workflows. See the current source, migrations, tests, and `ROLE_BASED_ACCESS_CONTROL.md` for the implementation boundary.
+The repository now contains role-management permissions and service/API functionality introduced by later migrations and implementation work. The permission catalogue and delegation policy are not yet complete for all WMS workflows. See the current source, migrations, tests, and `role-based-access-control.md` for the implementation boundary.
 
 ## 3. Authorization model
 

@@ -1,4 +1,4 @@
-# WMS v1 HTTP Semantics & Operational Limits — Stage 13 WP7
+# WMS v1 HTTP Semantics and Operational Limits
 
 **Document status:** Historical HTTP semantics audit. Use [WMS API v1 Reference](wms-api-v1-reference.md) for the current compatibility-oriented API entry point.
 **Audit baseline:** `7db6742a6e04794eb5b31d54cc58aea45713d026` (historical)

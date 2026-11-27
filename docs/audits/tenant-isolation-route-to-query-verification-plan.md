@@ -2,7 +2,7 @@
 
 **Status:** Active verification plan; tenant isolation remains partially verified.
 **Baseline commit:** `2b72fb4b7870e8312b643a2b5fb71321eab0ab45`.
-**Related baseline:** `docs/security/TENANT_ISOLATION_AND_AUTHORIZATION.md`.
+**Related baseline:** `docs/security/tenant-isolation-and-authorization.md`.
 
 ## 1. Existing positive evidence
 

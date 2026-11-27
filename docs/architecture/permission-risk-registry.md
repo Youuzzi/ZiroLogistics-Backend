@@ -1,4 +1,4 @@
-# WMS Permission Risk Registry — Stage 16 Contract
+# WMS Permission Risk Registry
 
 **Status:** Contract for implementation; this document does not claim that machine-readable risk metadata is already enforced.
 **Scope:** Tenant WMS permissions only. Platform control-plane permissions remain a separate catalogue and authorization boundary.

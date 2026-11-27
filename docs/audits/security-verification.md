@@ -1,4 +1,6 @@
-# Stage 16.5 — Focused Security Verification
+# Focused WMS Security Verification
+
+> **Historical verification evidence:** This report records assertions and execution from its named commit and Backend CI run. It is not the current security status or a certification of all routes. Use the [Security and QA Baseline](security-qa-baseline.md), [Security Coverage Inventory](security-coverage-inventory-2026-11-27.md), and current CI results for the latest checkpoint.
 
 **Evidence commit:** `1c14922614db04c4e3a78ceb5eafa0845ba988ca`
 **Verification run:** Backend CI #690, attempt 2
@@ -70,7 +72,7 @@ The following are still open review items, not confirmed vulnerabilities:
 
 No new executable test was added in this WP because the inspected existing tests already exercised the specific cases above. The remaining route-wide gaps must be addressed with targeted tests only after controller/service ownership is mapped.
 
-## 5. WP16.5 disposition
+## 5. Verification disposition
 
 **PARTIALLY VERIFIED — evidence captured; not yet closed.**
 

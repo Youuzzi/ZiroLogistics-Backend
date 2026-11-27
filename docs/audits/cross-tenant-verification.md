@@ -1,4 +1,4 @@
-# Stage 16 — Cross-Tenant Final QA Evidence
+# Cross-Tenant Verification Evidence
 
 **Status: IN PROGRESS — evidence inventory, not a security certification.**  
 **Review date:** 2026-11-26  
@@ -36,7 +36,7 @@ The new MySQL Testcontainers test `stockCountListDetailAndWorkflowCommandsAreIso
 
 This protects against public-ID substitution and checks denial without workflow side effects. The test is not considered verified until the latest PR head passes Backend CI.
 
-## Stage 16 implementation status reflected in main
+## Current implementation status reflected in main
 
 The following PRs are merged:
 - #330 — tenant permission risk registry and MySQL catalogue parity.

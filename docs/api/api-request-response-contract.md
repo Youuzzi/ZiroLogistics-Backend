@@ -1,4 +1,4 @@
-# WMS v1 Request/Response Contract Audit — Stage 13 WP5
+# WMS v1 API Request and Response Contract Audit
 
 **Document status:** Historical API contract audit. Use [WMS API v1 Reference](wms-api-v1-reference.md) for the current compatibility-oriented API entry point.
 **Audit baseline:** `7db6742a6e04794eb5b31d54cc58aea45713d026` (historical)

@@ -4,7 +4,9 @@
 **Version:** 0.1.0  
 **Date:** 2026-11-16  
 **Applies to:** ZiroLogistics WMS V1 backend  
-**Schema authority:** Frozen `zirowms_v1` schema and its checked-in source DDL/migration
+**Schema authority:** Frozen WMS V1 schema source and checked-in DDL; current runtime applies immutable WMS migrations V1–V32 to the dedicated `zirologistics_wms` database. Future schema changes are additive from V33.
+
+**Current runtime checkpoint:** Java 21, Spring Boot 3.5.16, MySQL 8.4, Flyway 11.20.3, `WmsRuntimeApplication`, Spring profile `wms`, and Maven profile `wms-runtime`. The historical database name `zirowms_v1` identifies the original schema source only; it is not the current runtime database.
 
 > This document is an engineering policy for this product. It distinguishes formal standards, vendor-specific product guidance, technology documentation, and ZiroLogistics architecture decisions. A vendor workflow is evidence of an established implementation pattern, not a universal WMS requirement.
 
@@ -203,7 +205,7 @@ Do not generate all JPA entities in one batch. Implement vertical slices with ex
 
 ## 7. Source references
 
-See [WMS_ENGINEERING_REFERENCES.md](WMS_ENGINEERING_REFERENCES.md) for source URLs, scope, version notes, and how each reference is used.
+See [wms-engineering-references.md](wms-engineering-references.md) for source URLs, scope, version notes, and how each reference is used.
 
 ## 8. Change control
 

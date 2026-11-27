@@ -1,4 +1,4 @@
-# Stage 16 — Platform Control-Plane Source Review (2026-11-27)
+# Platform Control-Plane Source Review
 
 **Baseline:** `e88a3b9fbbdd5aeef31c02a542c46241a648f22f`
 **Scope:** Platform JWT authentication, current persisted permission evaluation, tenant lifecycle application boundary, and support-grant governance.

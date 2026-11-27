@@ -74,4 +74,4 @@ That command permanently deletes only the `zirologistics-wms` project's MySQL vo
 
 Never point WMS Flyway at `zirologistics_db`, the old Compose database `zirologistics`, or `zirowms_v1`; reuse an old Compose volume; use legacy `DB_URL` variables for WMS; enable Hibernate schema auto-update; commit `.env` or private secrets; or expose the local MySQL service publicly.
 
-See [WMS Runtime Boundary](../runtime/WMS_RUNTIME_BOUNDARY.md) and [Authentication HTTP Contract](../architecture/WMS_AUTHENTICATION_HTTP_API_CONTRACT.md).
+See [WMS Runtime Boundary](../runtime/wms-runtime-boundary.md) and [Authentication HTTP Contract](../architecture/wms-authentication-http-api-contract.md).

@@ -1,13 +1,13 @@
 # WMS Password Provisioning Architecture
 
-**Status:** Proposed architecture; no provisioning implementation or endpoint is enabled by this document.  
-**Runtime:** WMS-only runtime (`wms` profile).  
-**Schema:** Frozen V1 remains unchanged. Any durable invitation or recovery-token storage requires a separately reviewed additive migration.  
+**Status:** Historical provisioning design proposal. Core invitation, invitation acceptance, email verification, password change, and password reset services are now implemented; this document preserves original design rationale and must not be used as a current implementation-status statement.  
+**Current runtime:** WMS-only runtime (`wms` profile), dedicated database `zirologistics_wms`, migrations V1–V32.  
+**Current references:** [Authentication HTTP API Contract](wms-authentication-http-api-contract.md), [Identity Action Token V3 Design](wms-identity-action-token-v3-schema-design.md), and [Backend Maintenance Handoff](../project/backend-maintenance-handoff-2026-11-27.md).  
 **Database safety:** This document is based on repository/schema evidence only. It does not connect to or modify any user database.
 
 ## 1. Purpose and current context
 
-The WMS database `zirowms_v1` is a newly created development database. The owner confirmed that the read-only query `SELECT COUNT(*) FROM users` returned zero. This is expected for a new database; it is not an authentication defect.
+At the original audit date, `zirowms_v1` was the development schema reference and was reported empty. That historical observation does not describe the current runtime database, which is `zirologistics_wms`, and must not be used as current account-count evidence.
 
 The read-only password-hash inventory returned zero groups because the `users` table contains no rows. This establishes only the current empty state of that database. It does not establish the provenance or format of future or production password hashes.
 
@@ -106,18 +106,16 @@ Exact bootstrap mechanics remain a separate decision and security review item.
 - Do not infer verification merely because an administrator typed an email address.
 - Define whether the initial bootstrap operator is verified through its controlled bootstrap procedure.
 
-## 6. Persistence and migration boundary
+## 6. Persistence and migration boundary at the original design checkpoint
 
-V1 already provides the necessary core identity fields and must remain frozen:
+At the original design checkpoint, V1 provided the core identity fields and remained frozen:
 - `users.password_hash` is required and has capacity `VARCHAR(255)`;
 - `users.email_verified_at` and `users.last_login_at` are nullable;
 - `users.status` supports `PENDING_VERIFICATION`;
 - `tenant_memberships.status` supports `INVITED`;
 - tenant membership uniqueness prevents duplicate memberships for the same tenant/user pair.
 
-However, V1 does not provide durable one-time invitation, email-verification, or password-reset token storage.
-
-**Recommendation:** design a separately reviewed additive migration for purpose-bound identity action/invitation records before implementing invitation acceptance or password recovery. The storage must include, at minimum, a token digest, purpose, expiry, consumption/revocation state, and the appropriate user/tenant/inviter relationship. The exact normalized table design, indexes, constraints, retention, and concurrency behavior are intentionally deferred to a dedicated schema PR.
+V1 did not provide durable one-time invitation, email-verification, or password-reset token storage. This gap was addressed by the implemented V3 identity action-token migration and subsequent application/storage work. V3 is part of the immutable current migration history; do not reintroduce this recommendation as an open task.
 
 Do not:
 - edit or regenerate frozen V1;
@@ -157,18 +155,11 @@ Never record:
 
 Use the existing privacy-preserving logging/throttle conventions and define retention/access controls for the eventual audit sink.
 
-## 9. Login metadata
+## 9. Login metadata — current implementation update
 
-The current credential authentication use case does not update `users.last_login_at`.
+The current credential-authentication use case calls `recordSuccessfulLogin` after password verification and successful throttle reset, before issuing the tenant-selection token. The repository update writes `last_login_at` using `UTC_TIMESTAMP(6)` and increments the optimistic-lock version. The old statement that login metadata was not updated is superseded.
 
-Before exposing the login endpoint, add a narrowly scoped success operation that updates the timestamp only after:
-1. password verification succeeds;
-2. the global user is confirmed `ACTIVE`;
-3. the successful throttle reset commits.
-
-The update must not change password hash, email, user status, tenant membership, or role assignments. Use UTC consistently and account for optimistic concurrency. A failure to update non-security-critical login metadata must have an explicitly reviewed policy; it must not accidentally issue tokens before required security operations have committed.
-
-## 10. Implementation sequence
+## 10. Original implementation sequence (historical)
 
 1. Approve this identity/provisioning model and define tenant invitation authority/assignable-role rules.
 2. Design the additive invitation/action-token schema and Testcontainers migration tests. Keep V1 unchanged.
@@ -180,7 +171,7 @@ The update must not change password hash, email, user status, tenant membership,
 8. Only after these gates, wire narrowly scoped WMS HTTP endpoints and allow-list them in the WMS SecurityFilterChain.
 9. Run full integration/security tests; never point Testcontainers or migration tests at `zirowms_v1` or the legacy database.
 
-## 11. Explicit non-goals of this document
+## 11. Original scope exclusions (historical)
 
 - No user creation or password write is performed.
 - No endpoint, Spring bean wiring, or registration UI is added.
@@ -192,9 +183,9 @@ The update must not change password hash, email, user status, tenant membership,
 
 ## 12. Related architecture
 
-- `WMS_AUTHENTICATION_AND_TOKEN_ARCHITECTURE.md`
-- `WMS_AUTHENTICATION_READINESS_AUDIT.md`
-- `WMS_CREDENTIAL_AUTHENTICATION_ORCHESTRATION.md`
-- `WMS_READ_ONLY_PASSWORD_HASH_FORMAT_INVENTORY.md`
-- `WMS_LOGIN_THROTTLING_DESIGN.md`
+- `wms-authentication-and-token-architecture.md`
+- `wms-authentication-readiness-audit.md`
+- `wms-credential-authentication-orchestration.md`
+- `wms-read-only-password-hash-format-inventory.md`
+- `wms-login-throttling-design.md`
 

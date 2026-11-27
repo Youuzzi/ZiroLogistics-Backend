@@ -3,7 +3,7 @@
 **Status:** MySQL V2 schema and adapter implemented; credential flow integrated. Numeric production policy and operational evidence remain pending.  
 **Date:** 2026-11-15  
 **Scope:** Storage boundary for WMS credential-login throttling.  
-**Related design:** [WMS Login Throttling Design](WMS_LOGIN_THROTTLING_DESIGN.md)  
+**Related design:** [WMS Login Throttling Design](wms-login-throttling-design.md)  
 **Schema rule:** WMS V1 is frozen. Persistent changes are additive Flyway V2 only.  
 **Database safety:** All implementation and integration tests use disposable MySQL 8.4 Testcontainers. Never connect to or mutate `zirowms_v1` or `zirologistics_db`.
 

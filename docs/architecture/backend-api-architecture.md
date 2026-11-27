@@ -1,4 +1,4 @@
-# WMS Backend API Completion — Stage 13 Architecture & Delivery Contract
+# WMS Backend API Architecture and Delivery Contract
 
 **Status:** Historical API completion plan. Its delivery workstreams are retained as implementation history; current API compatibility guidance is in [WMS API v1 Reference](../api/wms-api-v1-reference.md).
 **Starting baseline:** `0441d900f19c028bc5f413695205d04630e73226` (historical).
@@ -56,37 +56,37 @@ Source observations are not runtime proof and do not justify broad refactoring b
 
 ## 5. Work packages
 
-### WP1 — API Architecture & Baseline Audit
+### API Architecture and Baseline Audit
 Inventory routes, DTOs, service delegates, permissions, response types, status codes and tests; record deployment switches and v1 policy; prioritize evidenced gaps; deliver this contract and endpoint inventory.
 
-### WP2 — Route Registration, Versioning & Security Matrix
+### Route Registration, Versioning, and Security Matrix
 Verify WMS route registration; test JWT disabled, JWT enabled/auth endpoints disabled, and JWT enabled/auth endpoints enabled; enforce exact public-route allowlist; ensure protected business routes remain available when authenticated API is enabled; test unknown routes/methods and cross-tenant identifiers.
 
-### WP3 — Unified WMS Error & Validation Contract
+### Unified WMS Error and Validation Contract
 Audit advice coverage/precedence; standardize safe error codes/messages and status semantics; cover malformed JSON, Bean Validation, path/query validation, not-found, conflict, forbidden, unauthorized and unexpected errors; preserve legacy non-WMS behavior; prevent WMS errors falling through to legacy response format.
 
-### WP4 — Bounded Collection Reads
+### Bounded Collection Reads
 Audit all list/search query implementations; add consistent pagination and deterministic ordering where reads can be unbounded; standardize metadata and safe maximum page sizes; add allowlisted filters/sorting only when needed; avoid unnecessary pagination on small bounded catalogues.
 
-### WP5 — Request/Response Contract Consistency
+### Request and Response Contract Consistency
 Review DTO fields, nullability, numeric precision, timestamps/time zones, enum validation and optimistic versions; replace generic map responses only where they create concrete ambiguity/risk; keep additions backward compatible; never expose persistence entities/internal IDs.
 
-### WP6 — Tenant, Permission & Command Boundary Verification
+### Tenant, Permission, and Command Boundary Verification
 Verify active membership, persisted permissions, tenant-scoped path IDs/nested ownership, idempotency, optimistic concurrency, state transitions and audit actor context; correct demonstrated defects and add cross-tenant/permission-denial HTTP tests.
 
-### WP7 — HTTP Semantics & Operational Limits
+### HTTP Semantics and Operational Limits
 Review method/status semantics (200/201/202/204/400/401/403/404/409/413/415/422/429/500 as applicable), request-body and pagination limits, timeout-sensitive reads, authentication throttling and sensitive logging. No blanket rate limits or automatic retries without evidence/policy.
 
-### WP8 — API Reference & Versioning Documentation
+### API Reference and Versioning Documentation
 Publish endpoint reference with auth, permissions, request/response examples, errors, pagination and idempotency; evaluate OpenAPI versus maintained contract docs; document v1 compatibility/deprecation policy; keep reference synchronized with controllers/DTOs.
 
-### WP9 — Controller HTTP Contract Test Matrix
+### Controller HTTP Contract Test Matrix
 Add focused MockMvc tests for each route family and representative success/failure paths; verify validation, auth, permission denial, tenant scope, error shape, status and response schema; reuse MySQL integration tests for business invariants; preserve legacy tests.
 
-### WP10 — Compatibility & API Integration Audit
+### Compatibility and API Integration Audit
 Verify route uniqueness, response compatibility, frontend-consumable contracts, pagination stability, deterministic ordering, timestamp serialization, enum evolution and migration notes; confirm no unimplemented/disabled functionality is accidentally exposed.
 
-### WP11 — Final API Audit & CI
+### Final API Audit and CI Verification
 Re-run endpoint inventory; verify delivered PR CI and sequential merges; run full Java 21/MySQL 8.4 Testcontainers regression on exact final main SHA; record residual evidence limits honestly.
 
 ## 6. Delivery and CI rules

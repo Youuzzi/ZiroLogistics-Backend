@@ -1,4 +1,4 @@
-# WMS v1 HTTP Endpoint Inventory — Stage 13 Baseline
+# WMS v1 HTTP Endpoint Inventory Baseline
 
 **Baseline commit:** `0441d900f19c028bc5f413695205d04630e73226` (historical)
 **Status:** Historical controller-route inventory. Current API compatibility and endpoint-family guidance is maintained in [WMS API v1 Reference](wms-api-v1-reference.md); route registration and authorization remain configuration- and principal-dependent.

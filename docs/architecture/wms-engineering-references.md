@@ -1,7 +1,7 @@
 # WMS Engineering References
 
 **Reviewed:** 2026-11-16  
-**Purpose:** Traceable primary-source references used by `WMS_ENGINEERING_PRINCIPLES_AND_QUALITY_GATES.md`.
+**Purpose:** Traceable primary-source references used by `wms-engineering-principles-and-quality-gates.md`.
 
 This list deliberately separates formal/open standards from product-vendor documentation and implementation technology documentation. Vendor documentation describes how that vendor's product works; it is not automatically a universal WMS requirement.
 

@@ -1,7 +1,9 @@
-# Stage 16.1 — Risk-to-Test Traceability (Inventory)
+# Security Risk-to-Test Traceability Inventory
+
+> **Historical filename-based inventory:** This mapping was created at the recorded baseline and infers test topics from filenames/locations. It is not the current security coverage report and must not be used as a current statement of test completeness. Use [Security Coverage Inventory](../../docs/audits/security-coverage-inventory-2026-11-27.md), [Security and QA Baseline](../../docs/audits/security-qa-baseline.md), and current CI results for the latest evidence.
 
 **Baseline:** `7079a36c3adfb83da2aad0ebdb4ae0e49b5abdbe`  
-**Scope:** Map existing WMS test files by name to the high-risk areas defined in Stage 16.  
+**Scope:** Map existing WMS test files by name to the high-risk areas in the backend security and quality review.  
 **Evidence status:** **INFERRED** for test-topic mapping from test names/locations only. This document does not claim the tests' assertions, execution, or completeness were inspected.
 
 ## Method and limitations
@@ -52,6 +54,6 @@
 9. Error responses must not reveal secrets, token values, stack traces, or tenant existence.
 10. CORS preflight and denied-origin paths for both relevant security configurations.
 
-## Next step
+## Historical next step
 
-Inspect existing test assertions for P0 topics above, record precise evidence and gaps, and only then add narrowly scoped tests where a concrete risk remains. No coverage percentage or release threshold is assigned in this WP.
+This was the recommended next step when this filename-based inventory was created. Subsequent security and QA work is recorded in the dated current security coverage inventory and CI evidence. Re-run assertion-level verification before using any row here to make a present-day coverage claim.

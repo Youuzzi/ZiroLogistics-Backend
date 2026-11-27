@@ -7,23 +7,31 @@
 
 ## Executive disposition
 
-PR #367 is a documentation refresh and handoff, not a full documentation cleanup. The documentation tree still contains uppercase/underscore filenames, historical stage/work-package terms in content, and overlapping documents. Do not interpret the PR's earlier rename summary as a repository-wide naming standardization.
+PR #367 refreshes current-reference content; PR #368 completes repository-wide filename, title, and link standardization. The documentation tree contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. These materials are classified by purpose and evidence status rather than rewritten as though they describe one current implementation.
 
-The current repository contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. They must not all be rewritten as if they described the same current implementation.
 
-## Repository-wide filename findings
 
-The scan found **many non-kebab-case names still present**. Examples include:
+## Second-pass content reconciliation
 
-- `docs/architecture/PLATFORM_ADMINISTRATION_AND_OPERATIONS.md`
-- `docs/architecture/PLATFORM_AUTHORIZATION_CONTRACT.md`
-- `docs/architecture/WMS_AUTHENTICATION_AND_TOKEN_ARCHITECTURE.md`
-- `docs/architecture/WMS_INVENTORY_CORE_ARCHITECTURE.md`
-- `docs/audits/BACKEND_ARCHITECTURE_AND_DOCUMENTATION_AUDIT.md`
-- `docs/runtime/WMS_RUNTIME_BOUNDARY.md`
-- `docs/deployment/WMS_LOCAL_DOCKER_DEPLOYMENT.md`
+A focused review of supporting documents found several original implementation claims that had become stale even though the documents were still useful as design or historical evidence. The documentation branch now reconciles these subjects with the current source checkpoint:
 
-**Naming disposition:** Current active entry points should use descriptive lowercase kebab-case. Historical evidence can retain dates and original identifiers in its content, but filenames should describe subject and evidence type. The repository has not yet been fully renamed to this convention. Any rename must update every inbound Markdown link and index reference and be checked for broken links.
+- Tenant RBAC now reflects the canonical `WmsTenantPermissionPolicy`, the implemented Tenant Owner grant baseline, thirteen operational system-role templates, V28 reconciliation, and the remaining risk-metadata/separation-of-duties gaps.
+- Password provenance and provisioning documents now distinguish the still-unverified provenance of pre-existing account hashes from the implemented invitation, password setup/change/reset, email-verification, and successful-login metadata flows.
+- The V3 identity-action-token and password-provisioning documents now distinguish their original design checkpoint from the implemented storage/application/HTTP flows and the remaining email/key/retention operational gates.
+- Flyway compatibility and V1 schema documents now distinguish the original `zirowms_v1` schema provenance from the current `zirologistics_wms` runtime, Spring Boot 3.5.16, Flyway 11.20.3, and V1–V32 migration checkpoint.
+- The inventory-posting design now labels V1+V12 as its original delivery scope rather than the current migration count.
+- The QA filename-based traceability matrix is explicitly historical/inferred and points readers to the current security coverage inventory and QA baseline.
+
+These updates do not convert historical design evidence into current test proof, do not certify tenant isolation, and do not approve production readiness.
+
+## Repository-wide filename and title findings
+
+- All 93 Markdown files were included in the repository-wide scan.
+- The 51 nonstandard/non-descriptive Markdown filenames were renamed to descriptive lowercase kebab-case; conventional `README.md` filenames were retained.
+- The final tree scan found no remaining uppercase/underscore Markdown filenames and no stage/work-package identifiers in Markdown filenames.
+- The 32 document H1 titles and identified delivery-stage/work-package headings were normalized.
+- Six stale relative Markdown links were corrected; the final repository-wide relative-link scan reported zero broken links.
+- Historical identifiers may remain in body text where they preserve evidence provenance; they are not used as active filenames or document titles.
 
 ## Current checkpoint facts used by the handoff
 
@@ -32,7 +40,7 @@ The scan found **many non-kebab-case names still present**. Examples include:
 - Dedicated runtime database: `zirologistics_wms`; migrations V1–V32. Applied migrations are immutable; future changes are additive from V33.
 - API prefix: `/api/wms/v1`. Existing endpoint-specific response shapes and successful status conventions are compatibility constraints.
 - Platform control-plane foundations now include V29 operator/role/permission/MFA persistence, V30 support-grant governance, platform JWT and permission services, role administration, tenant-lifecycle authorization, and support-grant administration. End-to-end platform MFA/login HTTP, initial Platform Administrator provisioning, platform controllers, and support-grant scope consumption remain incomplete.
-- Backend work is paused temporarily for frontend foundation work. This is not security completion or production-readiness certification.
+- Backend feature work remains paused while documentation cleanup is reviewed and merged. Frontend implementation is deferred until PR #367 and PR #368 are reviewed, validated, and merged. This is not security completion or production-readiness certification.
 
 ## Security and integration boundaries
 
@@ -82,6 +90,9 @@ The scan found **many non-kebab-case names still present**. Examples include:
 - [x] State explicitly that the API v1 reference is compatibility-oriented and track full route/DTO/status/pagination verification as a separate backend roadmap item.
 - [x] Reconcile security claims with implementation primitives, available negative tests, CI evidence, and explicit partial-verification boundaries.
 - [x] Align README, docs index, runtime/deployment guidance, roadmap, and handoff with the documentation-first decision.
-- [ ] Confirm PR #367 checks pass and review the final PR diffs before merging; PR #368 CI must run after PR #367 is merged and the stacked PR is retargeted to `main`.
+- [x] Confirm PR #367 Backend CI, Authenticated WMS API DAST, and CodeQL pass on its current head.
+- [ ] Merge PR #367, retarget PR #368 to `main`, run its required checks, and review the final stacked diff before merging.
 
-This pass closes the repository-wide documentation naming, navigation, current-reference, and handoff cleanup. It does **not** replace the separate endpoint-by-endpoint API inventory, re-run every historical audit, certify tenant isolation, or approve production readiness.
+This two-PR documentation pass closes repository-wide Markdown naming, title, navigation, current-reference, and handoff cleanup once both PRs are merged. It does **not** replace the separate endpoint-by-endpoint API inventory, re-run every historical audit, certify tenant isolation, or approve production readiness.
+
+**Post-second-pass link note:** The repository-wide relative-link scan above was completed before the supplemental content edits. All newly introduced relative targets in the second pass were checked against the documentation tree, but the complete automated repository-wide link scan must be rerun on the final retargeted PR #368 head before merge.

@@ -1,12 +1,12 @@
-# WMS Inventory Control — Stage 10 Architecture & API Contract
+# WMS Inventory Control Architecture and API Contract
 
 **Status:** Historical implementation design. Stock count, inventory adjustment, and replenishment capabilities have since been implemented; use current source and tests for runtime behavior.  
 **Runtime:** WMS-only modular monolith.  
-**Schema authority:** Frozen WMS V1 plus additive migrations only (V20 onward).  
+**Original design schema scope:** Frozen WMS V1 plus additive migrations introduced for the original inventory-control delivery (V20 onward). The current runtime migration history is V1–V32; this design record does not describe the full current schema.  
 **Verification:** Disposable MySQL 8.4 Testcontainers only.  
 **Scope:** Stock counts, cycle counting, variance review/approval, inventory adjustments and warehouse replenishment.
 
-## 1. Original objective and boundaries
+## 1. Objective and boundaries
 
 The original design adds controlled inventory verification and correction workflows on top of the single inventory balance and immutable ledger established in Stage 8 and the warehouse operations established in Stage 9.
 

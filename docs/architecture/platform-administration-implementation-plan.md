@@ -2,7 +2,7 @@
 
 **Status:** Partially implemented plan. Platform identity/role persistence, JWT trust-domain primitives, persisted permission evaluation, operator-role governance, tenant lifecycle service authorization, and support-grant governance exist. End-to-end platform MFA/login HTTP, first-operator provisioning, administration controllers, and support-grant scope consumption remain open.
 **Baseline commit:** `2b72fb4b7870e8312b643a2b5fb71321eab0ab45`.
-**Primary architecture:** `docs/architecture/PLATFORM_ADMINISTRATION_AND_OPERATIONS.md`.
+**Primary architecture:** `docs/architecture/platform-administration-and-operations.md`.
 
 ## 1. Current implementation boundary
 

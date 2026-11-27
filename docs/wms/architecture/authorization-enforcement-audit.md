@@ -1,4 +1,4 @@
-# Stage 16 — Authorization Enforcement Audit
+# WMS Authorization Enforcement Audit
 
 ## Scope and status
 

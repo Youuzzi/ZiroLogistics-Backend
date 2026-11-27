@@ -45,12 +45,12 @@ Examples include:
 **Finding:** Stage names are useful as historical delivery metadata but are poor permanent document names. The target convention should describe the document's enduring function and domain. Rename work must be performed with a repository-wide reference update (README, docs links, workflow references, and internal Markdown links) to avoid broken navigation. Do not rename files blindly or remove historical evidence.
 
 Recommended convention:
-- `PLATFORM_ADMINISTRATION_AND_OPERATIONS.md`
+- `platform-administration-and-operations.md`
 - `TENANT_LIFECYCLE_AND_PROVISIONING.md`
-- `ROLE_BASED_ACCESS_CONTROL.md`
+- `role-based-access-control.md`
 - `WMS_PERMISSION_CATALOG.md`
 - `WMS_ROLE_PERMISSION_MATRIX.md`
-- `TENANT_ISOLATION_AND_AUTHORIZATION.md`
+- `tenant-isolation-and-authorization.md`
 - `TENANT_LOCALE_AND_CURRENCY_POLICY.md`
 - `SAAS_ENTITLEMENT_AND_FEATURE_ACCESS.md`
 - `SUBSCRIPTION_LIFECYCLE.md`
@@ -102,7 +102,7 @@ The current divergence is a high-priority correctness gap to resolve before firs
 
 `WmsRoleManagementService` has a server-side `DELEGABLE_PERMISSIONS` set. It is narrower than the total permission catalogue and excludes sensitive operational actions. This is directionally appropriate for preventing privilege escalation, but the delegation policy needs to be documented and tested against the final role matrix. The current permission-catalogue query and delegable set expose only a small subset of the complete WMS permission catalogue. Consequently, a newly provisioned tenant cannot currently use the role-management API to delegate many operational workflow permissions to custom roles. This is a functional RBAC gap, not merely a documentation mismatch.
 
-The design document `WMS_ROLE_PERMISSION_MANAGEMENT_DESIGN.md` still labels several role-management permission codes as proposals that are not yet seeded. Migrations and source code show that role-management permissions and management service functionality have since been implemented. The document status and sections need to be updated to distinguish implemented behavior from remaining policy decisions.
+The design document `wms-role-permission-management-design.md` still labels several role-management permission codes as proposals that are not yet seeded. Migrations and source code show that role-management permissions and management service functionality have since been implemented. The document status and sections need to be updated to distinguish implemented behavior from remaining policy decisions.
 
 ## 5. Current tenant authorization boundary
 
@@ -180,10 +180,10 @@ Primary repository evidence:
 - `src/test/java/com/zirocraft/zirologistics/wms/bootstrap/WmsPlatformBootstrapMySqlIntegrationTest.java`
 - `src/test/java/com/zirocraft/zirologistics/wms/tenancy/WmsTenantProvisioningMySqlIntegrationTest.java`
 - `src/test/java/com/zirocraft/zirologistics/wms/authorization/WmsRoleManagementServiceTest.java`
-- `docs/architecture/WMS_CONTROLLED_PLATFORM_BOOTSTRAP.md`
-- `docs/architecture/WMS_TENANT_ORGANIZATION_MANAGEMENT.md`
-- `docs/architecture/WMS_ROLE_PERMISSION_MANAGEMENT_DESIGN.md`
-- `docs/architecture/WMS_TENANT_CONTEXT_AND_AUTHORIZATION_RESOLUTION.md`
+- `docs/architecture/wms-controlled-platform-bootstrap.md`
+- `docs/architecture/wms-tenant-organization-management.md`
+- `docs/architecture/wms-role-permission-management-design.md`
+- `docs/architecture/wms-tenant-context-and-authorization-resolution.md`
 - `docs/api/wms-api-v1-reference.md`
 - `src/main/resources/application-wms.properties`
 

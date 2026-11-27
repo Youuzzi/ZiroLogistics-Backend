@@ -1,9 +1,11 @@
-# WMS Stage 12 — Final Integration & CI Checklist
+# WMS Integration and CI Verification Checklist
 
-**Status:** Complete — final integration and Main CI verified.
+> **Historical integration checklist:** This checklist records the original Stage 12 integration order and CI evidence. It is retained as delivery history, not as the current migration or release checklist. The current runtime and security/QA checkpoint are maintained in the [Backend Maintenance Handoff](../project/backend-maintenance-handoff-2026-11-27.md) and [Security and QA Baseline](../audits/security-qa-baseline.md).
+
+**Status:** Historical integration checklist; the original integration delivery and recorded Main CI gate completed.
 **Baseline:** `f1ae5a05b14bf77f90ee92b4390113f8c29f6187`
 **Runtime verification:** Java 21, Maven, disposable MySQL 8.4 Testcontainers.
-**Schema baseline:** V1–V25 unchanged; additive V26 applied and validated through fresh and upgrade Testcontainers paths.
+**Original schema baseline:** V1–V25 unchanged; additive V26 was applied and validated through fresh and upgrade Testcontainers paths. Current runtime migration history is V1–V32.
 
 ## 1. Integration sequence
 
@@ -39,7 +41,7 @@ Before each merge:
 | Operational reporting | WMS runtime route; persisted report permission; tenant-scoped aggregation; available quantity semantics; read-only behavior; no legacy dashboard dependency |
 | Audit traceability | Tenant-scoped actor identity; event subject and operation reference; request IDs where supplied; audit and workflow changes share transaction; audit failure rolls back posting |
 
-## 3. Stage 12 final verification
+## 3. Final integration verification
 
 - [x] All delivered WP PR CI runs passed on their final tested head SHAs; superseded/duplicate PRs #127–#129 were not merged.
 - [x] Final delivered PRs reviewed; no unresolved inline review threads on PRs #108–#126, #130 and #131.
