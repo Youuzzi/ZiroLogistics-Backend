@@ -1,6 +1,6 @@
 # WMS Warehouse Master Data — Architecture & API Contract
 
-**Status:** Proposed implementation contract for roadmap Stage 7.  
+**Status:** Historical warehouse master-data design. Warehouse and hierarchical location master-data services and HTTP adapters are present in the current WMS runtime; use source and tests for exact behavior.  
 **Runtime:** WMS-only modular monolith.  
 **Schema:** Frozen WMS V1; any missing persisted capability requires a reviewed additive migration.  
 **Verification:** Disposable MySQL 8.4 Testcontainers only.  

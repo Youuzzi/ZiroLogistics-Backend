@@ -1,6 +1,8 @@
 # Stage 13 WP11 — Final API and Repository Audit
 
-- **Status:** Implementation submitted for PR review; WP11 CI evidence pending.
+> **Historical audit snapshot:** The runtime/API delivery recorded here was subsequently integrated. The pending-review wording below describes the original audit baseline, not the current PR state. Use [Runtime Boundary](../runtime/WMS_RUNTIME_BOUNDARY.md) and [WMS API v1 Reference](../api/wms-api-v1-reference.md) for current navigation.
+
+- **Status at the recorded audit baseline:** Implementation submitted for PR review; WP11 CI evidence pending.
 - **Audit baseline:** `a160b3ed0a52a9b9d98a8ac49b5e452af9e980ce`
 - **Work branch:** `chore/stage-13-wp11-wms-runtime-docs-infrastructure`
 

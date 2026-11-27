@@ -1,17 +1,16 @@
 # Stage 16 — Parallel Security Coverage Inventory (2026-11-27)
 
-**Purpose:** Record a non-invasive coverage inventory while tenant MFA lifecycle persistence (#358) is in progress. This is an audit planning artifact, not a security certification or proof that every listed control is implemented.
+**Purpose:** Preserve the security coverage inventory captured while tenant MFA lifecycle persistence (#358) was in progress. PR #358 has since merged; tenant MFA factor persistence exists, while end-to-end enrollment, verification, step-up, recovery, and one-time proof consumption remain incomplete and MFA remains disabled by default. This is an audit planning artifact, not a security certification or proof that every listed control is implemented.
 
 ## Baseline
 
-The current main branch at the time of this inventory is `102aae9642dd8f3d59ed47b91a54dab13fd7cd36`. Existing Stage 16 audit documents explicitly state that tenant isolation and route-to-query verification remain partially verified. This inventory preserves that status.
+The current main branch at the time of this inventory is `102aae9642dd8f3d59ed47b91a54dab13fd7cd36`. Existing security reviews explicitly state that tenant isolation and route-to-query verification remain partially verified. This inventory preserves that evidence boundary.
 
 ## Parallel work boundaries
 
 - This documentation-only slice does not modify authentication, authorization, MFA, migrations, or runtime behavior.
-- PR #358 remains isolated and is not a dependency for this inventory.
-- Follow-up implementation slices must be opened only after a source trace identifies a concrete gap and a focused test reproduces or proves it.
-- Avoid touching MFA lifecycle files while #358 is in review/CI.
+- The original review constraint to avoid MFA lifecycle changes while PR #358 was in review is historical and no longer an active restriction.
+- Follow-up implementation slices should be opened only after a source trace identifies a concrete gap and a focused test reproduces or proves it.
 
 ## Evidence already present in repository
 
