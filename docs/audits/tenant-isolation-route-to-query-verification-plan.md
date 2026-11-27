@@ -1,7 +1,7 @@
 # Tenant Isolation Route-to-Query Verification Plan
 
 **Status:** Active verification plan; tenant isolation remains partially verified.
-**Original plan baseline:** `2b72fb4b7870e8312b643a2b5fb71321eab0ab45`.  
+**Original plan baseline:** `2b72fb4b7870e8312b643a2b5fb71321eab0ab45`.
 **Current source checkpoint reconciled:** `main` at `148177826c5eebd56b6134851e5d901809549448`.
 **Related baseline:** `docs/security/tenant-isolation-and-authorization.md`.
 
