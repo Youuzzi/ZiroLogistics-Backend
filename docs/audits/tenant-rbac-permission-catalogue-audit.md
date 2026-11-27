@@ -79,7 +79,7 @@ The integration tests inspect persisted database rows for the Owner and every sy
 
 The canonical policy resolves the original bootstrap/provisioning mismatch, but it does not complete all authorization governance:
 
-1. **Permission risk metadata:** risk-class metadata is not yet represented as a canonical machine-readable permission attribute. The current role templates encode explicit grants, but do not provide a general permission-risk registry.
+1. **Permission risk metadata:** the immutable `WmsTenantPermissionRiskRegistry` now provides 94 machine-readable entries with risk class, tenant assignability, fresh-MFA, audit, and optional SoD-group metadata. The registry is tested against the seeded catalogue, but it does not itself enforce those controls at every action boundary.
 2. **Separation of duties:** stock-count and inventory-adjustment actor separation exists in their workflows, and high-risk system-role self-assignment is restricted. Inbound posting, final shipping, and transfer dispatch/receipt actor separation is not universally certified across all routes and lifecycle paths.
 3. **Delegation policy coverage:** catalogue visibility and custom-role delegation are centralized, but the allowed permission subset remains deliberately restricted. Do not broaden it without route-level enforcement review and negative tests.
 4. **Permission enforcement completeness:** this audit does not certify that every controller, service method, background worker, and indirect resource lookup enforces the intended permission and tenant scope.
