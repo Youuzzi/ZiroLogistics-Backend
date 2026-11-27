@@ -1,3 +1,5 @@
+> **Historical structural audit:** This disposition records the legacy-runtime cleanup at PR #162 and its V1–V26 migration checkpoint. The current WMS runtime has migrations V1–V32; use the [Runtime Boundary](../runtime/wms-runtime-boundary.md) and [Backend Maintenance Handoff](../project/backend-maintenance-handoff-2026-11-27.md) for current runtime facts.
+
 # Backend Structural Audit — Legacy Disposition
 
 **Baseline:** `9c03a2ff93593027d3d8ff6ca8e2ffec492e011a` (PR #162 merged; post-merge Main CI run `44653864200` successful)
