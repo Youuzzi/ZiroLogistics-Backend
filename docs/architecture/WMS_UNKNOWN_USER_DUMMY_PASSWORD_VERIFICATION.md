@@ -1,6 +1,6 @@
 # WMS Unknown-User Dummy Password Verification
 
-**Status:** Isolated WMS application security component implemented; login orchestration is not yet wired.  
+**Status:** Implemented and wired into `WmsCredentialAuthenticationService` for unknown-account password verification. Unit and MySQL credential-authentication tests cover the integration; this component does not own the complete login workflow.  
 **Scope:** Reduce password-hash timing differences between unknown and known email paths.  
 **Runtime:** WMS profile only.
 
