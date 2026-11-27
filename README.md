@@ -4,7 +4,7 @@ Tenant-aware Warehouse Management System (WMS) backend for the ZiroLogistics Saa
 
 The repository contains the Java/Spring Boot runtime, persistence and schema migrations, security and authorization foundations, automated tests, local Docker Compose environment, and engineering documentation.
 
-> **Development status:** Active development. Backend feature work is temporarily paused while the documentation handoff is finalized and the frontend foundation is prepared. This repository is **not production-ready**. Several security orchestration, authorization-enforcement, tenant-isolation verification, operational, and release-readiness items remain open. A module or endpoint being present does not mean its complete business workflow or production controls are finished.
+> **Development status:** Active development. Documentation refresh and filename/content standardization PRs #367 and #368 are merged. The frontend foundation may proceed independently using synthetic data behind replaceable adapters while prioritized backend security and operational follow-up remains open. This repository is **not production-ready**. Several security orchestration, authorization-enforcement, tenant-isolation verification, operational, and release-readiness items remain open. A module or endpoint being present does not mean its complete business workflow or production controls are finished.
 
 ## Contents
 
