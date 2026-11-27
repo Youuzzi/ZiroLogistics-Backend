@@ -10,6 +10,8 @@
 - `PlatformSecurityConfiguration` installs an ordered, dedicated stateless filter chain for `/api/platform/v1/**`; requests in that matcher require authentication.
 - `PlatformJwtAuthenticationConverter` requires a nonblank operator subject, integral credential-version claim, explicit MFA claim and MFA timestamp; it resolves the operator's current active and email-verified state and credential version from persistence on each request.
 - The converter creates a platform principal with no authorities. The source comment explicitly defers permission loading; application services must use the persisted permission evaluator.
+- The platform decoder uses its own configuration namespace, RSA key-material bean, issuer, audience, `token_use=platform_access`, and key-ID validation. The tenant decoder has separate tenant-selection/access audiences and token-use profiles. Configuration separation is present in source; deployed PEM values must still be verified to ensure the actual signing keys are distinct.
+- Platform MFA freshness is checked at two levels: no older than 15 minutes when converting the bearer token, then no older than five minutes when authorizing HIGH/CRITICAL actions.
 - `PlatformPermissionEvaluator` denies malformed inputs, missing grants, unknown risk values, and data-access failures. It reads current active operator/role/permission assignments. HIGH and CRITICAL permissions require MFA no older than five minutes at use time.
 
 ### Tenant lifecycle
@@ -39,7 +41,7 @@ Test names and source presence are evidence pointers, not proof that every produ
 2. No support-grant consumer/enforcement path was found in the reviewed source tree. Governance records and approval alone must never be interpreted as granting access; access must remain unavailable until a separate, explicit, tenant-scoped, purpose-bound, time-bound and audited enforcement boundary exists.
 3. Add negative HTTP boundary tests proving tenant JWTs cannot authenticate platform routes and platform JWTs cannot authenticate tenant operational routes.
 4. Add MySQL-backed tests for support-grant expiry, not-yet-started grants, revocation races, tenant suspension after approval, scope enforcement at every consumer, and audit-write rollback.
-5. Verify decoder issuer/audience/key separation and claim validation from the dedicated decoder configuration and its runtime tests as a separate focused slice.
+5. Add runtime configuration tests proving platform and tenant deployments use distinct RSA key material, issuer and audience values; source has separate beans/namespaces, but environment configuration can still accidentally reuse PEM values.
 6. Confirm all platform mutation entry points remain protected when called outside HTTP, and that audit persistence failure rolls back the corresponding state transition.
 
 ## Conclusion
