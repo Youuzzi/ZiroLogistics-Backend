@@ -1,47 +1,41 @@
 # Backend Documentation
 
-This directory contains active engineering references and historical verification records for the WMS backend.
+Documentation is organized by purpose: current reference, architecture/design, audits/evidence, runtime/deployment, security, testing, and historical material.
 
-## Start here
+## Current entry points
+- [Backend maintenance handoff](project/backend-maintenance-handoff-2026-11-27.md) — current pause checkpoint and resume order.
+- [Backend improvement roadmap](roadmap/backend-improvement-roadmap.md) — prioritized backend work after frontend foundation.
+- [Documentation content audit](audits/documentation-content-audit-2026-11-27.md) — naming and content findings, audit scope, and remaining cleanup.
+- [Runtime boundary](runtime/WMS_RUNTIME_BOUNDARY.md) — application runtime, database target, migration safety, configuration.
+- [Local Docker deployment](deployment/WMS_LOCAL_DOCKER_DEPLOYMENT.md) — isolated local compose workflow.
+- [Controlled platform bootstrap](architecture/WMS_CONTROLLED_PLATFORM_BOOTSTRAP.md) — bootstrap constraints and behavior.
+- [Tenant MFA contract](security/tenant-mfa-and-step-up-authentication-contract.md) — persistence foundations and incomplete orchestration.
+- [Tenant isolation and authorization](security/TENANT_ISOLATION_AND_AUTHORIZATION.md) — data access and authorization principles.
 
-- [Backend Maintenance Handoff](project/backend-maintenance-handoff-2026-11-27.md) — exact engineering checkpoint, completed changes, security boundaries, and resume instructions.
-- [Backend Improvement Roadmap](roadmap/backend-improvement-roadmap.md) — prioritized implementation and verification backlog.
-- [Documentation Content Audit](audits/documentation-content-audit-2026-11-27.md) — audit scope, current checkpoint facts, stale-content findings, and frontend integration boundaries.
-- [Backend Runtime Boundary](runtime/WMS_RUNTIME_BOUNDARY.md) — supported application runtime, database targets, migration safety, and configuration.
-- [Local Docker Deployment](deployment/WMS_LOCAL_DOCKER_DEPLOYMENT.md) — isolated local Compose workflow.
-- [Controlled Platform Bootstrap](architecture/WMS_CONTROLLED_PLATFORM_BOOTSTRAP.md) — one-time tenant-owner bootstrap constraints.
-- [Tenant MFA and Step-Up Contract](security/tenant-mfa-and-step-up-authentication-contract.md) — MFA architecture, implemented persistence slices, and enablement requirements.
-- [Tenant Isolation and Authorization](security/TENANT_ISOLATION_AND_AUTHORIZATION.md) — tenant data-access and authorization principles.
+## API references
+- [WMS API v1 reference](api/wms-api-v1-reference.md)
+- [Inventory endpoint baseline](api/inventory-endpoint-baseline.md)
+- [HTTP API semantics](api/http-api-semantics.md)
+- [API request/response contract](api/api-request-response-contract.md)
 
-## API
-
-- [WMS API v1 Reference](api/wms-api-v1-reference.md)
-- [Inventory Endpoint Baseline](api/inventory-endpoint-baseline.md)
-- [HTTP API Semantics](api/http-api-semantics.md)
-- [API Request/Response Contract](api/api-request-response-contract.md)
-
-## Architecture
-
-Architecture references cover identity, tenant context, authorization, role governance, warehouse operations, inventory posting, concurrency, and platform administration. See the files in [architecture](architecture/).
+## Architecture and design
+Architecture references cover identity, tenant context, authorization, role governance, warehouse operations, inventory posting, concurrency, and platform administration. The directory includes implemented references, contracts, designs, and plans; read each document's status and checkpoint before treating it as current behavior.
 
 ## Audits and verification
+- [Security and QA baseline](audits/security-qa-baseline.md)
+- [Security and QA verification status](audits/security-qa-closure-criteria.md)
+- [Platform control-plane review](audits/platform-control-plane-review-2026-11-27.md)
+- [Tenant isolation review](audits/tenant-isolation-review-2026-11-27.md)
+- [Outbound tenant-isolation review](audits/outbound-tenant-isolation-review-2026-11-27.md)
+- [Security coverage inventory](audits/security-coverage-inventory-2026-11-27.md)
+- [Documentation content audit](audits/documentation-content-audit-2026-11-27.md)
 
-- [Security and QA Baseline](audits/security-qa-baseline.md)
-- [Security and QA Verification Status](audits/security-qa-closure-criteria.md)
-- [Documentation Content Audit](audits/documentation-content-audit-2026-11-27.md)
-- [Platform Control-Plane Review](audits/platform-control-plane-review-2026-11-27.md)
-- [Tenant Isolation Review](audits/tenant-isolation-review-2026-11-27.md)
-- [Outbound Tenant-Isolation Review](audits/outbound-tenant-isolation-review-2026-11-27.md)
-- [Security Coverage Inventory](audits/security-coverage-inventory-2026-11-27.md)
-
-Source reviews describe only the code paths they inspected. They are not full penetration tests or security certifications.
+Audits are dated and scoped evidence, not certifications or claims that every code path was reviewed.
 
 ## Database and testing
-
-- `database/source/` contains historical reference material only. It is not an executable migration source.
+- `database/source/` contains historical schema reference material, not executable migrations.
 - `testing/` contains HTTP contract and regression test references.
-- WMS Flyway migrations live in `src/main/resources/db/wms-migration`; applied migrations are immutable.
+- WMS Flyway migrations are in `src/main/resources/db/wms-migration`; applied migrations are immutable.
 
 ## Naming convention
-
-Active documentation uses descriptive, lowercase, hyphen-separated filenames. Historical references may mention former project work packages in their body text, but filenames should describe the document's subject rather than a stage number.
+Preferred filenames for active documents: descriptive lowercase kebab-case. The existing tree has not yet been fully normalized; see the content audit for examples and remaining cleanup. Historical stage/work-package identifiers may remain in document text when needed for traceability, but should not be used as active navigation labels.
