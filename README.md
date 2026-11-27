@@ -135,7 +135,7 @@ A controlled non-web bootstrap command exists for a completely empty WMS databas
 
 Tenant MFA factor persistence is present, but enrollment/verification/step-up/recovery orchestration is not complete. Platform support-grant governance records exist, but a runtime support-access consumer/enforcement path is not yet implemented. These capabilities must not be represented as complete in the frontend.
 
-See [Controlled Platform Bootstrap](docs/architecture/WMS_CONTROLLED_PLATFORM_BOOTSTRAP.md), [Tenant MFA Contract](docs/security/TENANT_MFA_AND_STEP_UP_AUTHENTICATION_CONTRACT.md), and [Platform Control-Plane Review](docs/audits/platform-control-plane-review-2026-11-27.md).
+See [Controlled Platform Bootstrap](docs/architecture/WMS_CONTROLLED_PLATFORM_BOOTSTRAP.md), [Tenant MFA Contract](docs/security/tenant-mfa-and-step-up-authentication-contract.md), and [Platform Control-Plane Review](docs/audits/platform-control-plane-review-2026-11-27.md).
 
 ## Build and tests
 
