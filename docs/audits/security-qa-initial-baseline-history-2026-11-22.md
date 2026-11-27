@@ -2,8 +2,8 @@
 
 # Historical QA and Security Baseline — 2026-11-22
 
-**Baseline commit:** `a581d696e327ab5ba6cd70e8375caff9109b02fe`  
-**Scope:** WMS backend quality assurance, security verification, dependency risk, and performance readiness.  
+**Baseline commit:** `a581d696e327ab5ba6cd70e8375caff9109b02fe`
+**Scope:** WMS backend quality assurance, security verification, dependency risk, and performance readiness.
 **Status:** Baseline inventory completed; execution and measurement WPs remain open.
 
 ## 1. Audit rules
