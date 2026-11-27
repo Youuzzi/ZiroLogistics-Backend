@@ -27,9 +27,9 @@ The workflow:
 
 It does not connect to `zirowms_v1`, `zirologistics_db`, or any external production system.
 
-## 3. Initial scan boundary
+## 4. Planned initial scan boundary
 
-The first run scans the protected warehouse route while JWT is disabled. The expected HTTP 403 is an explicit fail-closed smoke check. The ZAP scan therefore measures the unauthenticated perimeter response and passive HTTP metadata only.
+The planned first run scans the protected warehouse route while JWT is disabled. The expected HTTP 403 is an explicit fail-closed smoke check. The ZAP scan therefore measures the unauthenticated perimeter response and passive HTTP metadata only.
 
 **It does not prove that authenticated warehouse, inventory, picking, shipping, or other business routes are secure.** The route returns deny-by-default before business services execute. A later authenticated DAST phase would require disposable tenant/user fixtures, ephemeral RSA key material, a controlled token-issuance flow, and an OpenAPI/context-aware scan plan. That is not included in this first pass.
 

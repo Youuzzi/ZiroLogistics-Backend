@@ -21,6 +21,8 @@ Out of scope: new warehouse workflows, duplicate endpoints, frontend implementat
 
 ### 3.1 Existing route families
 
+> **Historical security note:** The controller-condition finding below belongs to the recorded baseline. Current runtime behavior is governed by the WMS security-chain implementation and the current API v1 reference: JWT enables protected WMS routes, while the separate public-auth switch controls only the exact anonymous POST allowlist. Do not use the old condition statement below as current configuration guidance.
+
 The WMS runtime has HTTP adapters for authentication/invitations; tenant profile and role/permission management; warehouse/location and item/category/identifier/UOM/lot master data; inventory posting/balances/ledger; inbound receiving/putaway; outbound shipment/picking/packing/shipping; inter-warehouse transfer; stock count/adjustment; replenishment; and operational reporting.
 
 All identified controllers are under the WMS package scan, use `/api/wms/v1`, and are guarded by the WMS profile, servlet runtime and `WmsIdentityHttpEnabledCondition`.
