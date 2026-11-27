@@ -26,7 +26,7 @@ Tenant lifecycle/provisioning code can record `actor_type = PLATFORM_OPERATOR` a
 ## 3. Implementation slices
 
 ### Slice 1 — Platform identity persistence
-<badge>Implemented foundation — V29</badge>
+**Implemented foundation — V29.**
 V29 adds platform operators, platform roles, platform permissions, operator-role assignments, role-permission grants, MFA/recovery persistence, and platform authentication events. A controlled first-operator provisioning operation remains open. Use opaque public IDs, normalized unique email, adaptive password hashes, lifecycle status, credential version, and UTC audit timestamps.
 
 ### Slice 2 — Platform authentication
