@@ -1,6 +1,6 @@
 # Backend Improvement Roadmap
 
-**Status:** Prioritized backlog while frontend implementation remains deferred pending review, validation, and merge of the documentation PRs.  
+**Status:** Prioritized backend security and operational backlog. Documentation PRs #367 and #368 are merged; frontend foundation may proceed with synthetic data behind replaceable adapters, while real-account and privileged integration remain gated by the acceptance criteria below.  
 **Baseline:** `main` at `148177826c5eebd56b6134851e5d901809549448`.  
 **Rule:** Resume backend work based on security risk and frontend integration dependency, not to complete a checklist for its own sake.
 
@@ -101,7 +101,7 @@ Deferred until the product and integration flows stabilize:
 
 ## Frontend integration sequence — gated on documentation completion
 
-Do not begin frontend implementation until PR #367 and PR #368 are reviewed, validated, and merged and the documentation handoff is accepted. Once that gate is met, frontend foundation may use synthetic data behind replaceable repository/service interfaces. Before using real accounts or privileged production-like flows:
+PR #367 and PR #368 are merged. After accepting this handoff, frontend foundation may proceed with synthetic data behind replaceable repository/service interfaces. Do not connect real accounts or privileged production-like flows until the following gates are met:
 1. Confirm the documentation handoff and API compatibility boundaries.
 2. Complete Platform Administrator provisioning design.
 3. Complete required tenant MFA orchestration.
