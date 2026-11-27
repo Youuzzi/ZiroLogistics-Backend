@@ -56,32 +56,32 @@ The scan found **many non-kebab-case names still present**. Examples include:
 | Roadmap/handoff | Maintain these as the current backend pause/resume guides; avoid duplicating status in many documents. |
 | Historical documents | Retain useful evidence. Add a historical/superseded banner and successor link when a stale document may be mistaken for current truth. |
 
-## Confirmed cleanup gaps
+## Remaining follow-up work outside this documentation pass
 
-1. Repository-wide filename convention is not complete; uppercase and underscore names remain.
-2. Documentation overlaps substantially (architecture, audit, baseline, contract, implementation plan). Canonical ownership and duplication have not been resolved for every subject.
-3. Stage/work-package identifiers remain in historical document content and in some filenames. This is acceptable only where clearly historical; active entry points should not depend on these identifiers.
-4. The documentation index needs a link audit against the exact tree. No blanket assertion is made that every relative link is valid.
-5. The WMS API v1 reference is explicitly compatibility-oriented and does not claim to be a complete endpoint/DTO catalogue. Full route-to-controller-to-DTO/status/pagination verification remains a backend follow-up tracked in the roadmap.
-6. Historical audits retain their original source checkpoints; their findings are not silently promoted to current implementation claims.
+1. Historical audits and design snapshots preserve their original source checkpoints and have not all been independently re-run. They are labelled as historical, preliminary, proposed, or partial where that distinction changes how readers should use them; do not treat their findings as current truth without revalidation.
+2. The WMS API v1 reference is explicitly compatibility-oriented, not an exhaustive endpoint/DTO catalogue. Full route-to-controller-to-DTO/validation/status/pagination verification remains a backend follow-up in the roadmap.
+3. Security and production readiness are not certified. Tenant MFA orchestration, first Platform Administrator provisioning, support-grant scope consumption, complete tenant-isolation verification, and production operations remain open as documented.
 
 ## Frontend handoff guardrails
 
-- Use synthetic/mock data behind repository/service interfaces, not directly embedded in screens.
+- Frontend implementation is deferred until PR #367 and PR #368 are reviewed and merged.
+- Once the documentation handoff is accepted, use synthetic/mock data behind repository/service interfaces, not directly embedded in screens.
 - Keep API adapters separate so mock-to-real integration does not require screen rewrites.
 - Do not assume tenant MFA, support access, Platform Administrator bootstrap, or production operations are complete.
 - Tenant-local interpretation of scheduling fields remains a backend contract issue; do not invent timezone semantics in frontend.
 - Preserve endpoint-specific v1 payload and success-code behavior once integration begins.
 
-## Completion criteria for a truly exhaustive docs cleanup
+## Completion criteria for this documentation pass
 
-- [ ] Rename all active docs to descriptive lowercase kebab-case; decide whether historical evidence filenames also need normalization.
-- [ ] Update and verify all relative links after renames.
-- [ ] Establish one canonical doc per subject; mark duplicates, superseded plans, and historical snapshots.
-- [ ] Reconcile every active reference against source/config/tests and state the exact checkpoint.
-- [ ] Verify API endpoints, DTOs, validation, response bodies, status codes, pagination, and temporal behavior from controllers and tests.
-- [ ] Reconcile security claims with code, negative tests, CI evidence, and explicit scope.
-- [ ] Validate README, docs index, deployment/runtime instructions, and frontend handoff.
-- [ ] Run link/reference checks and documentation CI; review the diff before merge.
+- [x] Normalize all 51 non-descriptive/nonstandard Markdown filenames to descriptive lowercase kebab-case; retain conventional `README.md` names.
+- [x] Normalize the 32 delivery-stage/work-package H1 titles and the delivery-stage section headings found by the repository-wide heading scan.
+- [x] Update inbound references and canonical navigation links for the renamed documents.
+- [x] Check relative Markdown links across all 93 Markdown files; six stale links were corrected and the final recheck found zero broken Markdown links.
+- [x] Establish canonical documentation ownership by subject in `docs/README.md`; supporting designs and audits are classified as evidence or historical context.
+- [x] Reconcile current canonical references against source/configuration/migrations/tests for runtime, deployment, API compatibility scope, tenant identity/RBAC, tenant isolation, MFA, platform control plane, temporal behavior, security/QA, and the frontend handoff.
+- [x] State explicitly that the API v1 reference is compatibility-oriented and track full route/DTO/status/pagination verification as a separate backend roadmap item.
+- [x] Reconcile security claims with implementation primitives, available negative tests, CI evidence, and explicit partial-verification boundaries.
+- [x] Align README, docs index, runtime/deployment guidance, roadmap, and handoff with the documentation-first decision.
+- [ ] Confirm PR #367 checks pass and review the final PR diffs before merging; PR #368 CI must run after PR #367 is merged and the stacked PR is retargeted to `main`.
 
-This report is deliberately honest about coverage: current canonical references and active handoff documents have been reconciled; historical snapshots remain dated evidence rather than being rewritten as current truth. The API v1 reference is not an exhaustive route/DTO catalogue, and this report is **not** a historical-evidence re-run, security certification, or production-readiness approval.
+This pass closes the repository-wide documentation naming, navigation, current-reference, and handoff cleanup. It does **not** replace the separate endpoint-by-endpoint API inventory, re-run every historical audit, certify tenant isolation, or approve production readiness.
