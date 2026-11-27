@@ -2,7 +2,7 @@
 
 **Snapshot date:** 2026-11-27  
 **Main checkpoint:** `148177826c5eebd56b6134851e5d901809549448`  
-**Disposition:** Backend feature work is paused while repository-wide documentation cleanup is completed. Frontend implementation is deferred until the documentation PRs are reviewed and merged. Security and QA are not certified complete and production readiness is not asserted.
+**Disposition:** Documentation refresh PR #367 and filename/content standardization PR #368 are merged. This document records the remaining backend security/QA backlog; frontend foundation can proceed with synthetic data behind replaceable adapters after the handoff is accepted. Security and QA are not certified complete and production readiness is not asserted.
 
 ## Latest completed security PRs
 
@@ -49,4 +49,4 @@ Other recent merged slices include #354, #355, #357, #362, #364, and #365. See t
 
 ## Important qualification
 
-The successful PR checks listed above are evidence for those PR heads. They do not imply that every backend route, security control, operational workflow, or production control is complete. The backend is paused for documentation cleanup first; frontend work will follow only after the documentation PRs are reviewed and merged. This is not a declaration that backend security or production readiness is complete.
+The successful PR checks listed above are evidence for those PR heads. They do not imply that every backend route, security control, operational workflow, or production control is complete. The documentation cleanup PRs are merged; the remaining backend security/QA work is a separate prioritized backlog. Frontend foundation does not imply real-account or privileged integration is safe. This is not a declaration that backend security or production readiness is complete.
