@@ -161,7 +161,9 @@ A later implementation PR must add reviewed additive migration(s), not edit V1â€
 
 Use foreign keys to existing user, tenant, and membership identities, with composite tenant-membership constraints where supported by the established schema. Add unique constraints and indexes for digest lookup, active factor lookup, expiry cleanup, and bounded abuse counters. Do not reuse the credential-login throttle buckets for MFA verification; MFA has its own independent account/factor/source bucket namespace. Enforce terminal-state and binding invariants with database constraints where practical.
 
-Do not store raw TOTP seeds, raw recovery codes, raw challenge nonces, or raw proof handles. Use UTC `DATETIME(6)` persistence conventions already established by WMS migrations. Add migration clean-install and upgrade verification against disposable MySQL 8.4 Testcontainers.
+Do not store raw TOTP seeds, raw recovery codes, raw challenge nonces, raw proof handles, or raw password-reauthentication grants. Use UTC `DATETIME(6)` persistence conventions already established by WMS migrations. Add migration clean-install and upgrade verification against disposable MySQL 8.4 Testcontainers.
+
+**Implemented schema slices:** V31 now provides factor, recovery-code, step-up challenge/proof, dedicated MFA throttle, and tenant security-audit tables. V32 adds `wms_tenant_mfa_reauthentication_grants`: a digest-only, single-use, user/tenant/membership/credential-version/purpose-bound grant with a database-enforced maximum five-minute lifetime. It is intended to bridge successful password reauthentication to a specific sensitive MFA lifecycle operation; it is not an MFA proof and cannot satisfy step-up. The HTTP/application flow and durable throttle enforcement must be implemented before this table is used.
 
 The exact table/column names and FK definitions are intentionally left for the schema implementation PR after a complete inspection of the existing identity and membership DDL.
 
@@ -210,12 +212,13 @@ No production enablement until deployment key management, backup/rotation, clock
 
 ## 10. Implementation sequence
 
-1. **Contract (this PR):** establish tenant MFA factor, step-up, proof, recovery, and service-enforcement requirements.
-2. **Persistence:** additive schema and MySQL adapters for factors, challenges, recovery codes, and proofs.
-3. **TOTP domain/application:** enrollment, verification, replay protection, throttling, and recovery-code lifecycle.
-4. **HTTP boundary:** authenticated tenant MFA endpoints, DTO validation, generic errors, and security tests.
-5. **Step-up enforcement:** transactional proof consumption in privileged governance services.
-6. **Single-operator activation:** implement only after tenant MFA is operational and verified.
-7. **WebAuthn:** separate phishing-resistant factor slice with browser integration and migration compatibility.
+1. **Contract:** establish tenant MFA factor, step-up, proof, recovery, and service-enforcement requirements.
+2. **Persistence (in progress):** V31 factor/recovery/challenge/proof/throttle/audit storage; V32 password-reauthentication grant storage; replay-protection adapter implemented separately.
+3. **TOTP domain/application:** complete pending enrollment, confirmation, durable throttling, recovery-code lifecycle, and step-up verification.
+4. **Password reauthentication:** implement a tenant-authenticated, purpose-bound, one-time grant issuance and consumption flow with dedicated abuse controls.
+5. **HTTP boundary:** authenticated tenant MFA endpoints, DTO validation, generic errors, and security tests.
+6. **Step-up enforcement:** transactional proof consumption in privileged governance services.
+7. **Single-operator activation:** implement only after tenant MFA is operational and verified.
+8. **WebAuthn:** separate phishing-resistant factor slice with browser integration and migration compatibility.
 
 No tenant MFA factor is enrolled, no user is forced into MFA, and no governance mode is activated by this architecture-only contract.

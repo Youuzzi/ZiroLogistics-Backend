@@ -46,6 +46,7 @@ class WmsV31TenantMfaMigrationIntegrationTest {
         Flyway current = Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/wms-migration")
+                .target(MigrationVersion.fromVersion("31"))
                 .load();
         current.migrate();
         current.validate();
