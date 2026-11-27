@@ -2,7 +2,7 @@
 
 Tenant-aware Warehouse Management System backend for the ZiroLogistics SaaS product.
 
-> **Project status:** Active development. Repository-wide documentation cleanup is in progress; frontend implementation is deferred until the documentation PRs are reviewed and merged. The backend is **not production-ready**. Security and tenant-isolation work has meaningful coverage, while several orchestration, access-enforcement, operational, and release-readiness items remain open.
+> **Project status:** Active development. Backend feature work is temporarily paused while the final documentation review is completed; frontend implementation follows the accepted backend handoff. The backend is **not production-ready**. Security and tenant-isolation work has meaningful coverage, while several orchestration, access-enforcement, operational, and release-readiness items remain open.
 
 ## Product capabilities
 
@@ -17,7 +17,7 @@ The WMS runtime currently contains backend modules for:
 - Operational reporting.
 - Platform operator identity, platform authorization primitives, tenant lifecycle governance, and support-grant governance foundations.
 
-The presence of a module or endpoint does not by itself mean that its complete business workflow, UI, or production controls are finished. See the API and architecture documentation for the implemented contracts and known gaps.
+The presence of a module or endpoint does not by itself mean that its complete business workflow, UI, or production controls are finished. See the [WMS API v1 reference](docs/api/wms-api-v1-reference.md), [backend documentation index](docs/README.md), and architecture documentation for implemented contracts and known gaps.
 
 ## Technology
 
@@ -44,6 +44,8 @@ The only supported application runtime is WMS:
 - Production source is organized under `com.zirocraft.zirologistics.wms`.
 - The default JAR, Dockerfile, Compose stack, and CI package the WMS runtime.
 - Historical database exports are reference material only; they are not executable migrations.
+- API base path: `/api/wms/v1`.
+- Runtime configuration is maintained in `src/main/resources/application-wms.properties`; use the `WMS_*` environment variables documented below.
 
 ## Database and migrations
 
@@ -135,7 +137,7 @@ A controlled non-web bootstrap command exists for a completely empty WMS databas
 
 Tenant MFA factor persistence is present, but enrollment/verification/step-up/recovery orchestration is not complete. Platform support-grant governance records exist, but a runtime support-access consumer/enforcement path is not yet implemented. These capabilities must not be represented as complete in the frontend.
 
-See [Controlled Platform Bootstrap](docs/architecture/WMS_CONTROLLED_PLATFORM_BOOTSTRAP.md), [Tenant MFA Contract](docs/security/tenant-mfa-and-step-up-authentication-contract.md), and [Platform Control-Plane Review](docs/audits/platform-control-plane-review-2026-11-27.md).
+See [Controlled Platform Bootstrap](docs/architecture/wms-controlled-platform-bootstrap.md), [Tenant MFA Contract](docs/security/tenant-mfa-and-step-up-authentication-contract.md), and [Platform Control-Plane Review](docs/audits/platform-control-plane-review-2026-11-27.md).
 
 ## Build and tests
 
@@ -149,7 +151,7 @@ MySQL integration tests use disposable MySQL 8.4 Testcontainers databases and re
 
 ## Current engineering status
 
-The latest security-focused changes merged into `main` include:
+The latest security-focused implementation changes merged into `main` include:
 
 - Tenant credential-version enforcement in the authenticated principal (#357).
 - Tenant MFA reauthentication grants and dedicated throttling (#354, #355).
@@ -159,7 +161,7 @@ The latest security-focused changes merged into `main` include:
 - Outbound fulfillment tenant-isolation source review (#365).
 - Real RSA cross-signature rejection tests between tenant and platform JWT decoders (#366).
 
-See [Backend Maintenance Handoff](docs/project/backend-maintenance-handoff-2026-11-27.md) for the exact checkpoint, evidence boundaries, and remaining work. See [Backend Improvement Roadmap](docs/roadmap/backend-improvement-roadmap.md) for prioritized follow-up work.
+The current code checkpoint and evidence boundaries are recorded in the [Backend Maintenance Handoff](docs/project/backend-maintenance-handoff-2026-11-27.md). The [Backend Improvement Roadmap](docs/roadmap/backend-improvement-roadmap.md) tracks the remaining work, including tenant MFA orchestration, initial Platform Administrator provisioning, support-grant runtime enforcement, and deeper tenant-isolation verification.
 
 ## Frontend integration direction
 
