@@ -1,12 +1,15 @@
 # Platform Administration Implementation Plan
 
-**Status:** Implementation plan derived from the approved target architecture; no platform identity or authenticated control-plane runtime is claimed by this document.
+**Status:** Partially implemented plan. Platform identity/role persistence, JWT trust-domain primitives, persisted permission evaluation, operator-role governance, tenant lifecycle service authorization, and support-grant governance exist. End-to-end platform MFA/login HTTP, first-operator provisioning, administration controllers, and support-grant scope consumption remain open.
 **Baseline commit:** `2b72fb4b7870e8312b643a2b5fb71321eab0ab45`.
 **Primary architecture:** `docs/architecture/PLATFORM_ADMINISTRATION_AND_OPERATIONS.md`.
 
 ## 1. Current implementation boundary
 
-The repository currently has tenant-scoped authentication and authorization. `WmsSecurityConfiguration` installs a WMS catch-all security chain. Tenant JWTs resolve a selected membership and persisted tenant permissions. The platform bootstrap creates a tenant owner, not a platform operator.
+V29 establishes platform operators, roles, permissions, assignments, MFA/recovery persistence, and authentication events. V30 establishes support-grant governance. Service-layer primitives include platform credential authentication, platform JWT issuance/conversion, persisted permission evaluation, role assignment, tenant lifecycle authorization, and support-grant administration. These slices do not yet form a complete platform administration API or a first-operator onboarding workflow.
+
+
+The repository has tenant-scoped authentication and authorization plus partial platform control-plane foundations. The platform bootstrap still creates a tenant owner, not a platform operator; no controlled first Platform Administrator provisioning operation is established.
 
 Tenant lifecycle/provisioning code can record `actor_type = PLATFORM_OPERATOR` and an `operator_reference` string. That string is audit attribution only: the current lifecycle service validates its syntax but does not resolve it to an authenticated, persisted operator identity. It must not be exposed as an authenticated administrative API.
 
@@ -23,7 +26,8 @@ Tenant lifecycle/provisioning code can record `actor_type = PLATFORM_OPERATOR` a
 ## 3. Implementation slices
 
 ### Slice 1 — Platform identity persistence
-Add additive WMS migrations for platform operators, platform roles, platform permissions, operator-role assignments, role-permission grants, authentication/session revocation metadata, and platform audit events. Use opaque public IDs, normalized unique email, adaptive password hashes, lifecycle status, credential version, and UTC audit timestamps.
+<badge>Implemented foundation — V29</badge>
+V29 adds platform operators, platform roles, platform permissions, operator-role assignments, role-permission grants, MFA/recovery persistence, and platform authentication events. A controlled first-operator provisioning operation remains open. Use opaque public IDs, normalized unique email, adaptive password hashes, lifecycle status, credential version, and UTC audit timestamps.
 
 ### Slice 2 — Platform authentication
 Implement platform-specific credential authentication and token profile with a distinct audience and purpose. Require MFA enrollment before privileged permissions are usable. Keep existing tenant token claims and tenant auth flow unchanged.

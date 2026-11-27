@@ -2,7 +2,7 @@
 
 **Baseline:** `e88a3b9fbbdd5aeef31c02a542c46241a648f22f`
 **Scope:** Platform JWT authentication, current persisted permission evaluation, tenant lifecycle application boundary, and support-grant governance.
-**Status:** Source review with referenced tests; not a certification or complete route-to-query audit.
+**Status:** Source review with referenced tests; not a certification or complete route-to-query audit. No platform HTTP controllers were found in the reviewed source tree; the review covers service/security primitives, not a complete externally reachable platform API.
 
 ## Reviewed implementation
 
