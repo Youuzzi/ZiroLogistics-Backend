@@ -3,7 +3,6 @@ package com.zirocraft.zirologistics.wms.security.mfa.application;
 import org.junit.jupiter.api.Test;
 
 import java.util.Base64;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -32,13 +31,13 @@ class WmsTenantMfaRuntimeConfigurationTest {
         assertThrows(IllegalStateException.class,
                 () -> WmsTenantMfaRuntimeConfiguration.createKeyRing("v1", ""));
         assertThrows(IllegalStateException.class,
-                () -> WmsTenantMfaRuntimeConfiguration.createKeyRing("v1", "v1=not-base64!"));
+                () -> WmsTenantMfaRuntimeConfiguration.createKeyRing("v1", "v1:not-base64!"));
         assertThrows(IllegalArgumentException.class,
                 () -> WmsTenantMfaRuntimeConfiguration.createKeyRing("v1",
-                        "v1=" + Base64.getEncoder().encodeToString(new byte[31])));
+                        "v1:" + Base64.getEncoder().encodeToString(new byte[31])));
         assertThrows(IllegalStateException.class,
                 () -> WmsTenantMfaRuntimeConfiguration.createKeyRing("v1",
-                        "v1=" + Base64.getEncoder().encodeToString(new byte[32])
+                        "v1:" + Base64.getEncoder().encodeToString(new byte[32])
                                 + ",v1:" + Base64.getEncoder().encodeToString(new byte[32])));
     }
 }
