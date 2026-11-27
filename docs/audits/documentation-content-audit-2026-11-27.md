@@ -94,3 +94,5 @@ These updates do not convert historical design evidence into current test proof,
 - [ ] Merge PR #367, retarget PR #368 to `main`, run its required checks, and review the final stacked diff before merging.
 
 This two-PR documentation pass closes repository-wide Markdown naming, title, navigation, current-reference, and handoff cleanup once both PRs are merged. It does **not** replace the separate endpoint-by-endpoint API inventory, re-run every historical audit, certify tenant isolation, or approve production readiness.
+
+**Post-second-pass link note:** The repository-wide relative-link scan above was completed before the supplemental content edits. All newly introduced relative targets in the second pass were checked against the documentation tree, but the complete automated repository-wide link scan must be rerun on the final retargeted PR #368 head before merge.
