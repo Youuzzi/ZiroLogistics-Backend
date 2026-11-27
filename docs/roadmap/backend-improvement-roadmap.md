@@ -1,6 +1,6 @@
 # Backend Improvement Roadmap
 
-**Status:** Prioritized backlog while frontend work is deferred pending completion and merge of the documentation PRs.  
+**Status:** Prioritized backlog while frontend implementation remains deferred pending review, validation, and merge of the documentation PRs.  
 **Baseline:** `main` at `148177826c5eebd56b6134851e5d901809549448`.  
 **Rule:** Resume backend work based on security risk and frontend integration dependency, not to complete a checklist for its own sake.
 

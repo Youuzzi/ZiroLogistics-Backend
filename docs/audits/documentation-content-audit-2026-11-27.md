@@ -9,21 +9,14 @@
 
 PR #367 refreshes current-reference content; PR #368 completes repository-wide filename, title, and link standardization. The documentation tree contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. These materials are classified by purpose and evidence status rather than rewritten as though they describe one current implementation.
 
-The current repository contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. They must not all be rewritten as if they described the same current implementation.
+## Repository-wide filename and title findings
 
-## Repository-wide filename findings
-
-The scan found **many non-kebab-case names still present**. Examples include:
-
-- `docs/architecture/platform-administration-and-operations.md`
-- `docs/architecture/platform-authorization-contract.md`
-- `docs/architecture/wms-authentication-and-token-architecture.md`
-- `docs/architecture/WMS_INVENTORY_CORE_ARCHITECTURE.md`
-- `docs/audits/backend-architecture-and-documentation-audit.md`
-- `docs/runtime/wms-runtime-boundary.md`
-- `docs/deployment/wms-local-docker-deployment.md`
-
-**Naming disposition:** Current active entry points should use descriptive lowercase kebab-case. Historical evidence can retain dates and original identifiers in its content, but filenames should describe subject and evidence type. The repository has not yet been fully renamed to this convention. Any rename must update every inbound Markdown link and index reference and be checked for broken links.
+- All 93 Markdown files were included in the repository-wide scan.
+- The 51 nonstandard/non-descriptive Markdown filenames were renamed to descriptive lowercase kebab-case; conventional `README.md` filenames were retained.
+- The final tree scan found no remaining uppercase/underscore Markdown filenames and no stage/work-package identifiers in Markdown filenames.
+- The 32 document H1 titles and identified delivery-stage/work-package headings were normalized.
+- Six stale relative Markdown links were corrected; the final repository-wide relative-link scan reported zero broken links.
+- Historical identifiers may remain in body text where they preserve evidence provenance; they are not used as active filenames or document titles.
 
 ## Current checkpoint facts used by the handoff
 

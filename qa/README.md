@@ -19,4 +19,4 @@ Automated Java tests remain under `src/test/java`. Do not move executable tests 
 5. Do not claim a security or performance control is verified solely because a tool ran without errors.
 6. Keep raw outputs only when they are safe to publish and useful; summarize large or sensitive reports with sanitized evidence.
 
-See [Stage 16 QA & Security Baseline](../docs/audits/security-qa-baseline.md) for the initial inventory and staged plan.
+See [Security and QA Baseline](../docs/audits/security-qa-baseline.md) for the initial inventory and verification plan.
