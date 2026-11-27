@@ -99,14 +99,15 @@ Deferred until the product and integration flows stabilize:
 - Deployment pipeline, migration release policy, rollback strategy.
 - SaaS entitlements, billing, and payment provider selection.
 
-## Frontend dependency order
+## Frontend integration sequence — after documentation cleanup
 
-Frontend foundation can proceed with synthetic data while this backlog is paused. Before using real accounts or privileged production-like flows:
-1. Complete Platform Administrator provisioning design.
-2. Complete required tenant MFA orchestration.
-3. Verify tenant context and permission enforcement for the API flows being integrated.
-4. Provision a dedicated development tenant and Tenant Owner through the controlled bootstrap process.
-5. Replace mock repositories with API adapters and run end-to-end tests.
+Do not begin frontend implementation until PR #367 and PR #368 are reviewed and merged and the documentation handoff is accepted. Once that gate is met, frontend foundation may use synthetic data behind replaceable repository/service interfaces. Before using real accounts or privileged production-like flows:
+1. Confirm the documentation handoff and API compatibility boundaries.
+2. Complete Platform Administrator provisioning design.
+3. Complete required tenant MFA orchestration.
+4. Verify tenant context and permission enforcement for the API flows being integrated.
+5. Provision a dedicated development tenant and Tenant Owner through the controlled bootstrap process.
+6. Replace mock repositories with API adapters and run end-to-end tests.
 
 ---
 Backlog items are not claims of implementation. Re-scope each item against the current source and tests when resumed.

@@ -2,8 +2,8 @@
 
 **Target:** `docs/backend-handoff-and-documentation-refresh`  
 **Code checkpoint:** `main` at `148177826c5eebd56b6134851e5d901809549448`  
-**Scope of this pass:** repository-wide documentation tree/name scan, PR diff review, selected current-state reference review, and checkpoint fact reconciliation.  
-**Status:** Structural and targeted content review completed. A line-by-line source-backed review of every historical document is not claimed.
+**Scope of this pass:** repository-wide documentation tree/name/link scan; current-reference reconciliation against source, configuration, migrations, and tests for runtime/deployment, API compatibility, tenant identity/RBAC, tenant isolation, MFA, platform control plane, temporal behavior, security/QA, and the frontend handoff. Historical evidence is retained with its original baseline and explicit status rather than rewritten as current truth.  
+**Status:** Current reference and handoff reconciliation completed. Historical findings have not all been independently re-run, and this is not an endpoint-by-endpoint API or production-security certification.
 
 ## Executive disposition
 
@@ -62,8 +62,8 @@ The scan found **many non-kebab-case names still present**. Examples include:
 2. Documentation overlaps substantially (architecture, audit, baseline, contract, implementation plan). Canonical ownership and duplication have not been resolved for every subject.
 3. Stage/work-package identifiers remain in historical document content and in some filenames. This is acceptable only where clearly historical; active entry points should not depend on these identifiers.
 4. The documentation index needs a link audit against the exact tree. No blanket assertion is made that every relative link is valid.
-5. Current API reference and selected summaries are compatibility-focused, but endpoint-by-endpoint route/schema/status verification has not been completed in this pass.
-6. Every historical audit has not been independently reconciled against its original source commit or re-run evidence.
+5. The WMS API v1 reference is explicitly compatibility-oriented and does not claim to be a complete endpoint/DTO catalogue. Full route-to-controller-to-DTO/status/pagination verification remains a backend follow-up tracked in the roadmap.
+6. Historical audits retain their original source checkpoints; their findings are not silently promoted to current implementation claims.
 
 ## Frontend handoff guardrails
 
@@ -84,4 +84,4 @@ The scan found **many non-kebab-case names still present**. Examples include:
 - [ ] Validate README, docs index, deployment/runtime instructions, and frontend handoff.
 - [ ] Run link/reference checks and documentation CI; review the diff before merge.
 
-This report is deliberately honest about coverage: the structural scan and targeted review identified the remaining cleanup work, but it is **not a line-by-line audit of every Markdown document** and is not a security or production-readiness certification.
+This report is deliberately honest about coverage: current canonical references and active handoff documents have been reconciled; historical snapshots remain dated evidence rather than being rewritten as current truth. The API v1 reference is not an exhaustive route/DTO catalogue, and this report is **not** a historical-evidence re-run, security certification, or production-readiness approval.
