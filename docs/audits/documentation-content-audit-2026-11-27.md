@@ -9,6 +9,21 @@
 
 PR #367 refreshes current-reference content; PR #368 completes repository-wide filename, title, and link standardization. The documentation tree contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. These materials are classified by purpose and evidence status rather than rewritten as though they describe one current implementation.
 
+
+
+## Second-pass content reconciliation
+
+A focused review of supporting documents found several original implementation claims that had become stale even though the documents were still useful as design or historical evidence. The documentation branch now reconciles these subjects with the current source checkpoint:
+
+- Tenant RBAC now reflects the canonical `WmsTenantPermissionPolicy`, the implemented Tenant Owner grant baseline, thirteen operational system-role templates, V28 reconciliation, and the remaining risk-metadata/separation-of-duties gaps.
+- Password provenance and provisioning documents now distinguish the still-unverified provenance of pre-existing account hashes from the implemented invitation, password setup/change/reset, email-verification, and successful-login metadata flows.
+- The V3 identity-action-token and password-provisioning documents now distinguish their original design checkpoint from the implemented storage/application/HTTP flows and the remaining email/key/retention operational gates.
+- Flyway compatibility and V1 schema documents now distinguish the original `zirowms_v1` schema provenance from the current `zirologistics_wms` runtime, Spring Boot 3.5.16, Flyway 11.20.3, and V1–V32 migration checkpoint.
+- The inventory-posting design now labels V1+V12 as its original delivery scope rather than the current migration count.
+- The QA filename-based traceability matrix is explicitly historical/inferred and points readers to the current security coverage inventory and QA baseline.
+
+These updates do not convert historical design evidence into current test proof, do not certify tenant isolation, and do not approve production readiness.
+
 ## Repository-wide filename and title findings
 
 - All 93 Markdown files were included in the repository-wide scan.

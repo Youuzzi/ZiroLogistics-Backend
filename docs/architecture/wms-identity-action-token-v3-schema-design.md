@@ -1,6 +1,7 @@
 # WMS Identity Action Token V3 Schema Design
 
-**Status:** Implemented as WMS V3 and verified by MySQL 8.4 Testcontainers CI.  
+**Status:** Historical V3 schema design record. The migration, storage adapter, invitation/email-verification/password lifecycle services, and related HTTP adapters have since been implemented; see the current authentication contract for runtime behavior.  
+**Current runtime database:** `zirologistics_wms` (the original `zirowms_v1` reference below describes the historical schema source only).  
 **Migration:** `src/main/resources/db/wms-migration/V3__create_wms_identity_action_tokens.sql`.  
 **Runtime:** WMS-only.  
 **V1:** Frozen; no edits.  
@@ -157,21 +158,22 @@ The PR #53 CI and the post-merge main CI passed. These checks use disposable Tes
 ## 9. Original open decisions at the V3 design checkpoint
 
 The following questions were open when this schema design was written. Subsequent implementation has closed the core application-flow items; operational readiness and deployment-specific email/key configuration remain separate release gates.
-1. Whether email verification is required before first login, and how invitation acceptance satisfies it.
-2. Exact invitation, verification, and reset token lifetimes.
-3. Which tenant statuses permit invitations and acceptance.
-4. Exact permission code for inviting users and which role assignments an inviter may grant.
-5. Retention duration for consumed/revoked/expired tokens and bounded cleanup ownership.
-6. Email provider, encrypted outbox payload, delivery retries, and operational key rotation. Sending mail must not happen inside the token-consumption transaction.
-7. Bootstrap of the first platform operator/tenant owner remains a separate controlled operational workflow.
+1. Invitation, email-verification, and password-reset lifecycles are implemented in WMS identity services and exposed through the opt-in authentication/account-lifecycle HTTP adapters.
+2. Current service defaults are 48 hours for invitation tokens (configurable within validated bounds), 24 hours for email verification, and 30 minutes for password reset.
+3. Invitation issuance requires the persisted tenant invitation permission and an active tenant; acceptance revalidates token, email, tenant, and current state.
+4. Password change/reset use the WMS Argon2id encoder and credential-version controls.
+5. The encrypted email outbox is implemented; provider credentials, encryption-key management/rotation, delivery monitoring, and production operations remain deployment gates.
+6. Retention/cleanup policy for expired and consumed identity-action records remains a separate operational decision.
+7. First Platform Administrator provisioning remains separate from tenant invitation and bootstrap.
 
 V3 stores `user_id` on an invitation when the global user already exists at creation; otherwise it remains NULL and acceptance resolves the current user by the verified normalized email. Outstanding invitation tokens for the same tenant/email are designed to be superseded on resend.
 
 ## 10. Current implementation boundary
 
-- V3 migration and its MySQL 8.4 Testcontainers verification are complete.
-- Token generation is implemented separately: 256-bit SecureRandom secret, unpadded URL-safe Base64, and SHA-256 digest-only persistence contract.
-- The MySQL token storage adapter, invitation domain/application service, password lifecycle, invitation acceptance, email verification, controlled bootstrap, and HTTP endpoints are separate implementation workstreams.
-- No user, membership, or role is created by the migration itself.
-- No production database is accessed.
-- No Redis or refresh-token/session-revocation functionality is added.
+- V3 remains an immutable migration in the current V1–V32 migration history.
+- Token generation uses a 256-bit SecureRandom secret, unpadded URL-safe Base64 transport, and SHA-256 digest-only persistence.
+- MySQL token storage, tenant invitation, invitation acceptance, email verification, and password change/reset services are implemented; exact route gates and request/response behavior are maintained in the current Authentication HTTP API Contract.
+- Invitation acceptance may create a global user and tenant membership transactionally when the invitee does not already exist; the migration itself creates no user, membership, or role.
+- The separate controlled bootstrap creates a tenant owner only; it does not provision a Platform Administrator.
+- This design record does not claim production database inspection or production email/key readiness.
+- Redis and durable refresh-token/session-revocation functionality are outside this V3 schema slice.

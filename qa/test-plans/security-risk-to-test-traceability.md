@@ -1,5 +1,7 @@
 # Security Risk-to-Test Traceability Inventory
 
+> **Historical filename-based inventory:** This mapping was created at the recorded baseline and infers test topics from filenames/locations. It is not the current security coverage report and must not be used as a current statement of test completeness. Use [Security Coverage Inventory](../../docs/audits/security-coverage-inventory-2026-11-27.md), [Security and QA Baseline](../../docs/audits/security-qa-baseline.md), and current CI results for the latest evidence.
+
 **Baseline:** `7079a36c3adfb83da2aad0ebdb4ae0e49b5abdbe`  
 **Scope:** Map existing WMS test files by name to the high-risk areas in the backend security and quality review.  
 **Evidence status:** **INFERRED** for test-topic mapping from test names/locations only. This document does not claim the tests' assertions, execution, or completeness were inspected.
