@@ -40,7 +40,7 @@ These updates do not convert historical design evidence into current test proof,
 - Dedicated runtime database: `zirologistics_wms`; migrations V1–V32. Applied migrations are immutable; future changes are additive from V33.
 - API prefix: `/api/wms/v1`. Existing endpoint-specific response shapes and successful status conventions are compatibility constraints.
 - Platform control-plane foundations now include V29 operator/role/permission/MFA persistence, V30 support-grant governance, platform JWT and permission services, role administration, tenant-lifecycle authorization, and support-grant administration. End-to-end platform MFA/login HTTP, initial Platform Administrator provisioning, platform controllers, and support-grant scope consumption remain incomplete.
-- Backend feature work remains paused while documentation cleanup is reviewed and merged. Frontend implementation is deferred until PR #367 and PR #368 are reviewed, validated, and merged. This is not security completion or production-readiness certification.
+- PR #367 and PR #368 are merged. This audit records the resulting documentation checkpoint; final reconciliation of the remaining stale status and implementation claims is tracked separately. Frontend foundation may proceed with synthetic data behind replaceable adapters; real-account and privileged integration remain gated. This is not security completion or production-readiness certification.
 
 ## Security and integration boundaries
 
@@ -72,7 +72,7 @@ These updates do not convert historical design evidence into current test proof,
 
 ## Frontend handoff guardrails
 
-- Frontend implementation is deferred until PR #367 and PR #368 are reviewed and merged.
+- Frontend foundation may proceed with synthetic data now that PR #367 and PR #368 are merged; real authentication and privileged workflow integration remain gated.
 - Once the documentation handoff is accepted, use synthetic/mock data behind repository/service interfaces, not directly embedded in screens.
 - Keep API adapters separate so mock-to-real integration does not require screen rewrites.
 - Do not assume tenant MFA, support access, Platform Administrator bootstrap, or production operations are complete.
@@ -91,8 +91,8 @@ These updates do not convert historical design evidence into current test proof,
 - [x] Reconcile security claims with implementation primitives, available negative tests, CI evidence, and explicit partial-verification boundaries.
 - [x] Align README, docs index, runtime/deployment guidance, roadmap, and handoff with the documentation-first decision.
 - [x] Confirm PR #367 Backend CI, Authenticated WMS API DAST, and CodeQL pass on its current head.
-- [ ] Merge PR #367, retarget PR #368 to `main`, run its required checks, and review the final stacked diff before merging.
+- [x] PR #367 and PR #368 merged into `main`; required PR checks passed and the final stacked diff was reviewed.
 
 This two-PR documentation pass closes repository-wide Markdown naming, title, navigation, current-reference, and handoff cleanup once both PRs are merged. It does **not** replace the separate endpoint-by-endpoint API inventory, re-run every historical audit, certify tenant isolation, or approve production readiness.
 
-**Post-second-pass link note:** The repository-wide relative-link scan above was completed before the supplemental content edits. All newly introduced relative targets in the second pass were checked against the documentation tree, but the complete automated repository-wide link scan must be rerun on the final retargeted PR #368 head before merge.
+**Final link verification:** The complete repository-wide relative-link scan was rerun on the final PR #368 head after retargeting and supplemental edits. All 93 Markdown files were scanned; zero broken relative Markdown links were found.
