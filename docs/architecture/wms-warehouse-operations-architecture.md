@@ -218,7 +218,7 @@ Delivery may be split into multiple focused PRs. Do not implement all workflows 
 - V17 adds the packing permissions and audit-event allowlist. V1–V16 remain immutable. Integration coverage uses disposable MySQL 8.4 Testcontainers only.
 
 
-#### Inter-Warehouse Transfer implementation boundary (Stage 9 delivery)
+#### Inter-Warehouse Transfer implementation boundary
 
 The V1 transfer tables are authoritative: `stock_transfers`, `stock_transfer_lines`, `stock_transfer_allocations`, and `stock_transfer_line_serials`. V1 already models source/destination warehouses and locations, lot allocations, partial quantities, and an `IN_TRANSIT` document/allocation/serial state. It does not provide a transit warehouse location, and the inventory ledger requires every entry to reference a real warehouse location. Do not invent a virtual `TRANSIT` location.
 
