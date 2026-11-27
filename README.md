@@ -2,7 +2,7 @@
 
 Tenant-aware Warehouse Management System backend for the ZiroLogistics SaaS product.
 
-> **Project status:** Active development. The backend is suitable for continued frontend integration work in a controlled development environment, but it is **not production-ready**. Security and tenant-isolation work has meaningful coverage, while several orchestration, access-enforcement, operational, and release-readiness items remain open.
+> **Project status:** Active development. Repository-wide documentation cleanup is in progress; frontend implementation is deferred until the documentation PRs are reviewed and merged. The backend is **not production-ready**. Security and tenant-isolation work has meaningful coverage, while several orchestration, access-enforcement, operational, and release-readiness items remain open.
 
 ## Product capabilities
 
