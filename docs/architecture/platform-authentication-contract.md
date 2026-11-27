@@ -97,9 +97,7 @@ The platform JWT issuer and decoder are implemented as a separate, disabled-by-d
 - Issued access tokens are short-lived (10 minutes), carry the operator public ID and credential version, and contain no tenant membership, tenant ID, role, or permission claims.
 - The issuer refuses to sign unless a successful MFA timestamp is present, not in the future, and no older than five minutes.
 - Cross-profile tests prove a tenant access token is rejected by the platform decoder; missing MFA, wrong key ID, and invalid credential-version claims are rejected.
-- Platform JWT remains disabled unless explicitly enabled with distinct deployment secrets. No platform HTTP route or security chain is enabled by this slice, and no operator/bootstrap credential is created.
-
-The platform decoder is not yet the final revocation enforcement point: the upcoming platform authentication converter/security chain must re-check the operator's current status and credential version against persistence on authenticated requests.
+- Platform JWT remains disabled unless explicitly enabled with distinct deployment secrets. The dedicated platform security chain and authentication converter are implemented and re-check the operator's current status and credential version against persistence. No platform login HTTP adapter, platform administration controllers, or operator/bootstrap credential is created by these primitives.
 
 
 ## Implementation status — request identity and route isolation
