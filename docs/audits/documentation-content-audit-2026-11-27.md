@@ -7,7 +7,7 @@
 
 ## Executive disposition
 
-PR #367 refreshes current-reference content; PR #368 completes repository-wide filename, title, and link standardization. The documentation tree contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. These materials are classified by purpose and evidence status rather than rewritten as though they describe one current implementation. The final follow-up reconciliation archives the former 408-line QA closure evidence file under a descriptive historical filename instead of discarding its PR/CI/artifact history.
+PR #367 refreshes current-reference content; PR #368 completes repository-wide filename, title, and link standardization. The documentation tree contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. These materials are classified by purpose and evidence status rather than rewritten as though they describe one current implementation. The final follow-up reconciliation archives the former 408-line QA closure evidence file under a descriptive historical filename instead of discarding its PR/CI/artifact history: [Historical QA Closure Evidence](security-qa-evidence-history-2026-11-23.md).
 
 
 
@@ -26,7 +26,7 @@ These updates do not convert historical design evidence into current test proof,
 
 ## Repository-wide filename and title findings
 
-- All 93 Markdown files were included in the repository-wide scan.
+- The original full repository-wide scan covered 93 Markdown files. The final reconciliation added one historical QA evidence archive, bringing the current tree to 94 Markdown files.
 - The 51 nonstandard/non-descriptive Markdown filenames were renamed to descriptive lowercase kebab-case; conventional `README.md` filenames were retained.
 - The final tree scan found no remaining uppercase/underscore Markdown filenames and no stage/work-package identifiers in Markdown filenames.
 - The 32 document H1 titles and identified delivery-stage/work-package headings were normalized.
@@ -84,7 +84,7 @@ These updates do not convert historical design evidence into current test proof,
 - [x] Normalize all 51 non-descriptive/nonstandard Markdown filenames to descriptive lowercase kebab-case; retain conventional `README.md` names.
 - [x] Normalize the 32 delivery-stage/work-package H1 titles and the delivery-stage section headings found by the repository-wide heading scan.
 - [x] Update inbound references and canonical navigation links for the renamed documents.
-- [x] Check relative Markdown links across all 93 Markdown files; six stale links were corrected and the final recheck found zero broken Markdown links.
+- [x] Check relative Markdown links across the original 93 Markdown files; six stale links were corrected and the full recheck found zero broken links. The subsequently added QA archive and its new relative references were checked against the current tree.
 - [x] Establish canonical documentation ownership by subject in `docs/README.md`; supporting designs and audits are classified as evidence or historical context.
 - [x] Reconcile current canonical references against source/configuration/migrations/tests for runtime, deployment, API compatibility scope, tenant identity/RBAC, tenant isolation, MFA, platform control plane, temporal behavior, security/QA, and the frontend handoff.
 - [x] State explicitly that the API v1 reference is compatibility-oriented and track full route/DTO/status/pagination verification as a separate backend roadmap item.
@@ -97,4 +97,4 @@ These updates do not convert historical design evidence into current test proof,
 
 This two-PR documentation pass closes repository-wide Markdown naming, title, navigation, current-reference, and handoff cleanup once both PRs are merged. It does **not** replace the separate endpoint-by-endpoint API inventory, re-run every historical audit, certify tenant isolation, or approve production readiness.
 
-**Final link verification:** The complete repository-wide relative-link scan was rerun on the final PR #368 head after retargeting and supplemental edits. All 93 Markdown files were scanned; zero broken relative Markdown links were found.
+**Final link verification:** The complete repository-wide relative-link scan on the final PR #368 head covered 93 Markdown files and found zero broken relative links. The final reconciliation then added one historical QA archive; its two internal references and the new links from the documentation index and QA status were checked against the current tree. No broken links were introduced.
