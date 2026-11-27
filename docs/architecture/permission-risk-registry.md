@@ -1,6 +1,6 @@
 # WMS Permission Risk Registry
 
-**Status:** Contract for implementation; this document does not claim that machine-readable risk metadata is already enforced.
+**Status:** Implemented immutable Java metadata registry with 94 permission entries and unit/MySQL catalogue-consistency tests. The metadata is not itself an authorization grant and is not yet consumed as universal action-level enforcement.
 **Scope:** Tenant WMS permissions only. Platform control-plane permissions remain a separate catalogue and authorization boundary.
 
 ## 1. Why this registry exists
