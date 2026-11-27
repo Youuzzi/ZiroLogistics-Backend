@@ -42,7 +42,7 @@ jobs:
       # before extraction can begin; a transient Maven Central outage then prevents
       # CodeQL from analyzing otherwise buildable source.
       - name: Build for CodeQL analysis
-        run: mvn --batch-mode --no-transfer-progress -Pwms-runtime -DskipTests package
+        run: mvn --settings .docker/maven/settings.xml --batch-mode --no-transfer-progress -Pwms-runtime -DskipTests package
 
       - name: Perform CodeQL Analysis
         id: codeql
