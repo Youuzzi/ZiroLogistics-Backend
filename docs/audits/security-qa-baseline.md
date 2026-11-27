@@ -79,4 +79,4 @@ A successful workflow proves only that the checks included in that workflow pass
 - Do not declare production readiness from green CI or source review alone.
 
 
-Historical context: the initial 2026-11-22 QA/security baseline (including the then-current 147 production Java files, 73 test files, and early CI/tooling inventory) is preserved in [Historical QA and Security Baseline](security-qa-initial-baseline-history-2026-11-22.md). It must not be used as the current repository inventory.
+Historical context: the initial 2026-11-22 QA/security baseline (including the then-current 147 production Java files, 73 test files, and early CI/tooling inventory) is preserved in [Historical QA and Security Baseline](security-qa-initial-baseline-history-2026-11-20.md). It must not be used as the current repository inventory.
