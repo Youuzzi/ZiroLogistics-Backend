@@ -65,7 +65,7 @@ class WmsV32TenantMfaReauthenticationGrantMigrationIntegrationTest {
                         'chk_wms_tenant_mfa_reauth_terminal_state'
                       )
                     """));
-            assertEquals(4, scalar(statement, """
+            assertEquals(5, scalar(statement, """
                     SELECT COUNT(*) FROM information_schema.key_column_usage
                     WHERE table_schema = DATABASE()
                       AND table_name = 'wms_tenant_mfa_reauthentication_grants'
