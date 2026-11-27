@@ -47,8 +47,8 @@ Never point the WMS runtime or migrations at the legacy `zirologistics_db`. All 
 
 ## 5. Related implementation contracts
 
-- `WMS_TENANT_CONTEXT_AND_AUTHORIZATION_RESOLUTION.md` — server-side membership and effective permission resolution.
-- `WMS_AUTHENTICATION_HTTP_API_CONTRACT.md` — opt-in HTTP authentication and account lifecycle routes.
-- `WMS_CONTROLLED_PLATFORM_BOOTSTRAP.md` — controlled first-install tenant-owner creation.
-- `WMS_TENANT_ORGANIZATION_MANAGEMENT.md` — tenant profile, permission, and audit behavior.
+- `wms-tenant-context-and-authorization-resolution.md` — server-side membership and effective permission resolution.
+- `wms-authentication-http-api-contract.md` — opt-in HTTP authentication and account lifecycle routes.
+- `wms-controlled-platform-bootstrap.md` — controlled first-install tenant-owner creation.
+- `wms-tenant-organization-management.md` — tenant profile, permission, and audit behavior.
 

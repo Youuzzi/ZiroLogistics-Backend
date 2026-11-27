@@ -1,6 +1,6 @@
 # WMS V1 Backend Repository Audit — Historical Baseline
 
-> **Historical document:** This was the initial repository audit before the WMS runtime and Stage 1–13 implementation. Its old recommendations about retiring branches, legacy runtime defaults, and pending WMS implementation are superseded by the current repository state and [Stage 13 WP11 Final API and Repository Audit](WMS_STAGE_13_FINAL_API_AND_REPOSITORY_AUDIT.md). Keep this file as historical evidence; do not use it as current operational instructions.
+> **Historical document:** This was the initial repository audit before the WMS runtime and Stage 1–13 implementation. Its old recommendations about retiring branches, legacy runtime defaults, and pending WMS implementation are superseded by the current repository state and [Stage 13 WP11 Final API and Repository Audit](api-and-repository-audit.md). Keep this file as historical evidence; do not use it as current operational instructions.
 
 - **Status:** Historical initial audit; not the current implementation baseline.
 - **Original audited commit:** `b9386b1107b6bcdd2b16d5bf91d8c733e7e6340b`
@@ -13,7 +13,7 @@
 
 The original repository contained a legacy single-organization warehouse application alongside the frozen tenant-based WMS V1 schema. The original audit correctly warned that the legacy entity model was not the WMS V1 persistence model.
 
-The WMS runtime is now implemented as an isolated application under `com.zirocraft.zirologistics.wms`, with dedicated component/entity/repository scanning and an explicit Maven packaging profile. See [WMS Runtime Boundary](../runtime/WMS_RUNTIME_BOUNDARY.md).
+The WMS runtime is now implemented as an isolated application under `com.zirocraft.zirologistics.wms`, with dedicated component/entity/repository scanning and an explicit Maven packaging profile. See [WMS Runtime Boundary](../runtime/wms-runtime-boundary.md).
 
 ## Historical architecture recommendations
 

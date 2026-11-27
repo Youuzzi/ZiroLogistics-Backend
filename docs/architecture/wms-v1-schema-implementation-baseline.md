@@ -60,7 +60,7 @@ No sample tenant, user, password, role assignment, or operational data is seeded
 
 The test does not connect to a developer database. The migration PR was merged after its CI run passed. The main-branch CI run after merge also passed. This gate validates migration execution and schema structure only; it does not validate WMS application runtime behavior.
 
-## 5. Historical backend implementation sequence (completed through Stage 12)
+## 5. Historical backend implementation sequence
 
 1. Tenant identity, membership, and authorization context.
 2. Warehouse and location access boundaries.

@@ -2,7 +2,7 @@
 
 **Status:** Canonical Tenant Owner grants, delegation/catalogue sets, and all 13 operational tenant system-role templates are implemented. Machine-readable permission risk metadata and universal cross-workflow separation-of-duties enforcement remain incomplete.
 **Implementation source of truth:** `WmsTenantPermissionPolicy` and its MySQL persisted-grant integration tests on `main`.
-**Related evidence:** `docs/audits/TENANT_RBAC_PERMISSION_CATALOGUE_AUDIT.md`, `docs/architecture/WMS_ROLE_PERMISSION_MANAGEMENT_DESIGN.md`, `docs/security/TENANT_ISOLATION_AND_AUTHORIZATION.md`
+**Related evidence:** `docs/audits/tenant-rbac-permission-catalogue-audit.md`, `docs/architecture/wms-role-permission-management-design.md`, `docs/security/tenant-isolation-and-authorization.md`
 **Scope:** Tenant-scoped role templates, permission risk classes, delegation ceilings, separation of duties, and bootstrap/provisioning parity.
 
 ## 1. Purpose

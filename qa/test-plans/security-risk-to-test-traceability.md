@@ -1,7 +1,7 @@
-# Stage 16.1 — Risk-to-Test Traceability (Inventory)
+# Security Risk-to-Test Traceability Inventory
 
 **Baseline:** `7079a36c3adfb83da2aad0ebdb4ae0e49b5abdbe`  
-**Scope:** Map existing WMS test files by name to the high-risk areas defined in Stage 16.  
+**Scope:** Map existing WMS test files by name to the high-risk areas in the backend security and quality review.  
 **Evidence status:** **INFERRED** for test-topic mapping from test names/locations only. This document does not claim the tests' assertions, execution, or completeness were inspected.
 
 ## Method and limitations
@@ -54,4 +54,4 @@
 
 ## Next step
 
-Inspect existing test assertions for P0 topics above, record precise evidence and gaps, and only then add narrowly scoped tests where a concrete risk remains. No coverage percentage or release threshold is assigned in this WP.
+Inspect existing test assertions for P0 topics above, record precise evidence and gaps, and only then add narrowly scoped tests where a concrete risk remains. No coverage percentage or release threshold is assigned in this document.

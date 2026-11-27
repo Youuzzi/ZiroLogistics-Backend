@@ -1,4 +1,4 @@
-# WMS v1 Compatibility & API Integration Audit — Stage 13 WP10
+# WMS v1 Compatibility and API Integration Audit
 
 > **Historical WP10 snapshot:** The deployment mismatch recorded below was the WP10 baseline finding. WP11 PR #157 replaces the root Dockerfile/Compose runtime with the dedicated WMS Maven artifact and isolated WMS MySQL database. Treat the WP11 final repository audit as the current remediation record; this WP10 file preserves the original finding and evidence.
 
@@ -50,7 +50,7 @@ The inspected Maven dependency list contains no springdoc/OpenAPI dependency and
 
 If a generated OpenAPI document is required for external consumers, add it as a separately reviewed compatibility/security change and verify that protected schemas/routes are not unintentionally exposed.
 
-## 7. Deployment configuration mismatch — identified at WP10 baseline; remediation owned by WP11
+## 7. Deployment configuration mismatch — historical finding and remediation record
 
 The existing `compose.yml` and default `application.properties` describe the legacy application configuration:
 

@@ -1,4 +1,4 @@
-# Stage 16 — Custom Tenant Role Delegation Audit
+# Custom Tenant Role Delegation Audit
 
 **Status:** Evidence-backed current-state review; not a certification of the complete RBAC surface.
 

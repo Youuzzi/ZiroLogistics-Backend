@@ -1,4 +1,4 @@
-# Stage 16 — Outbound Fulfillment Tenant-Isolation Source Review
+# Outbound Fulfillment Tenant Isolation Source Review
 
 Date: 2026-11-27
 Scope: source-level review of shipping, picking, and packing application services on the reviewed mainline commit. This is not a penetration test or runtime certification.

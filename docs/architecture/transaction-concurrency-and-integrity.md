@@ -1,4 +1,4 @@
-# WMS Transaction & Concurrency Integrity — Stage 11 Architecture Contract
+# WMS Transaction and Concurrency Integrity Architecture
 
 **Status:** Completed — WP1–WP8 merged; final Main CI #503 succeeded on `8cf37a7558a07481d284d91b2b137f28ed61d8cd`.
 **Runtime:** WMS-only modular monolith.

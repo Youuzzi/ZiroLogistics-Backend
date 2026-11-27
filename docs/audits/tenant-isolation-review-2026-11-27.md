@@ -1,4 +1,4 @@
-# Stage 16 — Tenant Isolation Source Review Slice (2026-11-27)
+# WMS Tenant Isolation Source Review — Initial Slice
 
 **Baseline:** `102aae9642dd8f3d59ed47b91a54dab13fd7cd36`
 **Scope:** Initial source review of warehouse/location, inventory master data and projections, inbound receiving, and inter-warehouse transfer.

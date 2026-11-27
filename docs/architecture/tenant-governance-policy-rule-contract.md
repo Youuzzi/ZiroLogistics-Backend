@@ -1,4 +1,4 @@
-# Stage 16 — Tenant Governance Policy Rule Contract
+# WMS Tenant Governance Policy Rule Contract
 
 **Status:** Implementation contract for the next governance-policy increment. This document defines policy semantics; it does not introduce runtime configuration or relax current controls.
 

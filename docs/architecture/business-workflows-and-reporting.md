@@ -1,4 +1,4 @@
-# WMS Business Workflows & Reporting — Stage 12 Architecture & Delivery Contract
+# WMS Business Workflows and Reporting Architecture
 
 **Status:** Completed — WP1–WP9 integrated; final Main CI #558 succeeded on `893ad6ba82dfc1ae5acc3a5fa471c047fd9e0e5c`.
 **Runtime:** WMS-only modular monolith (`wms` profile).
@@ -8,7 +8,7 @@
 **Final integrated commit:** `893ad6ba82dfc1ae5acc3a5fa471c047fd9e0e5c` (Main CI #558: success).
 **Scope:** End-to-end integrity across inbound, outbound, inventory lifecycle, inter-warehouse transfer, replenishment/stock control, operational reporting and audit traceability.
 
-## 1. Stage objective
+## 1. Objective and boundaries
 
 Stage 12 verifies that the WMS modules delivered in Stages 7–11 operate as coherent business workflows. It closes only demonstrated cross-module gaps; it is not a broad feature-expansion stage.
 
@@ -141,9 +141,9 @@ Required integrity:
 - stock count freezes and reservations cannot be bypassed by replenishment;
 - task status, confirmation records, inventory ledger and reporting remain consistent.
 
-## 4. Stage 12 work packages
+## 4. Workflow implementation areas
 
-### WP1 — Workflow Architecture & Baseline Audit
+### Workflow Architecture and Baseline Audit
 
 - Establish this architecture/delivery contract and canonical end-to-end workflow definitions.
 - Map existing services, controllers, persistence tables, permission checks, audit events and integration tests.
@@ -152,14 +152,14 @@ Required integrity:
 - Record the WMS reporting gap and define tenant-safe report boundaries.
 - No production feature or schema changes unless a blocking architecture defect is discovered and separately approved.
 
-### WP2 — Inbound Workflow Integrity
+### Inbound Workflow Integrity
 
 - Audit receipt → posting → putaway continuity, including partial quantities and rejected quantities.
 - Verify lot/serial, receiving-location, putaway destination and source-receipt reconciliation.
 - Verify duplicate commands, failure rollback, cancellation/terminal-state guards and tenant isolation.
 - Add only missing focused MySQL integration evidence or narrowly scoped fixes.
 
-### WP3 — Outbound Workflow Integrity
+### Outbound Workflow Integrity
 
 - Audit shipment → allocation → picking → staging → packing → shipping continuity.
 - Verify demand, allocation, picked, packed, shipped and serial quantities reconcile at each transition.
@@ -167,28 +167,28 @@ Required integrity:
 - Verify package sealing, partial work, cancellation and failed-posting rollback.
 - Add only missing focused MySQL integration evidence or narrowly scoped fixes.
 
-### WP4 — Inventory Lifecycle Integration
+### Inventory Lifecycle Integration
 
 - Audit how receipt, putaway, picking, shipping, transfer, count and adjustment use the single inventory posting boundary.
 - Verify balance/ledger/serial consistency and the relationship between available, reserved and physical quantities.
 - Verify status/lot/serial constraints survive cross-workflow transitions.
 - Do not duplicate stock projections or bypass posting service.
 
-### WP5 — Inter-Warehouse Workflow
+### Inter-Warehouse Workflow
 
 - Audit request → dispatch → transit → receipt/reconciliation as one business process.
 - Verify partial receipt, shortage handling, serial lifecycle, reversal and retry behavior.
 - Verify source/destination tenant and warehouse boundaries and audit traceability.
 - Fix only demonstrated gaps.
 
-### WP6 — Replenishment & Stock Control Integration
+### Replenishment and Stock Control Integration
 
 - Audit planning, task execution, confirmation, cancellation/reversal and interaction with reservations and count freezes.
 - Verify aggregate source demand, partial confirmations, lot/serial handling and inventory posting.
 - Verify replenishment cannot bypass count freeze or consume reserved stock.
 - Keep planning side-effect-free with respect to inventory until confirmation.
 
-### WP7 — Operational Reporting
+### Operational Reporting
 
 - Add a dedicated WMS reporting boundary inside the WMS runtime. WP7 delivers a read-only operational summary across inventory position, inbound receipts and putaway tasks, outbound shipments, inter-warehouse transfers, replenishment tasks, stock counts and adjustments. The summary reports current document-status totals across the tenant (not a date-window count) and returns an explicit UTC generation timestamp. Inventory `onHandQty` includes all stock statuses, while `availableQty` includes only `AVAILABLE` stock; reserved quantity remains separately reported.
 - Define tenant-scoped, permission-protected operational summaries based on authoritative WMS documents and inventory sources.
@@ -198,7 +198,7 @@ Required integrity:
 - Avoid unbounded scans and expensive cross-domain joins; inspect indexes and query plans before widening report scope.
 - Keep legacy dashboard behavior isolated; do not silently repurpose legacy repositories for WMS data.
 
-### WP8 — Workflow Audit & Traceability
+### Workflow Audit and Traceability
 
 - Verify every material state transition and inventory-affecting action has tenant-scoped actor/time/document evidence.
 - Trace document IDs through linked workflow documents, confirmations, posting request IDs and ledger entries.
@@ -206,7 +206,7 @@ Required integrity:
 - Add focused traceability queries or read models only when a concrete operational need exists.
 - Preserve append-only ledger and audit semantics.
 
-### WP9 — Final Workflow Integration & CI
+### Final Workflow Integration and CI Verification
 
 - Run a final end-to-end gap review across all Stage 12 workflows and reports.
 - Add deterministic MySQL 8.4 Testcontainers tests for any uncovered cross-module boundaries.
@@ -239,7 +239,7 @@ Stage 12 is complete when:
 - all nine work packages are merged;
 - final full regression and post-merge Main CI succeed on the exact main commit.
 
-## 7. Final Stage 12 evidence
+## 7. Final integration evidence
 
 - **VERIFIED:** WP1–WP7 merged in order through PRs #119–#126; WP8 merged as integrated PR #130 after rebasing onto the outbound-integrated main; WP9 checklist merged as PR #131. The earlier WP8/WP9 PRs #127/#128 and duplicate PR #129 were not merged and are not part of the delivered result.
 - **VERIFIED:** PR #130 and PR #131 have successful PR CI; final Main CI #558 passed on `893ad6ba82dfc1ae5acc3a5fa471c047fd9e0e5c` with Java 21 and the full Maven test step.

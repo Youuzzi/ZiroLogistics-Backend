@@ -203,7 +203,7 @@ Do not generate all JPA entities in one batch. Implement vertical slices with ex
 
 ## 7. Source references
 
-See [WMS_ENGINEERING_REFERENCES.md](WMS_ENGINEERING_REFERENCES.md) for source URLs, scope, version notes, and how each reference is used.
+See [wms-engineering-references.md](wms-engineering-references.md) for source URLs, scope, version notes, and how each reference is used.
 
 ## 8. Change control
 

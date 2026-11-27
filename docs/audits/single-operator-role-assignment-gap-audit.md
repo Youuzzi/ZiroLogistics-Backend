@@ -1,4 +1,4 @@
-# Stage 16 — Single-Operator Tenant Role Assignment Gap Audit
+# Single-Operator Tenant Role Assignment Gap Audit
 
 **Status:** Verified current-state functional gap and proposed safe resolution. Documentation only; no role grants or runtime policy changes.
 

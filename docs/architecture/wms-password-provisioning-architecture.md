@@ -192,9 +192,9 @@ The update must not change password hash, email, user status, tenant membership,
 
 ## 12. Related architecture
 
-- `WMS_AUTHENTICATION_AND_TOKEN_ARCHITECTURE.md`
-- `WMS_AUTHENTICATION_READINESS_AUDIT.md`
-- `WMS_CREDENTIAL_AUTHENTICATION_ORCHESTRATION.md`
-- `WMS_READ_ONLY_PASSWORD_HASH_FORMAT_INVENTORY.md`
-- `WMS_LOGIN_THROTTLING_DESIGN.md`
+- `wms-authentication-and-token-architecture.md`
+- `wms-authentication-readiness-audit.md`
+- `wms-credential-authentication-orchestration.md`
+- `wms-read-only-password-hash-format-inventory.md`
+- `wms-login-throttling-design.md`
 

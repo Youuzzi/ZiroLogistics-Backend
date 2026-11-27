@@ -15,13 +15,13 @@ The current repository contains active references, dated audits, historical base
 
 The scan found **many non-kebab-case names still present**. Examples include:
 
-- `docs/architecture/PLATFORM_ADMINISTRATION_AND_OPERATIONS.md`
-- `docs/architecture/PLATFORM_AUTHORIZATION_CONTRACT.md`
-- `docs/architecture/WMS_AUTHENTICATION_AND_TOKEN_ARCHITECTURE.md`
+- `docs/architecture/platform-administration-and-operations.md`
+- `docs/architecture/platform-authorization-contract.md`
+- `docs/architecture/wms-authentication-and-token-architecture.md`
 - `docs/architecture/WMS_INVENTORY_CORE_ARCHITECTURE.md`
-- `docs/audits/BACKEND_ARCHITECTURE_AND_DOCUMENTATION_AUDIT.md`
-- `docs/runtime/WMS_RUNTIME_BOUNDARY.md`
-- `docs/deployment/WMS_LOCAL_DOCKER_DEPLOYMENT.md`
+- `docs/audits/backend-architecture-and-documentation-audit.md`
+- `docs/runtime/wms-runtime-boundary.md`
+- `docs/deployment/wms-local-docker-deployment.md`
 
 **Naming disposition:** Current active entry points should use descriptive lowercase kebab-case. Historical evidence can retain dates and original identifiers in its content, but filenames should describe subject and evidence type. The repository has not yet been fully renamed to this convention. Any rename must update every inbound Markdown link and index reference and be checked for broken links.
 

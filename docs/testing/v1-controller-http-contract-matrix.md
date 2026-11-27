@@ -7,7 +7,7 @@
 **Test style:** Spring MVC slice + Spring Security test authentication, with application services mocked.
 **Purpose:** Verify the transport boundary independently of the existing service/Testcontainers workflow suites.
 
-## 1. Existing HTTP coverage before WP9
+## 1. Existing HTTP coverage at the recorded baseline
 
 The baseline contained six HTTP/security test classes:
 

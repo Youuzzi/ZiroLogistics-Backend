@@ -18,7 +18,7 @@ The effective decision for a request is the intersection of:
 
 A permission is necessary but not sufficient: business invariants, approval requirements, resource scope, and tenant lifecycle state remain mandatory.
 
-Platform operator permissions belong to the separate platform control plane defined in `PLATFORM_ADMINISTRATION_AND_OPERATIONS.md`. They must never be inserted into tenant roles or tenant permission grants.
+Platform operator permissions belong to the separate platform control plane defined in `platform-administration-and-operations.md`. They must never be inserted into tenant roles or tenant permission grants.
 
 ## 2. Verified current implementation and gaps
 
@@ -225,8 +225,8 @@ The implementation is not complete until tests prove:
 
 ## 15. Related architecture
 
-- `PLATFORM_ADMINISTRATION_AND_OPERATIONS.md` — separate platform control-plane identity and authorization.
-- `TENANT_ISOLATION_AND_AUTHORIZATION.md` — tenant boundary and resource isolation.
+- `platform-administration-and-operations.md` — separate platform control-plane identity and authorization.
+- `tenant-isolation-and-authorization.md` — tenant boundary and resource isolation.
 - `WMS_PERMISSION_CATALOG.md` — canonical extracted permission inventory (to be produced from source and migrations).
 - `WMS_ROLE_PERMISSION_MATRIX.md` — approved role-to-permission grants (to be produced after policy review).
 - `SAAS_ENTITLEMENT_AND_FEATURE_ACCESS.md` — tenant product capability/plan enforcement, separate from RBAC.

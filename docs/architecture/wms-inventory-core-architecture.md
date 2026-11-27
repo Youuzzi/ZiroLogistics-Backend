@@ -1,4 +1,4 @@
-# WMS Inventory Core — Architecture & API Contract
+# WMS Inventory Core Architecture and API Contract
 
 **Status:** Historical inventory foundation design. Item catalogue, inventory balances, and the posting ledger are present in the current WMS runtime; this document preserves the original architecture requirements and is not a complete statement of current feature coverage.  
 **Runtime:** WMS-only modular monolith.  

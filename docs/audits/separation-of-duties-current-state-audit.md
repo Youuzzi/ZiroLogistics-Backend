@@ -1,4 +1,4 @@
-# Stage 16 — Separation of Duties Current-State Classification Audit
+# Separation of Duties Current-State Audit
 
 **Status:** Evidence-backed classification of selected current workflow controls; not a complete SoD certification.
 **Scope:** Tenant WMS workflow actor separation, risk-registry metadata, integration evidence and remaining classification decisions. This document does not change runtime policy.

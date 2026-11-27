@@ -1,4 +1,4 @@
-# Stage 16 — Parallel Security Coverage Inventory (2026-11-27)
+# WMS Security Coverage Inventory
 
 **Purpose:** Preserve the security coverage inventory captured while tenant MFA lifecycle persistence (#358) was in progress. PR #358 has since merged; tenant MFA factor persistence exists, while end-to-end enrollment, verification, step-up, recovery, and one-time proof consumption remain incomplete and MFA remains disabled by default. This is an audit planning artifact, not a security certification or proof that every listed control is implemented.
 

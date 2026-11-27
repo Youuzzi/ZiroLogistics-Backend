@@ -1,4 +1,4 @@
-# Stage 16.6 — ZAP DAST Baseline (initial perimeter scope)
+# Authenticated WMS API DAST Baseline
 
 **Status:** Proposed passive ZAP Baseline workflow; no execution of this specific workflow is verified by this document. The separate Authenticated WMS API DAST workflow is tracked in the current security/QA baseline.  
 **Workflow:** `.github/workflows/wms-dast-baseline.yml`  
@@ -48,6 +48,6 @@ Run the workflow manually from GitHub Actions after this workflow is merged to `
 
 If startup fails, inspect the captured Compose logs before interpreting the result as a DAST finding.
 
-## 6. WP16.6 disposition
+## 6. DAST workflow disposition
 
 **NOT VERIFIED until the workflow has actually completed and its report artifact has been reviewed.** The presence of workflow code is not DAST evidence.
