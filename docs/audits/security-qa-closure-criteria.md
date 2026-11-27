@@ -47,7 +47,7 @@ Other recent merged slices include #354, #355, #357, #362, #364, and #365. See t
 6. Provision Platform Administrator and tenant identities only through reviewed, controlled bootstrap procedures.
 7. Keep deployment and production-readiness approval separate from this engineering handoff.
 
-Historical detailed PR/CI/DAST/k6 evidence is retained in [Historical QA Closure Evidence](security-qa-evidence-history-2026-11-23.md). It is a provenance archive, not the current verification status.
+Historical detailed PR/CI/DAST/k6 evidence is retained in [Historical QA Closure Evidence](security-qa-evidence-history-2026-11-23.md), and the original early-stage test/tooling baseline is retained in [Historical QA and Security Baseline](security-qa-initial-baseline-history-2026-11-22.md). Both are provenance archives, not current verification status.
 
 ## Important qualification
 
