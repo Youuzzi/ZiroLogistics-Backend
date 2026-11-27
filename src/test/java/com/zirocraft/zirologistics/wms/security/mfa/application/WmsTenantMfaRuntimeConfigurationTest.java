@@ -14,8 +14,8 @@ class WmsTenantMfaRuntimeConfigurationTest {
         byte[] activeKey = new byte[32];
         java.util.Arrays.fill(oldKey, (byte) 1);
         java.util.Arrays.fill(activeKey, (byte) 2);
-        String encoded = "mfa-v1=" + Base64.getEncoder().encodeToString(oldKey)
-                + ",mfa-v2=" + Base64.getEncoder().encodeToString(activeKey);
+        String encoded = "mfa-v1:" + Base64.getEncoder().encodeToString(oldKey)
+                + ",mfa-v2:" + Base64.getEncoder().encodeToString(activeKey);
 
         WmsTenantMfaKeyRing ring = WmsTenantMfaRuntimeConfiguration.createKeyRing("mfa-v2", encoded);
 
@@ -27,7 +27,7 @@ class WmsTenantMfaRuntimeConfigurationTest {
     @Test
     void failsClosedForMissingActiveKeyOrMalformedMaterial() {
         assertThrows(IllegalStateException.class,
-                () -> WmsTenantMfaRuntimeConfiguration.createKeyRing("", "v1="
+                () -> WmsTenantMfaRuntimeConfiguration.createKeyRing("", "v1:"
                         + Base64.getEncoder().encodeToString(new byte[32])));
         assertThrows(IllegalStateException.class,
                 () -> WmsTenantMfaRuntimeConfiguration.createKeyRing("v1", ""));
@@ -39,6 +39,6 @@ class WmsTenantMfaRuntimeConfigurationTest {
         assertThrows(IllegalStateException.class,
                 () -> WmsTenantMfaRuntimeConfiguration.createKeyRing("v1",
                         "v1=" + Base64.getEncoder().encodeToString(new byte[32])
-                                + ",v1=" + Base64.getEncoder().encodeToString(new byte[32])));
+                                + ",v1:" + Base64.getEncoder().encodeToString(new byte[32])));
     }
 }
