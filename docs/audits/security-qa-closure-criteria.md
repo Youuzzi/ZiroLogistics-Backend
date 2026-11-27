@@ -47,6 +47,8 @@ Other recent merged slices include #354, #355, #357, #362, #364, and #365. See t
 6. Provision Platform Administrator and tenant identities only through reviewed, controlled bootstrap procedures.
 7. Keep deployment and production-readiness approval separate from this engineering handoff.
 
+Historical detailed PR/CI/DAST/k6 evidence is retained in [Historical QA Closure Evidence](security-qa-evidence-history-2026-11-23.md). It is a provenance archive, not the current verification status.
+
 ## Important qualification
 
 The successful PR checks listed above are evidence for those PR heads. They do not imply that every backend route, security control, operational workflow, or production control is complete. The documentation cleanup PRs are merged; the remaining backend security/QA work is a separate prioritized backlog. Frontend foundation does not imply real-account or privileged integration is safe. This is not a declaration that backend security or production readiness is complete.
