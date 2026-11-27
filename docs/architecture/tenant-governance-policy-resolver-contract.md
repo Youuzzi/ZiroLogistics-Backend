@@ -1,4 +1,6 @@
-# WMS Tenant Governance Policy Resolver Contract — Stage 16
+# WMS Tenant Governance Policy Resolver Contract
+
+**Status:** Target policy-resolution contract. No runtime resolver or tenant-configurable governance enforcement is claimed by this document.
 
 ## Purpose
 Define a typed, deterministic policy resolution boundary before profile rules are wired into operational workflows. This contract is additive and does not authorize permissions or change the frozen V1 schema.

@@ -1,5 +1,7 @@
 # Backend Architecture and Documentation Audit
 
+> **Historical audit baseline:** This document records findings at the audited commit below. Use the current [Backend Maintenance Handoff](../project/backend-maintenance-handoff-2026-11-27.md), [Backend Improvement Roadmap](../roadmap/backend-improvement-roadmap.md), and [Documentation Content Audit](documentation-content-audit-2026-11-27.md) for the current checkpoint and remaining work.
+
 **Status:** Initial repository baseline completed; domain-by-domain verification remains in progress.
 **Audited branch:** `main`
 **Audited commit:** `90bc354c91c273a416a95352c3c242548a0c817e`

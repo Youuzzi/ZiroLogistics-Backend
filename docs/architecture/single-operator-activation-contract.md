@@ -1,4 +1,6 @@
-# UMKM Single-Operator Activation Contract — Stage 16
+# UMKM Single-Operator Activation Contract
+
+**Status:** Proposed tenant operating-mode contract only. No runtime activation feature or mode-derived role grants are implemented or enabled by this document. Activation requires separate approval, MFA enforcement, least-privilege policy, audit, and negative-path tests.
 
 ## Problem statement
 Tenant provisioning gives the initial owner only the Owner template. Multi-role aggregation does not close the operational gap because selected system roles are self-assignment restricted and the custom-role delegation allowlist excludes critical operational commit permissions.

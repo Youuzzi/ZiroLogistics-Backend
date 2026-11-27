@@ -1,6 +1,6 @@
 # WMS Authentication and Token Architecture
 
-**Status:** Historical architecture baseline. Current implemented route and security behavior is authoritative in the [Stage 13 WMS v1 API Reference](../api/wms-api-v1-reference.md) and [Authentication HTTP API Contract](WMS_AUTHENTICATION_HTTP_API_CONTRACT.md).  
+**Status:** Historical architecture baseline. Current implemented route and security behavior is authoritative in the [WMS API v1 Reference](../api/wms-api-v1-reference.md) and [Authentication HTTP API Contract](WMS_AUTHENTICATION_HTTP_API_CONTRACT.md).  
 **Runtime:** WMS-only runtime (`wms` profile)  
 **Schema:** Frozen V1 remains unchanged. Any persistence extension requires a separately reviewed additive Flyway migration.  
 **Decision scope:** Authentication flow, tenant selection, access-token validation, password verification, throttling, revocation boundaries.
