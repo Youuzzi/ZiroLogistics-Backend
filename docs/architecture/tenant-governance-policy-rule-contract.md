@@ -1,6 +1,6 @@
 # WMS Tenant Governance Policy Rule Contract
 
-**Status:** Implementation contract for the next governance-policy increment. This document defines policy semantics; it does not introduce runtime configuration or relax current controls.
+**Status:** Partial implementation. The typed rule catalogue and pure deterministic resolver exist, and the independent replenishment-reversal actor check was implemented in PR #341. Persisted tenant overrides and universal workflow integration remain incomplete; this document defines the broader target policy semantics and does not relax current controls.
 
 ## 1. Purpose and boundaries
 
@@ -28,7 +28,7 @@ An unclassified rule is not implicitly advisory. Unknown rule codes, unsupported
 
 ## 3. Initial rule catalogue
 
-The rule identifiers below are stable policy concepts proposed for implementation. They must be mapped to actual persisted actor fields and service methods before runtime rollout.
+The rule identifiers below are represented in the typed `WmsTenantGovernancePolicyResolver.RuleId` catalogue. Enforcement is mixed: selected workflow rules are already enforced in services, while other rules remain target policy and must be mapped to persisted actor evidence before runtime rollout.
 
 | Rule code | Workflow / actor comparison | Classification | Initial default |
 |---|---|---|---|
@@ -41,7 +41,7 @@ The rule identifiers below are stable policy concepts proposed for implementatio
 | `INVENTORY_ADJUSTMENT_CREATOR_APPROVER` | Approver user must differ from adjustment creator. | Mandatory | Enforced |
 | `INVENTORY_ADJUSTMENT_CREATOR_POSTER` | Poster user must differ from adjustment creator. | Mandatory | Enforced |
 | `INVENTORY_ADJUSTMENT_APPROVER_POSTER` | Whether approver and poster must differ. | Configurable | Two-person default: approver may also post after independent approval; Enterprise profile may require a third actor. |
-| `REPLENISHMENT_CONFIRMATION_REVERSAL` | Reversal user and membership must differ from the original confirmation actor. | Mandatory | Enforced; implementation tracked in Stage 16 PR #341. |
+| `REPLENISHMENT_CONFIRMATION_REVERSAL` | Reversal user and membership must differ from the original confirmation actor. | Mandatory | Enforced by the replenishment reversal service and MySQL regression coverage; PR #341 merged at `0e4e053dfc5a2cb26efd8889e0bf900b8734a213`. |
 | `REPLENISHMENT_TASK_ASSIGNEE_CONFIRMER` | Whether the assigned operator may confirm their own task. | Advisory | Same operator permitted; confirmation still requires exact workflow and inventory-post permissions. |
 
 ### Actor identity semantics
