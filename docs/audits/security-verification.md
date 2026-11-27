@@ -1,5 +1,7 @@
 # Focused WMS Security Verification
 
+> **Historical verification evidence:** This report records assertions and execution from its named commit and Backend CI run. It is not the current security status or a certification of all routes. Use the [Security and QA Baseline](security-qa-baseline.md), [Security Coverage Inventory](security-coverage-inventory-2026-11-27.md), and current CI results for the latest checkpoint.
+
 **Evidence commit:** `1c14922614db04c4e3a78ceb5eafa0845ba988ca`
 **Verification run:** Backend CI #690, attempt 2
 **Run URL:** https://github.com/Youuzzi/ZiroLogistics-Backend/actions/runs/44742151637

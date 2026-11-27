@@ -1,8 +1,8 @@
 # WMS Transaction and Concurrency Integrity Architecture
 
-**Status:** Completed — WP1–WP8 merged; final Main CI #503 succeeded on `8cf37a7558a07481d284d91b2b137f28ed61d8cd`.
+**Status:** Historical transaction/concurrency delivery record. The original WP1–WP8 scope was merged and its recorded Main CI passed; this document preserves that delivery's design and acceptance evidence.
 **Runtime:** WMS-only modular monolith.
-**Schema authority:** Frozen WMS V1 plus immutable additive migrations V2–V25; future schema changes are additive V26+.
+**Original delivery schema scope:** Frozen WMS V1 plus immutable additive migrations V2–V25. The current runtime has immutable migrations V1–V32; future changes are additive from V33.
 **Verification:** Disposable MySQL 8.4 Testcontainers only.
 **Scope:** Transaction boundaries, concurrent inventory operations, lock ordering, idempotency and safe retry behavior across implemented WMS workflows.
 
