@@ -1,6 +1,6 @@
 # Backend Improvement Roadmap
 
-**Status:** Prioritized backlog while frontend foundation work proceeds.  
+**Status:** Prioritized backlog while frontend work is deferred pending completion and merge of the documentation PRs.  
 **Baseline:** `main` at `148177826c5eebd56b6134851e5d901809549448`.  
 **Rule:** Resume backend work based on security risk and frontend integration dependency, not to complete a checklist for its own sake.
 
@@ -99,9 +99,9 @@ Deferred until the product and integration flows stabilize:
 - Deployment pipeline, migration release policy, rollback strategy.
 - SaaS entitlements, billing, and payment provider selection.
 
-## Frontend integration sequence — after documentation cleanup
+## Frontend integration sequence — gated on documentation completion
 
-Do not begin frontend implementation until PR #367 and PR #368 are reviewed and merged and the documentation handoff is accepted. Once that gate is met, frontend foundation may use synthetic data behind replaceable repository/service interfaces. Before using real accounts or privileged production-like flows:
+Do not begin frontend implementation until PR #367 and PR #368 are reviewed, validated, and merged and the documentation handoff is accepted. Once that gate is met, frontend foundation may use synthetic data behind replaceable repository/service interfaces. Before using real accounts or privileged production-like flows:
 1. Confirm the documentation handoff and API compatibility boundaries.
 2. Complete Platform Administrator provisioning design.
 3. Complete required tenant MFA orchestration.

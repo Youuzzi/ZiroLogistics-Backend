@@ -7,7 +7,7 @@
 
 ## Executive disposition
 
-PR #367 is a documentation refresh and handoff, not a full documentation cleanup. The documentation tree still contains uppercase/underscore filenames, historical stage/work-package terms in content, and overlapping documents. Do not interpret the PR's earlier rename summary as a repository-wide naming standardization.
+PR #367 refreshes current-reference content; PR #368 completes repository-wide filename, title, and link standardization. The documentation tree contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. These materials are classified by purpose and evidence status rather than rewritten as though they describe one current implementation.
 
 The current repository contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. They must not all be rewritten as if they described the same current implementation.
 
@@ -32,7 +32,7 @@ The scan found **many non-kebab-case names still present**. Examples include:
 - Dedicated runtime database: `zirologistics_wms`; migrations V1–V32. Applied migrations are immutable; future changes are additive from V33.
 - API prefix: `/api/wms/v1`. Existing endpoint-specific response shapes and successful status conventions are compatibility constraints.
 - Platform control-plane foundations now include V29 operator/role/permission/MFA persistence, V30 support-grant governance, platform JWT and permission services, role administration, tenant-lifecycle authorization, and support-grant administration. End-to-end platform MFA/login HTTP, initial Platform Administrator provisioning, platform controllers, and support-grant scope consumption remain incomplete.
-- Backend work is paused temporarily for frontend foundation work. This is not security completion or production-readiness certification.
+- Backend feature work remains paused while documentation cleanup is reviewed and merged. Frontend implementation is deferred until PR #367 and PR #368 are reviewed, validated, and merged. This is not security completion or production-readiness certification.
 
 ## Security and integration boundaries
 
@@ -82,6 +82,7 @@ The scan found **many non-kebab-case names still present**. Examples include:
 - [x] State explicitly that the API v1 reference is compatibility-oriented and track full route/DTO/status/pagination verification as a separate backend roadmap item.
 - [x] Reconcile security claims with implementation primitives, available negative tests, CI evidence, and explicit partial-verification boundaries.
 - [x] Align README, docs index, runtime/deployment guidance, roadmap, and handoff with the documentation-first decision.
-- [ ] Confirm PR #367 checks pass and review the final PR diffs before merging; PR #368 CI must run after PR #367 is merged and the stacked PR is retargeted to `main`.
+- [x] Confirm PR #367 Backend CI, Authenticated WMS API DAST, and CodeQL pass on its current head.
+- [ ] Merge PR #367, retarget PR #368 to `main`, run its required checks, and review the final stacked diff before merging.
 
-This pass closes the repository-wide documentation naming, navigation, current-reference, and handoff cleanup. It does **not** replace the separate endpoint-by-endpoint API inventory, re-run every historical audit, certify tenant isolation, or approve production readiness.
+This two-PR documentation pass closes repository-wide Markdown naming, title, navigation, current-reference, and handoff cleanup once both PRs are merged. It does **not** replace the separate endpoint-by-endpoint API inventory, re-run every historical audit, certify tenant isolation, or approve production readiness.
