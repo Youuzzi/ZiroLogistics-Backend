@@ -302,14 +302,14 @@ public class WmsInventoryPostingService {
             if (delta.signum() < 0 && before.subtract(balance.reserved()).compareTo(delta.abs()) < 0) {
                 throw new IllegalStateException("Insufficient available inventory");
             }
-            updateBalance(balance.id(), delta);
+            updateBalance(access.tenantId(), balance.id(), delta);
             runningOnHand.put(key, after);
             try {
                 insertLedger(access, normalized, movementGroupId, entryNo++, leg, delta, before, after);
             } catch (DuplicateKeyException duplicateRequest) {
                 throw new IllegalStateException("Inventory request ID has already been used", duplicateRequest);
             }
-            transitionSerial(normalized.movementType(), legs, leg);
+            transitionSerial(access.tenantId(), normalized.movementType(), legs, leg);
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("entryNo", entryNo - 1);
             entry.put("itemPublicId", leg.itemPublicId());
@@ -822,20 +822,20 @@ public class WmsInventoryPostingService {
         return new Balance(number(row, "id"), decimal(row.get("on_hand_qty")), decimal(row.get("reserved_qty")));
     }
 
-    private void updateBalance(long id, BigDecimal delta) {
+    private void updateBalance(long tenantId, long id, BigDecimal delta) {
         int changed;
         if (delta.signum() > 0) {
             changed = jdbc.update("""
                     UPDATE inventory_balances
                     SET on_hand_qty = on_hand_qty + ?, version = version + 1, updated_at = UTC_TIMESTAMP(6)
-                    WHERE id = ?
-                    """, delta, id);
+                    WHERE id = ? AND tenant_id = ?
+                    """, delta, id, tenantId);
         } else {
             changed = jdbc.update("""
                     UPDATE inventory_balances
                     SET on_hand_qty = on_hand_qty - ?, version = version + 1, updated_at = UTC_TIMESTAMP(6)
-                    WHERE id = ? AND on_hand_qty - reserved_qty >= ?
-                    """, delta.abs(), id, delta.abs());
+                    WHERE id = ? AND tenant_id = ? AND on_hand_qty - reserved_qty >= ?
+                    """, delta.abs(), id, tenantId, delta.abs());
         }
         if (changed != 1) throw new IllegalStateException("Inventory balance changed or available quantity is insufficient");
     }
@@ -860,31 +860,31 @@ public class WmsInventoryPostingService {
         }
     }
 
-    private void transitionSerial(String movement, List<ResolvedLeg> legs, ResolvedLeg leg) {
+    private void transitionSerial(long tenantId, String movement, List<ResolvedLeg> legs, ResolvedLeg leg) {
         if (leg.serialId() == null) return;
         if ("TRANSFER_DISPATCH".equals(movement)) {
             int changed = jdbc.update("""
                     UPDATE inventory_serials SET status='IN_TRANSIT', current_warehouse_id=NULL,
                         current_location_id=NULL, version=version+1, updated_at=UTC_TIMESTAMP(6)
-                    WHERE id=? AND status='AVAILABLE' AND current_warehouse_id=? AND current_location_id=?
-                    """, leg.serialId(), leg.warehouseId(), leg.locationId());
+                    WHERE id=? AND tenant_id=? AND status='AVAILABLE' AND current_warehouse_id=? AND current_location_id=?
+                    """, leg.serialId(), tenantId, leg.warehouseId(), leg.locationId());
             if (changed != 1) throw new IllegalStateException("Serial dispatch transition failed");
         } else if ("TRANSFER_RECEIPT".equals(movement)) {
             String targetStatus = "DAMAGED".equals(leg.stockStatus()) ? "DAMAGED" : "AVAILABLE";
             int changed = jdbc.update("""
                     UPDATE inventory_serials SET status=?, current_warehouse_id=?, current_location_id=?,
                         version=version+1, updated_at=UTC_TIMESTAMP(6)
-                    WHERE id=? AND status='IN_TRANSIT' AND current_warehouse_id IS NULL AND current_location_id IS NULL
-                    """, targetStatus, leg.warehouseId(), leg.locationId(), leg.serialId());
+                    WHERE id=? AND tenant_id=? AND status='IN_TRANSIT' AND current_warehouse_id IS NULL AND current_location_id IS NULL
+                    """, targetStatus, leg.warehouseId(), leg.locationId(), leg.serialId(), tenantId);
             if (changed != 1) throw new IllegalStateException("Serial receipt transition failed");
         } else if ("TRANSFER".equals(movement) && leg.index() == 1) {
             int changed = jdbc.update("""
                     UPDATE inventory_serials
                     SET current_warehouse_id = ?, current_location_id = ?, version = version + 1,
                         updated_at = UTC_TIMESTAMP(6)
-                    WHERE id = ? AND status = 'AVAILABLE'
+                    WHERE id = ? AND tenant_id = ? AND status = 'AVAILABLE'
                       AND current_warehouse_id = ? AND current_location_id = ?
-                    """, leg.warehouseId(), leg.locationId(), leg.serialId(),
+                    """, leg.warehouseId(), leg.locationId(), leg.serialId(), tenantId,
                     legs.getFirst().warehouseId(), legs.getFirst().locationId());
             if (changed != 1) throw new IllegalStateException("Serial transfer transition failed");
         } else if ("ISSUE".equals(movement)) {
@@ -893,27 +893,27 @@ public class WmsInventoryPostingService {
                     SET status = 'SHIPPED', shipped_at = UTC_TIMESTAMP(6),
                         current_warehouse_id = NULL, current_location_id = NULL,
                         version = version + 1, updated_at = UTC_TIMESTAMP(6)
-                    WHERE id = ? AND status = 'AVAILABLE'
+                    WHERE id = ? AND tenant_id = ? AND status = 'AVAILABLE'
                       AND current_warehouse_id = ? AND current_location_id = ?
-                    """, leg.serialId(), leg.warehouseId(), leg.locationId());
+                    """, leg.serialId(), tenantId, leg.warehouseId(), leg.locationId());
             if (changed != 1) throw new IllegalStateException("Serial shipment transition failed");
         } else if ("RETURN".equals(movement)) {
             int changed = jdbc.update("""
                     UPDATE inventory_serials
                     SET status = 'RETURNED', current_warehouse_id = ?, current_location_id = ?,
                         version = version + 1, updated_at = UTC_TIMESTAMP(6)
-                    WHERE id = ? AND status = 'SHIPPED'
+                    WHERE id = ? AND tenant_id = ? AND status = 'SHIPPED'
                       AND current_warehouse_id IS NULL AND current_location_id IS NULL
-                    """, leg.warehouseId(), leg.locationId(), leg.serialId());
+                    """, leg.warehouseId(), leg.locationId(), leg.serialId(), tenantId);
             if (changed != 1) throw new IllegalStateException("Serial return transition failed");
         } else if ("ADJUSTMENT_OUT".equals(movement)) {
             int changed = jdbc.update("""
                     UPDATE inventory_serials
                     SET status = 'LOST', current_warehouse_id = NULL, current_location_id = NULL,
                         version = version + 1, updated_at = UTC_TIMESTAMP(6)
-                    WHERE id = ? AND status = 'AVAILABLE'
+                    WHERE id = ? AND tenant_id = ? AND status = 'AVAILABLE'
                       AND current_warehouse_id = ? AND current_location_id = ?
-                    """, leg.serialId(), leg.warehouseId(), leg.locationId());
+                    """, leg.serialId(), tenantId, leg.warehouseId(), leg.locationId());
             if (changed != 1) throw new IllegalStateException("Serial loss adjustment failed");
         } else if (Set.of("ADJUSTMENT_IN", "OPENING_BALANCE").contains(movement)
                 && leg.serialNumber() == null) {
@@ -921,16 +921,16 @@ public class WmsInventoryPostingService {
                     UPDATE inventory_serials
                     SET status = 'AVAILABLE', current_warehouse_id = ?, current_location_id = ?,
                         version = version + 1, updated_at = UTC_TIMESTAMP(6)
-                    WHERE id = ? AND status = 'LOST'
+                    WHERE id = ? AND tenant_id = ? AND status = 'LOST'
                       AND current_warehouse_id IS NULL AND current_location_id IS NULL
-                    """, leg.warehouseId(), leg.locationId(), leg.serialId());
+                    """, leg.warehouseId(), leg.locationId(), leg.serialId(), tenantId);
             if (changed != 1) throw new IllegalStateException("Serial inventory restoration failed");
         } else if ("DAMAGE".equals(movement) && leg.index() == 1) {
             int changed = jdbc.update("""
                     UPDATE inventory_serials SET status = 'DAMAGED', version = version + 1,
-                        updated_at = UTC_TIMESTAMP(6) WHERE id = ? AND status = 'AVAILABLE'
+                        updated_at = UTC_TIMESTAMP(6) WHERE id = ? AND tenant_id = ? AND status = 'AVAILABLE'
                           AND current_warehouse_id = ? AND current_location_id = ?
-                    """, leg.serialId(), legs.getFirst().warehouseId(), legs.getFirst().locationId());
+                    """, leg.serialId(), tenantId, legs.getFirst().warehouseId(), legs.getFirst().locationId());
             if (changed != 1) throw new IllegalStateException("Serial damage transition failed");
         } else if ("STATUS_CHANGE".equals(movement) && leg.index() == 1) {
             String sourceStatus = legs.getFirst().serialStatus();
@@ -941,8 +941,8 @@ public class WmsInventoryPostingService {
             int changed = jdbc.update("""
                     UPDATE inventory_serials SET status = ?, version = version + 1,
                         updated_at = UTC_TIMESTAMP(6)
-                    WHERE id = ? AND status = ?
-                    """, targetStatus, leg.serialId(), sourceStatus);
+                    WHERE id = ? AND tenant_id = ? AND status = ?
+                    """, targetStatus, leg.serialId(), tenantId, sourceStatus);
             if (changed != 1) throw new IllegalStateException("Serial status transition failed");
         }
     }
