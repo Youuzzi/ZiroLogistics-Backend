@@ -23,7 +23,7 @@ class MySqlWmsTenantMfaFactorLifecycleAdapterIntegrationTest {
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
             .withDatabaseName("wms_tenant_mfa_factor_lifecycle_test")
-            .withUsername("wms_tenant_mfa_factor_lifecycle_test")
+            .withUsername("wms_mfa_factor_user")
             .withPassword("wms_tenant_mfa_factor_lifecycle_test");
 
     private static JdbcTemplate jdbc;
