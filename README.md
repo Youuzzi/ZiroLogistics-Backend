@@ -170,6 +170,8 @@ ZiroLogistics-Backend/
 │   │       └── banner.txt
 │   └── test/
 │       └── java/com/zirocraft/zirologistics/wms/
+│           ├── WmsRuntimeBoundaryIntegrationTest.java
+│           ├── WmsTenantIdentityPersistenceIntegrationTest.java
 │           ├── authorization/
 │           ├── bootstrap/
 │           ├── governance/
