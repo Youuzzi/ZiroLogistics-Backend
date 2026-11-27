@@ -1,6 +1,6 @@
 # Tenant Locale, Timezone, Currency, and Temporal Data Policy Audit
 
-**Status:** Source audit baseline; LOC-01 and LOC-02 are implemented through the shared `WmsTenantLocalePolicy` used by bootstrap, provisioning, and tenant profile updates. Temporal persistence/session policy remains open.
+**Status:** Source audit baseline with follow-up implementation. LOC-01/LOC-02 are implemented through shared `WmsTenantLocalePolicy`; PR #299 adds UTC session initialization for Hikari-managed WMS MySQL connections, with selected MySQL timestamp tests. Tenant-local schedule/DST semantics and a complete temporal field audit remain open.
 **Reviewed commit:** `b3ac39828880eaae967b005d9169f6e9a3801bec`
 **Scope:** Tenant timezone/currency validation, WMS temporal API fields, persistence mappings, SQL timestamp generation, and quantity precision visible in representative workflows.
 **Assurance:** This is a targeted source audit, not a complete database-wide temporal or financial certification.
@@ -29,8 +29,8 @@
 - `WmsOperationalReportingService`: report generation timestamp is selected with `UTC_TIMESTAMP(6)` and exposed as `generatedAtUtc`.
 
 ### Persistence and runtime
-- `application-wms.properties`: Hibernate JDBC timezone is configured as UTC; its datasource URL is supplied through `WMS_DB_URL`.
-- `compose.yml`: the current WMS JDBC URL is `jdbc:mysql://mysql:3306/zirologistics_wms` and does not explicitly set a MySQL connection/session timezone parameter. No MySQL server timezone override is declared in the reviewed Compose service.
+- `application-wms.properties`: Hibernate JDBC timezone is UTC and Hikari runs `SET time_zone = '+00:00'` for each pooled connection; its datasource URL is supplied through `WMS_DB_URL`.
+- `compose.yml`: the current WMS JDBC URL is `jdbc:mysql://mysql:3306/zirologistics_wms`. The Compose service does not need a separate JDBC timezone parameter because the WMS Hikari connection initializer sets the MySQL session timezone to UTC. No global MySQL server timezone override is declared.
 - `V1__create_tenant_wms_schema.sql`: numerous temporal columns use `DATETIME(6)`; many creation/update columns default to `CURRENT_TIMESTAMP(6)`; business dates such as lot manufacture/received/expiry use SQL `DATE`.
 - Operational services use explicit `UTC_TIMESTAMP(6)` for selected lifecycle timestamps, including inbound receipt completion/posting and transfer dispatch/receipt.
 
@@ -41,11 +41,11 @@
 
 ## 2A. Runtime temporal configuration findings (follow-up review)
 
-- `application-wms.properties` configures `spring.jpa.properties.hibernate.jdbc.time_zone=UTC`, but does not define a datasource connection-init statement or other explicit MySQL session-timezone enforcement.
-- The reviewed `compose.yml` JDBC URL is `jdbc:mysql://mysql:3306/zirologistics_wms`; no timezone parameter or MySQL server timezone override is configured in that file. This is configuration evidence only; it does not prove the actual timezone of an externally deployed database or session.
+- `application-wms.properties` configures `spring.jpa.properties.hibernate.jdbc.time_zone=UTC` and `spring.datasource.hikari.connection-init-sql=SET time_zone = '+00:00'` for pooled MySQL sessions.
+- The reviewed `compose.yml` JDBC URL is `jdbc:mysql://mysql:3306/zirologistics_wms`; the Hikari initializer supplies the session timezone independently of a JDBC URL parameter. This is configuration evidence for application-managed connections, not proof about external tools or sessions opened outside the WMS pool.
 - `UserEntity` and `TenantEntity` map creation/update audit fields as `LocalDateTime` and use Hibernate `@CreationTimestamp` / `@UpdateTimestamp`. These are ORM-generated values and must be tested against JDBC/database-default timestamp paths under deliberately different session timezones.
 - `DATETIME(6)` itself carries no timezone conversion semantics. The application must define whether the stored value is UTC wall-clock representation or tenant-local wall-clock value; the recommended contract is UTC for event instants.
-- This follow-up still does not certify every temporal field or write path. No runtime connection was made to any database.
+- PR #299 adds the UTC session initializer and MySQL integration coverage for selected ORM/session timestamp paths. This follow-up still does not certify every temporal field or write path. No external production database was inspected.
 
 ## 3. Policy decisions recommended
 
