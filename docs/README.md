@@ -6,6 +6,7 @@ This directory contains active engineering references and historical verificatio
 
 - [Backend Maintenance Handoff](project/backend-maintenance-handoff-2026-11-27.md) — exact engineering checkpoint, completed changes, security boundaries, and resume instructions.
 - [Backend Improvement Roadmap](roadmap/backend-improvement-roadmap.md) — prioritized implementation and verification backlog.
+- [Documentation Content Audit](audits/documentation-content-audit-2026-11-27.md) — audit scope, current checkpoint facts, stale-content findings, and frontend integration boundaries.
 - [Backend Runtime Boundary](runtime/WMS_RUNTIME_BOUNDARY.md) — supported application runtime, database targets, migration safety, and configuration.
 - [Local Docker Deployment](deployment/WMS_LOCAL_DOCKER_DEPLOYMENT.md) — isolated local Compose workflow.
 - [Controlled Platform Bootstrap](architecture/WMS_CONTROLLED_PLATFORM_BOOTSTRAP.md) — one-time tenant-owner bootstrap constraints.
@@ -27,6 +28,7 @@ Architecture references cover identity, tenant context, authorization, role gove
 
 - [Security and QA Baseline](audits/security-qa-baseline.md)
 - [Security and QA Verification Status](audits/security-qa-closure-criteria.md)
+- [Documentation Content Audit](audits/documentation-content-audit-2026-11-27.md)
 - [Platform Control-Plane Review](audits/platform-control-plane-review-2026-11-27.md)
 - [Tenant Isolation Review](audits/tenant-isolation-review-2026-11-27.md)
 - [Outbound Tenant-Isolation Review](audits/outbound-tenant-isolation-review-2026-11-27.md)
