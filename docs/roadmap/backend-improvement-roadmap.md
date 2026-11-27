@@ -1,7 +1,7 @@
 # Backend Improvement Roadmap
 
-**Status:** Prioritized backend security and operational backlog. Documentation PRs #367 and #368 are merged; frontend foundation may proceed with synthetic data behind replaceable adapters, while real-account and privileged integration remain gated by the acceptance criteria below.  
-**Baseline:** `main` at `148177826c5eebd56b6134851e5d901809549448`.  
+**Status:** Prioritized backend security and operational backlog. Documentation PRs #367 and #368 are merged; frontend foundation may proceed with synthetic data behind replaceable adapters, while real-account and privileged integration remain gated by the acceptance criteria below.
+**Baseline:** `main` at `148177826c5eebd56b6134851e5d901809549448`.
 **Rule:** Resume backend work based on security risk and frontend integration dependency, not to complete a checklist for its own sake.
 
 ## Priority 0 — Required before real account provisioning or privileged integration
