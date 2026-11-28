@@ -9,6 +9,7 @@ import com.zirocraft.zirologistics.wms.identity.domain.WmsIdentityActionTokenPur
 import com.zirocraft.zirologistics.wms.identity.domain.WmsIdentityActionTokenRecord;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.UserEntity;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.UserRepository;
+import com.zirocraft.zirologistics.wms.security.mfa.application.WmsTenantMfaReauthenticationService;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -26,6 +27,7 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * Global-account password change and reset workflows.
@@ -52,6 +54,7 @@ public class WmsPasswordManagementService {
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
+    private final Supplier<WmsTenantMfaReauthenticationService> reauthenticationServiceProvider;
 
     @Autowired
     public WmsPasswordManagementService(
@@ -63,10 +66,12 @@ public class WmsPasswordManagementService {
             ObjectProvider<WmsEmailOutboxEncryptionService> encryptionProvider,
             WmsEmailOutboxStoragePort outboxStorage,
             ObjectMapper objectMapper,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            ObjectProvider<WmsTenantMfaReauthenticationService> reauthenticationServiceProvider) {
         this(userRepository, userLookupService, tokenStorage, tokenGenerator, passwordEncoder,
                 encryptionProvider, outboxStorage, objectMapper,
-                new TransactionTemplate(transactionManager), Clock.systemUTC());
+                new TransactionTemplate(transactionManager), Clock.systemUTC(),
+                reauthenticationServiceProvider::getIfAvailable);
     }
 
     WmsPasswordManagementService(
@@ -80,6 +85,22 @@ public class WmsPasswordManagementService {
             ObjectMapper objectMapper,
             TransactionTemplate transactionTemplate,
             Clock clock) {
+        this(userRepository, userLookupService, tokenStorage, tokenGenerator, passwordEncoder,
+                encryptionProvider, outboxStorage, objectMapper, transactionTemplate, clock, () -> null);
+    }
+
+    WmsPasswordManagementService(
+            UserRepository userRepository,
+            WmsUserLookupService userLookupService,
+            WmsIdentityActionTokenStoragePort tokenStorage,
+            WmsIdentityActionTokenGenerator tokenGenerator,
+            PasswordEncoder passwordEncoder,
+            ObjectProvider<WmsEmailOutboxEncryptionService> encryptionProvider,
+            WmsEmailOutboxStoragePort outboxStorage,
+            ObjectMapper objectMapper,
+            TransactionTemplate transactionTemplate,
+            Clock clock,
+            Supplier<WmsTenantMfaReauthenticationService> reauthenticationServiceProvider) {
         this.userRepository = Objects.requireNonNull(userRepository);
         this.userLookupService = Objects.requireNonNull(userLookupService);
         this.tokenStorage = Objects.requireNonNull(tokenStorage);
@@ -90,6 +111,7 @@ public class WmsPasswordManagementService {
         this.objectMapper = Objects.requireNonNull(objectMapper);
         this.transactionTemplate = Objects.requireNonNull(transactionTemplate);
         this.clock = Objects.requireNonNull(clock);
+        this.reauthenticationServiceProvider = Objects.requireNonNull(reauthenticationServiceProvider);
     }
 
     /**
@@ -135,6 +157,7 @@ public class WmsPasswordManagementService {
             userRepository.saveAndFlush(locked);
             tokenStorage.revokeOutstandingForUser(
                     locked.getId(), WmsIdentityActionTokenPurpose.PASSWORD_RESET, now);
+            revokeTenantMfaReauthenticationGrants(locked.getId());
             return Boolean.TRUE;
         }), "Password change transaction returned no result");
     }
@@ -252,8 +275,17 @@ public class WmsPasswordManagementService {
             }
             tokenStorage.revokeOutstandingForUser(
                     user.getId(), WmsIdentityActionTokenPurpose.PASSWORD_RESET, now);
+            revokeTenantMfaReauthenticationGrants(user.getId());
             return Boolean.TRUE;
         }), "Password reset transaction returned no result");
+    }
+
+    private void revokeTenantMfaReauthenticationGrants(long userId) {
+        WmsTenantMfaReauthenticationService reauthenticationService =
+                reauthenticationServiceProvider.get();
+        if (reauthenticationService != null) {
+            reauthenticationService.revokeOutstandingForUser(userId);
+        }
     }
 
     private WmsEmailOutboxEncryptionService requireEncryptionService() {

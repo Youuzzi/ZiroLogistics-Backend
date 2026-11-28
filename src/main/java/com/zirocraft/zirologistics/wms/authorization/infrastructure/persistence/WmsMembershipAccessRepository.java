@@ -6,6 +6,7 @@ import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Resolves the current tenant access graph from authoritative database state.
@@ -50,4 +51,26 @@ public interface WmsMembershipAccessRepository extends Repository<TenantMembersh
     List<WmsMembershipAccessProjection> findActiveAccess(
             @Param("userPublicId") String userPublicId,
             @Param("membershipPublicId") String membershipPublicId);
+    /**
+     * Locks the active membership and its joined user/tenant rows while a
+     * security-sensitive operation revalidates the selected tenant context.
+     */
+    @Query(value = """
+            SELECT m.id
+            FROM tenant_memberships m
+            INNER JOIN users u
+                ON u.id = m.user_id
+            INNER JOIN tenants t
+                ON t.id = m.tenant_id
+            WHERE m.public_id = :membershipPublicId
+                AND u.public_id = :userPublicId
+                AND m.status = 'ACTIVE'
+                AND u.status = 'ACTIVE'
+                AND t.status = 'ACTIVE'
+            FOR UPDATE
+            """, nativeQuery = true)
+    Optional<Long> findActiveMembershipIdForUpdate(
+            @Param("userPublicId") String userPublicId,
+            @Param("membershipPublicId") String membershipPublicId);
+
 }

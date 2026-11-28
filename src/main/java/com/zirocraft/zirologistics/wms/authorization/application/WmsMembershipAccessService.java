@@ -58,4 +58,23 @@ public class WmsMembershipAccessService {
                 first.getCredentialVersion(),
                 permissions);
     }
+    /**
+     * Resolves the current access graph while holding a database lock on the
+     * selected active membership and its owning user and tenant rows. The caller
+     * must keep the surrounding transaction open through its protected mutation.
+     */
+    @Transactional
+    public WmsMembershipAccess resolveForUpdate(
+            String authenticatedUserPublicId, String selectedMembershipPublicId) {
+        if (authenticatedUserPublicId == null || authenticatedUserPublicId.isBlank()
+                || selectedMembershipPublicId == null || selectedMembershipPublicId.isBlank()) {
+            throw new WmsMembershipAccessDeniedException();
+        }
+        if (accessRepository.findActiveMembershipIdForUpdate(
+                authenticatedUserPublicId, selectedMembershipPublicId).isEmpty()) {
+            throw new WmsMembershipAccessDeniedException();
+        }
+        return resolve(authenticatedUserPublicId, selectedMembershipPublicId);
+    }
+
 }

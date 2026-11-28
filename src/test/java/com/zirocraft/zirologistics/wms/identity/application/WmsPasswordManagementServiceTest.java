@@ -9,6 +9,9 @@ import com.zirocraft.zirologistics.wms.identity.domain.WmsIdentityActionTokenPur
 import com.zirocraft.zirologistics.wms.identity.domain.WmsIdentityActionTokenRecord;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.UserEntity;
 import com.zirocraft.zirologistics.wms.identity.infrastructure.persistence.UserRepository;
+import com.zirocraft.zirologistics.wms.authorization.application.WmsMembershipAccessService;
+import com.zirocraft.zirologistics.wms.security.mfa.application.WmsTenantMfaReauthenticationService;
+import com.zirocraft.zirologistics.wms.security.mfa.application.WmsTenantMfaReauthenticationGrantStoragePort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -95,6 +98,37 @@ class WmsPasswordManagementServiceTest {
         InOrder order = inOrder(passwordEncoder, transactionManager);
         order.verify(passwordEncoder).encode("NewPassword123");
         order.verify(transactionManager).getTransaction(any(TransactionDefinition.class));
+    }
+
+    @Test
+    void passwordChangeRevokesOutstandingTenantMfaReauthenticationGrants() {
+        UserEntity snapshot = activeUser(42L, "account-public-42", "old-argon2-hash", 7L);
+        when(userRepository.findByPublicId("account-public-42")).thenReturn(Optional.of(snapshot));
+        when(passwordEncoder.matches("CurrentPassword123", "old-argon2-hash")).thenReturn(true);
+        when(passwordEncoder.matches("NewPassword123", "old-argon2-hash")).thenReturn(false);
+        when(passwordEncoder.encode("NewPassword123")).thenReturn("new-argon2-hash");
+        when(userRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(snapshot));
+        when(userRepository.saveAndFlush(snapshot)).thenReturn(snapshot);
+        when(tokenStorage.revokeOutstandingForUser(
+                42L, WmsIdentityActionTokenPurpose.PASSWORD_RESET, NOW)).thenReturn(0);
+
+        WmsTenantMfaReauthenticationGrantStoragePort grantStorage =
+                mock(WmsTenantMfaReauthenticationGrantStoragePort.class);
+        WmsTenantMfaReauthenticationService reauthenticationService =
+                new WmsTenantMfaReauthenticationService(
+                        userRepository, mock(WmsMembershipAccessService.class), passwordEncoder,
+                        grantStorage, transactionManager, Clock.fixed(NOW, ZoneOffset.UTC),
+                        new java.security.SecureRandom());
+        WmsPasswordManagementService serviceWithMfaRevocation = new WmsPasswordManagementService(
+                userRepository, userLookupService, tokenStorage, tokenGenerator, passwordEncoder,
+                encryptionProvider, outboxStorage, new ObjectMapper().findAndRegisterModules(),
+                new TransactionTemplate(transactionManager), Clock.fixed(NOW, ZoneOffset.UTC),
+                () -> reauthenticationService);
+
+        serviceWithMfaRevocation.changePassword(
+                "account-public-42", "CurrentPassword123", "NewPassword123");
+
+        verify(grantStorage).revokeOutstandingForUser(42L, NOW);
     }
 
     @Test
