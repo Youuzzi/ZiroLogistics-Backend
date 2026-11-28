@@ -30,7 +30,7 @@ Call `consume(...)` inside the same transaction as the protected factor lifecycl
 
 ## Revocation
 
-`revokeOutstandingForUser(userId)` is transactional and revokes all outstanding grants for the global user. Password-change/reset and other account-security mutation flows must call it in their own transaction after locking the user and changing the credential/security state. Wiring those lifecycle call sites is a separate required integration task before enabling this feature.
+`revokeOutstandingForUser(userId)` is transactional and revokes all outstanding grants for the global user. The existing WMS password-change and password-reset completion flows now invoke it inside the same transaction that changes the password and increments the credential version. Other account-security mutation flows must invoke it in their own transaction after locking the user and changing the security state.
 
 ## Explicit non-goals
 
