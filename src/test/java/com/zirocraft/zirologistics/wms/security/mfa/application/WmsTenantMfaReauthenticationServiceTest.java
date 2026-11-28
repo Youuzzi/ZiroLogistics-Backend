@@ -53,7 +53,7 @@ class WmsTenantMfaReauthenticationServiceTest {
 
         when(userRepository.findByPublicId("user-public-id")).thenReturn(Optional.of(user));
         when(userRepository.findByIdForUpdate(17L)).thenReturn(Optional.of(user));
-        when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
+        when(membershipAccessService.resolveForUpdate("user-public-id", "membership-public-id"))
                 .thenReturn(membership);
 
         service = new WmsTenantMfaReauthenticationService(
@@ -145,7 +145,7 @@ class WmsTenantMfaReauthenticationServiceTest {
     @Test
     void rejectsMembershipThatNoLongerMatchesAuthenticatedPrincipal() {
         when(passwordEncoder.matches("correct-password", "argon2id-hash")).thenReturn(true);
-        when(membershipAccessService.resolve("user-public-id", "membership-public-id"))
+        when(membershipAccessService.resolveForUpdate("user-public-id", "membership-public-id"))
                 .thenReturn(new WmsMembershipAccess(
                         17L, "user-public-id", 30L, "other-tenant-public-id",
                         41L, "membership-public-id", 7L, Set.of()));
