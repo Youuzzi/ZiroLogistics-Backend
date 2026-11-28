@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WmsTenantMfaReauthenticationConfigurationTest {
 
@@ -23,7 +24,7 @@ class WmsTenantMfaReauthenticationConfigurationTest {
                 .withPropertyValues("wms.security.tenant-mfa.reauthentication.enabled=true")
                 .run(context -> {
                     assertFalse(context.containsBean("wmsTenantMfaReauthenticationService"));
-                    assertFalse(context.getBeansOfType(WmsTenantMfaReauthenticationService.class).size() > 0);
+                    assertTrue(context.getBeansOfType(WmsTenantMfaReauthenticationService.class).isEmpty());
                 });
     }
 }
