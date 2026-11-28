@@ -24,6 +24,10 @@ import java.time.Clock;
 @Configuration(proxyBeanMethods = false)
 @Profile("wms")
 @ConditionalOnProperty(
+        prefix = "wms.security.tenant-mfa",
+        name = "enabled",
+        havingValue = "true")
+@ConditionalOnProperty(
         prefix = "wms.security.tenant-mfa.reauthentication",
         name = "enabled",
         havingValue = "true")
