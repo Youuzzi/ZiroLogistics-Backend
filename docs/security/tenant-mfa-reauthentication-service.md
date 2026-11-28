@@ -26,7 +26,7 @@ Allowed purposes are the explicit V32 enum values: `MFA_FACTOR_ENROLLMENT`, `MFA
 
 Consumption validates the handle's canonical encoding, locks and revalidates the active global user, re-resolves the active selected membership, and invokes the storage port's atomic conditional consume with the exact identity, credential version, and purpose.
 
-Call `consume(...)` inside the same transaction as the protected factor lifecycle mutation. Its REQUIRED transaction joins the caller's transaction; a rollback must undo both grant consumption and the protected state change. Never consume a grant in a controller and pass a boolean to a later service.
+Call `consume(...)` inside the same transaction as the protected factor lifecycle mutation. Consumption uses MANDATORY transaction propagation: it rejects calls without an existing transaction and joins the caller's transaction. The caller must wrap grant consumption and the protected factor mutation in that same transaction; a rollback must undo both. Never consume a grant in a controller and pass a boolean to a later service.
 
 ## Revocation
 
