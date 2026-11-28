@@ -1,7 +1,7 @@
 # Tenant RBAC Permission Catalogue and Provisioning Audit
 
 **Status:** Source and MySQL integration-test audit; canonical tenant policy and provisioning parity are implemented. Remaining authorization assurance gaps are listed below.
-**Reviewed baseline:** Current `main` at the time of this audit.
+**Reviewed source checkpoint:** `main` at `148177826c5eebd56b6134851e5d901809549448`; the subsequent #367/#368 merges changed documentation, not runtime Java source.
 **Scope:** Permission catalogue, Tenant Owner baseline, operational system-role templates, bootstrap/provisioning parity, delegation boundaries, and separation-of-duties evidence.
 **Assurance:** This audit verifies source structure and the persisted-grant assertions in Testcontainers tests. It does not certify every permission enforcement point or every cross-workflow separation-of-duties path.
 
@@ -79,7 +79,7 @@ The integration tests inspect persisted database rows for the Owner and every sy
 
 The canonical policy resolves the original bootstrap/provisioning mismatch, but it does not complete all authorization governance:
 
-1. **Permission risk metadata:** risk-class metadata is not yet represented as a canonical machine-readable permission attribute. The current role templates encode explicit grants, but do not provide a general permission-risk registry.
+1. **Permission risk metadata:** the immutable `WmsTenantPermissionRiskRegistry` now provides 94 machine-readable entries with risk class, tenant assignability, fresh-MFA, audit, and optional SoD-group metadata. The registry is tested against the seeded catalogue, but it does not itself enforce those controls at every action boundary.
 2. **Separation of duties:** stock-count and inventory-adjustment actor separation exists in their workflows, and high-risk system-role self-assignment is restricted. Inbound posting, final shipping, and transfer dispatch/receipt actor separation is not universally certified across all routes and lifecycle paths.
 3. **Delegation policy coverage:** catalogue visibility and custom-role delegation are centralized, but the allowed permission subset remains deliberately restricted. Do not broaden it without route-level enforcement review and negative tests.
 4. **Permission enforcement completeness:** this audit does not certify that every controller, service method, background worker, and indirect resource lookup enforces the intended permission and tenant scope.
@@ -87,7 +87,7 @@ The canonical policy resolves the original bootstrap/provisioning mismatch, but 
 
 ## 5. Required follow-up
 
-1. Build a canonical permission metadata registry with stable risk class and operation semantics, after auditing every seeded permission and its enforcement point.
+1. **Registry implemented:** maintain the 94-entry canonical metadata registry and generate an exact-code matrix from source. The remaining work is to verify each entry's action-level enforcement point and ensure new migrations cannot introduce unclassified permissions.
 2. Trace each sensitive workflow from HTTP route through service and SQL to verify both tenant scope and permission checks.
 3. Add negative MySQL tests for cross-actor inbound posting, shipment release/shipping, transfer dispatch/receipt, and any operation where the same actor must not perform both sides.
 4. Verify that tenant role assignment cannot bypass self-assignment restrictions, delegation ceilings, protected-role immutability, or last-owner protections.

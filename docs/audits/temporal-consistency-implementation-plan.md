@@ -1,7 +1,8 @@
 # Temporal Consistency Implementation Plan
 
 **Status:** Active engineering plan; not a runtime certification.
-**Baseline commit:** `2b72fb4b7870e8312b643a2b5fb71321eab0ab45` (UTC MySQL session enforcement merged from PR #299).
+**Original plan baseline:** `2b72fb4b7870e8312b643a2b5fb71321eab0ab45` (UTC MySQL session enforcement merged from PR #299).
+**Current source checkpoint reconciled:** `main` at `148177826c5eebd56b6134851e5d901809549448`.
 **Scope:** UTC persistence, tenant-local business dates, WMS schedule semantics, worker leases, and API timestamp representation.
 
 ## 1. Verified foundation

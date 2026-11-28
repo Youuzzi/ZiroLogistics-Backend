@@ -1,6 +1,6 @@
 # WMS Permission Risk Registry
 
-**Status:** Contract for implementation; this document does not claim that machine-readable risk metadata is already enforced.
+**Status:** Implemented immutable Java metadata registry with 94 permission entries and unit/MySQL catalogue-consistency tests. The metadata is not itself an authorization grant and is not yet consumed as universal action-level enforcement.
 **Scope:** Tenant WMS permissions only. Platform control-plane permissions remain a separate catalogue and authorization boundary.
 
 ## 1. Why this registry exists
@@ -9,7 +9,7 @@ The permission catalogue currently stores a stable permission code, module, and 
 
 The registry is policy metadata. It does not grant a permission, replace tenant RBAC, bypass resource ownership, or replace workflow state validation.
 
-## 2. Required metadata contract
+## 2. Implemented metadata contract
 
 Every seeded tenant WMS permission must resolve to exactly one immutable registry entry:
 
@@ -24,7 +24,7 @@ Every seeded tenant WMS permission must resolve to exactly one immutable registr
 | `separationOfDutiesGroup` | Optional stable workflow group for operations requiring independent actors |
 | `description` | Human-readable intent consistent with the seeded catalogue |
 
-The initial implementation should be an immutable Java registry, not a new database table. The current catalogue is seeded by Flyway and should remain the source for persisted permission identity. Add durable columns or a new table only if runtime administration or versioned metadata requires database ownership.
+The current implementation is an immutable Java registry, not a new database table. The Flyway-seeded catalogue remains the source for persisted permission identity. Add durable columns or a new table only if runtime administration or versioned metadata later requires database ownership.
 
 ## 3. Risk classes
 
@@ -66,15 +66,15 @@ Initial groups to audit and enforce where the workflow requires dual control:
 
 A SoD group is a review/enforcement key, not a blanket prohibition on assigning multiple roles. Small warehouses may combine operational duties where no independent control is required; critical commit and approval boundaries must remain independent.
 
-## 6. Required implementation and test gates
+## 6. Implemented evidence and remaining enforcement gates
 
-1. Enumerate every tenant WMS permission from the complete migration history and compare it with the registry. Missing, duplicate, unknown, or unclassified codes fail tests.
-2. Verify each registry module and description against the persisted catalogue using MySQL integration tests.
-3. Verify risk class, MFA, audit, tenant-assignability, and SoD metadata for every entry.
-4. Keep catalogue visibility, custom-role delegation, system-role templates, and risk metadata as separate policy dimensions.
-5. Add negative tests proving that a high-risk permission cannot be obtained through custom-role creation, role replacement, self-assignment, or platform/tenant principal confusion.
-6. Add action-level tests for fresh MFA and persisted actor separation; do not treat a registry unit test as proof of endpoint enforcement.
-7. Preserve existing migrations V1–V30. A metadata-only registry does not justify rewriting historical migrations or mutating a user database.
+1. **Implemented:** enumerate tenant WMS permissions and compare them with the registry; missing, duplicate, unknown, or unclassified codes fail tests.
+2. **Implemented:** verify registry modules and descriptions against the persisted catalogue using MySQL integration tests.
+3. **Implemented:** verify risk class, MFA, audit, tenant-assignability, and SoD metadata for every entry with registry tests.
+4. **Implemented policy boundary:** keep catalogue visibility, custom-role delegation, system-role templates, and risk metadata as separate policy dimensions.
+5. **Remaining:** expand negative tests proving high-risk permissions cannot be obtained through custom-role creation, role replacement, self-assignment, or platform/tenant principal confusion.
+6. **Remaining:** add action-level tests for fresh MFA and persisted actor separation; do not treat registry unit/MySQL catalogue tests as proof of endpoint enforcement.
+7. Preserve existing migrations V1–V32. The metadata registry is code-owned and does not justify rewriting historical migrations or mutating a user database.
 
 ## 7. Out of scope
 

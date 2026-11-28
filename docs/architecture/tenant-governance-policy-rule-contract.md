@@ -1,6 +1,6 @@
 # WMS Tenant Governance Policy Rule Contract
 
-**Status:** Implementation contract for the next governance-policy increment. This document defines policy semantics; it does not introduce runtime configuration or relax current controls.
+**Status:** Partial implementation. The typed rule catalogue and pure deterministic resolver exist, and the independent replenishment-reversal actor check was implemented in PR #341. Persisted tenant overrides and universal workflow integration remain incomplete; this document defines the broader target policy semantics and does not relax current controls.
 
 ## 1. Purpose and boundaries
 
@@ -28,7 +28,7 @@ An unclassified rule is not implicitly advisory. Unknown rule codes, unsupported
 
 ## 3. Initial rule catalogue
 
-The rule identifiers below are stable policy concepts proposed for implementation. They must be mapped to actual persisted actor fields and service methods before runtime rollout.
+The rule identifiers below are represented in the typed `WmsTenantGovernancePolicyResolver.RuleId` catalogue. Enforcement is mixed: selected workflow rules are already enforced in services, while other rules remain target policy and must be mapped to persisted actor evidence before runtime rollout.
 
 | Rule code | Workflow / actor comparison | Classification | Initial default |
 |---|---|---|---|
@@ -41,7 +41,7 @@ The rule identifiers below are stable policy concepts proposed for implementatio
 | `INVENTORY_ADJUSTMENT_CREATOR_APPROVER` | Approver user must differ from adjustment creator. | Mandatory | Enforced |
 | `INVENTORY_ADJUSTMENT_CREATOR_POSTER` | Poster user must differ from adjustment creator. | Mandatory | Enforced |
 | `INVENTORY_ADJUSTMENT_APPROVER_POSTER` | Whether approver and poster must differ. | Configurable | Two-person default: approver may also post after independent approval; Enterprise profile may require a third actor. |
-| `REPLENISHMENT_CONFIRMATION_REVERSAL` | Reversal user and membership must differ from the original confirmation actor. | Mandatory | Enforced; implementation tracked in Stage 16 PR #341. |
+| `REPLENISHMENT_CONFIRMATION_REVERSAL` | Reversal user and membership must differ from the original confirmation actor. | Mandatory | Enforced by the replenishment reversal service and MySQL regression coverage; PR #341 merged at `0e4e053dfc5a2cb26efd8889e0bf900b8734a213`. |
 | `REPLENISHMENT_TASK_ASSIGNEE_CONFIRMER` | Whether the assigned operator may confirm their own task. | Advisory | Same operator permitted; confirmation still requires exact workflow and inventory-post permissions. |
 
 ### Actor identity semantics
@@ -82,7 +82,7 @@ These defaults preserve a workable operating model for small warehouses without 
 
 ## 6. Proposed policy data contract
 
-The first implementation should use a typed, versioned policy representation rather than arbitrary JSON interpreted at runtime.
+Any future persisted tenant-configurable policy should use a typed, versioned representation rather than arbitrary JSON interpreted at runtime. The pure typed resolver already exists; persistence and workflow integration remain open.
 
 Minimum conceptual fields:
 
@@ -102,8 +102,8 @@ No database migration should be added until the policy catalogue, override const
 
 ## 7. Enforcement and rollout sequence
 
-1. Add a typed rule catalogue and validator with unit tests for all rule codes and profile defaults.
-2. Add a read-only effective-policy resolver backed by immutable platform defaults; no tenant overrides initially.
+1. **Implemented foundation:** a typed rule catalogue and deterministic resolver with unit tests for rule codes, profile defaults, and bounded overrides. Remaining work is to persist approved tenant overrides and integrate selected resolutions into workflow services.
+2. **Implemented as a pure domain resolver:** immutable defaults and bounded in-memory overrides. Persisted tenant overrides are not implemented.
 3. Route existing hard-coded mandatory SoD checks through the resolver without changing their effective behavior.
 4. Add MySQL integration tests proving the resolver and actor checks are evaluated in the same tenant transaction.
 5. Add bounded tenant overrides only for CONFIGURABLE and THRESHOLD_DRIVEN rules, with optimistic versioning and audit.

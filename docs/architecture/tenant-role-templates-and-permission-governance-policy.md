@@ -1,6 +1,6 @@
 # Tenant Role Templates and Permission Governance Policy
 
-**Status:** Canonical Tenant Owner grants, delegation/catalogue sets, and all 13 operational tenant system-role templates are implemented. Machine-readable permission risk metadata and universal cross-workflow separation-of-duties enforcement remain incomplete.
+**Status:** Canonical Tenant Owner grants, delegation/catalogue sets, all 13 operational tenant system-role templates, and the 94-entry immutable permission-risk metadata registry are implemented. Universal action-level use of risk metadata and cross-workflow separation-of-duties enforcement remain incomplete.
 **Implementation source of truth:** `WmsTenantPermissionPolicy` and its MySQL persisted-grant integration tests on `main`.
 **Related evidence:** `docs/audits/tenant-rbac-permission-catalogue-audit.md`, `docs/architecture/wms-role-permission-management-design.md`, `docs/security/tenant-isolation-and-authorization.md`
 **Scope:** Tenant-scoped role templates, permission risk classes, delegation ceilings, separation of duties, and bootstrap/provisioning parity.
@@ -227,7 +227,7 @@ The matrix is intentionally conservative for C1 and A1. Shipment release is assi
 
 ## 6. Canonical policy and delegation contract
 
-Implemented today: a centralized immutable Java policy defines the Tenant Owner baseline, catalogue-visible permissions, custom-role delegable permissions, restricted self-assignment system roles, and 13 immutable operational system-role templates. Permission risk classes and per-permission metadata are still design requirements, not implemented fields. A future metadata registry should define, at minimum, these attributes per permission code:
+Implemented today: a centralized immutable Java policy defines the Tenant Owner baseline, catalogue-visible permissions, custom-role delegable permissions, restricted self-assignment system roles, and 13 immutable operational system-role templates. The immutable `WmsTenantPermissionRiskRegistry` now defines per-permission risk metadata. It is classification input only; it does not itself enforce MFA, audit, delegation, or separation-of-duties controls. The registry defines these attributes per permission code:
 
 - code, module, display description;
 - risk class;
@@ -314,7 +314,7 @@ Run these suites with MySQL 8.4 Testcontainers and include HTTP authorization-bo
 
 ## 10. Implementation order
 
-The first implementation slice is now in progress: shared Tenant Owner and delegation policy, bootstrap/provisioning parity, and additive V28 reconciliation. The broader named role templates, per-permission risk metadata, and cross-workflow separation-of-duties enforcement remain subsequent work.
+The shared Tenant Owner/delegation policy, bootstrap/provisioning parity, additive V28 reconciliation, 13 named role templates, and 94-entry risk metadata registry are implemented. Universal cross-workflow separation-of-duties enforcement and action-level consumption of risk metadata remain subsequent work.
 
 1. Complete and merge the source permission catalogue audit.
 2. Approve this role-template matrix and risk classifications.
@@ -334,7 +334,7 @@ The first implementation slice is now in progress: shared Tenant Owner and deleg
 | Multiple active role permission union | Implemented in membership-access query/service |
 | Role CRUD and protected system-role handling | Implemented for current tenant APIs; protected template codes cannot be created as custom roles and system grants remain immutable |
 | Caller-authority check for permission replacement | Implemented with canonical delegable policy and caller-effective-permission ceiling |
-| Canonical permission risk metadata | Not implemented; permission codes are centralized but risk-class metadata remains a follow-up |
+| Canonical permission risk metadata | Implemented as an immutable 94-entry Java registry with unit and MySQL catalogue-consistency tests; action-level enforcement remains incomplete |
 | Canonical catalogue visibility/delegation/Owner/system-role template policy | Implemented in `WmsTenantPermissionPolicy` |
 | Tenant Owner default grant template | Implemented as a 30-code governance + read-only operational baseline |
 | Bootstrap/provisioning grant parity | Implemented through the shared Owner and 13 operational role templates with MySQL persisted-grant assertions |

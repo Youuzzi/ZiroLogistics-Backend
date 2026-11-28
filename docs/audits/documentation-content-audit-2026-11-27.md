@@ -7,7 +7,7 @@
 
 ## Executive disposition
 
-PR #367 refreshes current-reference content; PR #368 completes repository-wide filename, title, and link standardization. The documentation tree contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. These materials are classified by purpose and evidence status rather than rewritten as though they describe one current implementation.
+PR #367 refreshes current-reference content; PR #368 completes repository-wide filename, title, and link standardization. The documentation tree contains active references, dated audits, historical baselines, design proposals, plans, test inventories, and source schema artifacts. These materials are classified by purpose and evidence status rather than rewritten as though they describe one current implementation. The final follow-up reconciliation archives both deleted QA documents under descriptive historical filenames instead of discarding their evidence: the 408-line PR/CI/DAST/k6 closure record ([Historical QA Closure Evidence](security-qa-evidence-history-2026-11-23.md)) and the original test/tooling baseline ([Historical QA and Security Baseline](security-qa-initial-baseline-history-2026-11-20.md)).
 
 
 
@@ -26,7 +26,7 @@ These updates do not convert historical design evidence into current test proof,
 
 ## Repository-wide filename and title findings
 
-- All 93 Markdown files were included in the repository-wide scan.
+- The original full repository-wide scan covered 93 Markdown files. The final reconciliation added two historical QA archives, bringing the current tree to 95 Markdown files.
 - The 51 nonstandard/non-descriptive Markdown filenames were renamed to descriptive lowercase kebab-case; conventional `README.md` filenames were retained.
 - The final tree scan found no remaining uppercase/underscore Markdown filenames and no stage/work-package identifiers in Markdown filenames.
 - The 32 document H1 titles and identified delivery-stage/work-package headings were normalized.
@@ -40,7 +40,7 @@ These updates do not convert historical design evidence into current test proof,
 - Dedicated runtime database: `zirologistics_wms`; migrations V1–V32. Applied migrations are immutable; future changes are additive from V33.
 - API prefix: `/api/wms/v1`. Existing endpoint-specific response shapes and successful status conventions are compatibility constraints.
 - Platform control-plane foundations now include V29 operator/role/permission/MFA persistence, V30 support-grant governance, platform JWT and permission services, role administration, tenant-lifecycle authorization, and support-grant administration. End-to-end platform MFA/login HTTP, initial Platform Administrator provisioning, platform controllers, and support-grant scope consumption remain incomplete.
-- Backend feature work remains paused while documentation cleanup is reviewed and merged. Frontend implementation is deferred until PR #367 and PR #368 are reviewed, validated, and merged. This is not security completion or production-readiness certification.
+- PR #367 and PR #368 are merged. The final documentation reconciliation corrects the remaining stale status and implementation claims, preserves historical QA evidence, and keeps frontend mock-data work separate from real-account/privileged integration. This is not security completion or production-readiness certification.
 
 ## Security and integration boundaries
 
@@ -72,7 +72,7 @@ These updates do not convert historical design evidence into current test proof,
 
 ## Frontend handoff guardrails
 
-- Frontend implementation is deferred until PR #367 and PR #368 are reviewed and merged.
+- Frontend foundation may proceed with synthetic data now that PR #367 and PR #368 are merged; real authentication and privileged workflow integration remain gated.
 - Once the documentation handoff is accepted, use synthetic/mock data behind repository/service interfaces, not directly embedded in screens.
 - Keep API adapters separate so mock-to-real integration does not require screen rewrites.
 - Do not assume tenant MFA, support access, Platform Administrator bootstrap, or production operations are complete.
@@ -84,15 +84,17 @@ These updates do not convert historical design evidence into current test proof,
 - [x] Normalize all 51 non-descriptive/nonstandard Markdown filenames to descriptive lowercase kebab-case; retain conventional `README.md` names.
 - [x] Normalize the 32 delivery-stage/work-package H1 titles and the delivery-stage section headings found by the repository-wide heading scan.
 - [x] Update inbound references and canonical navigation links for the renamed documents.
-- [x] Check relative Markdown links across all 93 Markdown files; six stale links were corrected and the final recheck found zero broken Markdown links.
+- [x] Check relative Markdown links across the original 93 Markdown files; six stale links were corrected and the full recheck found zero broken links. The subsequently added QA archive and its new relative references were checked against the current tree.
 - [x] Establish canonical documentation ownership by subject in `docs/README.md`; supporting designs and audits are classified as evidence or historical context.
 - [x] Reconcile current canonical references against source/configuration/migrations/tests for runtime, deployment, API compatibility scope, tenant identity/RBAC, tenant isolation, MFA, platform control plane, temporal behavior, security/QA, and the frontend handoff.
 - [x] State explicitly that the API v1 reference is compatibility-oriented and track full route/DTO/status/pagination verification as a separate backend roadmap item.
 - [x] Reconcile security claims with implementation primitives, available negative tests, CI evidence, and explicit partial-verification boundaries.
 - [x] Align README, docs index, runtime/deployment guidance, roadmap, and handoff with the documentation-first decision.
 - [x] Confirm PR #367 Backend CI, Authenticated WMS API DAST, and CodeQL pass on its current head.
-- [ ] Merge PR #367, retarget PR #368 to `main`, run its required checks, and review the final stacked diff before merging.
+- [x] PR #367 and PR #368 merged into `main`; required PR checks passed and the final stacked diff was reviewed.
+- [x] Preserve the deleted detailed QA closure evidence as a clearly labelled historical archive.
+- [x] Reconcile registry/resolver/SoD implementation claims and update the post-merge handoff state.
 
 This two-PR documentation pass closes repository-wide Markdown naming, title, navigation, current-reference, and handoff cleanup once both PRs are merged. It does **not** replace the separate endpoint-by-endpoint API inventory, re-run every historical audit, certify tenant isolation, or approve production readiness.
 
-**Post-second-pass link note:** The repository-wide relative-link scan above was completed before the supplemental content edits. All newly introduced relative targets in the second pass were checked against the documentation tree, but the complete automated repository-wide link scan must be rerun on the final retargeted PR #368 head before merge.
+**Final link verification:** The complete repository-wide relative-link scan on the final PR #368 head covered 93 Markdown files and found zero broken relative links. The final reconciliation then added two historical QA archives; their internal references and the new links from the documentation index, current QA baseline, and QA status were checked against the current tree. No broken links were introduced.

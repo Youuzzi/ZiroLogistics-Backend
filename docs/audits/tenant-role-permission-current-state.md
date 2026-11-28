@@ -1,7 +1,8 @@
 # Tenant RBAC Current-State and Role/Permission Matrix Audit
 
 **Status: AUDIT BASELINE — not a certification and not an authorization change.**
-**Reviewed against:** `main` at `be1722e74b537c9ef02c4d192974d258754f4bd7`
+**Original review baseline:** `main` at `be1722e74b537c9ef02c4d192974d258754f4bd7`
+**Current source checkpoint reconciled:** `main` at `148177826c5eebd56b6134851e5d901809549448` (the later documentation merges do not change runtime Java source).
 **Review date:** 2026-11-26
 
 ## 1. Purpose

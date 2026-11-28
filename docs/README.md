@@ -4,7 +4,7 @@ Documentation is organized by purpose: current reference, architecture/design, a
 
 ## Current entry points
 - [Backend maintenance handoff](project/backend-maintenance-handoff-2026-11-27.md) — current pause checkpoint and resume order.
-- [Backend improvement roadmap](roadmap/backend-improvement-roadmap.md) — prioritized backend work to resume after documentation cleanup and frontend foundation.
+- [Backend improvement roadmap](roadmap/backend-improvement-roadmap.md) — prioritized backend security and operational follow-up; frontend foundation may proceed with synthetic data while real-account integration remains gated.
 - [Documentation content audit](audits/documentation-content-audit-2026-11-27.md) — repository-wide naming, title, content, and verification findings.
 - [Runtime boundary](runtime/wms-runtime-boundary.md) — application runtime, database target, migration safety, configuration.
 - [Local Docker deployment](deployment/wms-local-docker-deployment.md) — isolated local compose workflow.
@@ -24,6 +24,8 @@ Architecture references cover identity, tenant context, authorization, role gove
 ## Audits and verification
 - [Security and QA baseline](audits/security-qa-baseline.md)
 - [Security and QA verification status](audits/security-qa-closure-criteria.md)
+- [Historical QA closure evidence archive](audits/security-qa-evidence-history-2026-11-23.md) — detailed PR/CI/artifact evidence retained for provenance; not current status.
+- [Historical QA/security baseline archive](audits/security-qa-initial-baseline-history-2026-11-20.md) — original test inventory and staged QA plan retained as a dated snapshot.
 - [Platform control-plane review](audits/platform-control-plane-review-2026-11-27.md)
 - [Tenant isolation review](audits/tenant-isolation-review-2026-11-27.md)
 - [Outbound tenant-isolation review](audits/outbound-tenant-isolation-review-2026-11-27.md)

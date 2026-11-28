@@ -200,7 +200,7 @@ Current repository inventory:
 - 194 production Java source files.
 - 136 Java test source files.
 - 32 WMS Flyway migrations (V1–V32).
-- 89 Markdown documents under `docs/` after this documentation refresh.
+- 92 Markdown documents under `docs/` on the final reconciliation branch, including the two preserved historical QA archives.
 
 Subsequent implementation changed several findings from the original audit:
 - Tenant Owner grants now come from the shared `WmsTenantPermissionPolicy.tenantOwnerTemplate()` used by controlled bootstrap and repeatable tenant provisioning; role templates are provisioned through `WmsTenantRoleTemplateProvisioner`. The old two-permission bootstrap discrepancy described in section 4.2 is historical and superseded.
