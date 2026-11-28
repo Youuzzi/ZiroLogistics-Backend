@@ -15,7 +15,7 @@ The runtime composition is disabled unless both `wms.security.tenant-mfa.enabled
 - Requires the persisted credential version to match the authenticated principal.
 - Verifies the password through the WMS Argon2id `PasswordEncoder`.
 - Acquires the user row lock and rechecks user status, credential version, password hash, and optimistic version before persistence.
-- Re-resolves the selected membership and verifies exact user, tenant, membership, and credential-version bindings.
+- Locks and re-resolves the selected active membership (including its owning user and tenant rows), then verifies exact user, tenant, membership, and credential-version bindings.
 - Generates 32 random bytes and returns a canonical unpadded Base64URL handle once.
 - Stores only a domain-separated SHA-256 digest of that handle.
 - Enforces a five-minute expiry, aligned with V32.
@@ -24,7 +24,7 @@ Allowed purposes are the explicit V32 enum values: `MFA_FACTOR_ENROLLMENT`, `MFA
 
 ## Consumption
 
-Consumption validates the handle's canonical encoding, locks and revalidates the active global user, re-resolves the active selected membership, and invokes the storage port's atomic conditional consume with the exact identity, credential version, and purpose.
+Consumption validates the handle's canonical encoding, locks and revalidates the active global user, locks and re-resolves the active selected membership, and invokes the storage port's atomic conditional consume with the exact identity, credential version, and purpose.
 
 Call `consume(...)` inside the same transaction as the protected factor lifecycle mutation. Consumption uses MANDATORY transaction propagation: it rejects calls without an existing transaction and joins the caller's transaction. The caller must wrap grant consumption and the protected factor mutation in that same transaction; a rollback must undo both. Never consume a grant in a controller and pass a boolean to a later service.
 
