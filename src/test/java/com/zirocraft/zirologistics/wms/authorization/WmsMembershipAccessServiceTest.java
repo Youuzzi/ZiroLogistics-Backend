@@ -50,6 +50,33 @@ class WmsMembershipAccessServiceTest {
                 () -> service.resolve("user-1", "revoked-membership"));
     }
 
+
+    @Test
+    void resolvesMembershipUnderLockBeforeReadingItsEffectivePermissions() {
+        List<WmsMembershipAccessProjection> rows = List.of(row("WMS_MFA_MANAGE"));
+        when(repository.findActiveMembershipIdForUpdate("user-1", "membership-1"))
+                .thenReturn(java.util.Optional.of(51L));
+        when(repository.findActiveAccess("user-1", "membership-1")).thenReturn(rows);
+
+        WmsMembershipAccess access = service.resolveForUpdate("user-1", "membership-1");
+
+        assertEquals(51L, access.membershipId());
+        org.mockito.InOrder order = inOrder(repository);
+        order.verify(repository).findActiveMembershipIdForUpdate("user-1", "membership-1");
+        order.verify(repository).findActiveAccess("user-1", "membership-1");
+    }
+
+    @Test
+    void rejectsMembershipThatCannotBeLockedAsActive() {
+        when(repository.findActiveMembershipIdForUpdate("user-1", "revoked-membership"))
+                .thenReturn(java.util.Optional.empty());
+
+        assertThrows(WmsMembershipAccessDeniedException.class,
+                () -> service.resolveForUpdate("user-1", "revoked-membership"));
+
+        verify(repository, never()).findActiveAccess(anyString(), anyString());
+    }
+
     @Test
     void rejectsMissingIdentityBeforeRepositoryAccess() {
         assertThrows(WmsMembershipAccessDeniedException.class, () -> service.resolve(" ", "membership-1"));
