@@ -209,7 +209,7 @@ public final class WmsTenantMfaReauthenticationService {
 
     private WmsMembershipAccess resolveCurrentMembership(WmsAuthenticatedPrincipal principal) {
         try {
-            return membershipAccessService.resolve(principal.userPublicId(), principal.membershipPublicId());
+            return membershipAccessService.resolveForUpdate(principal.userPublicId(), principal.membershipPublicId());
         } catch (WmsMembershipAccessDeniedException denied) {
             throw new WmsTenantMfaReauthenticationRejectedException();
         }
