@@ -19,7 +19,7 @@ This is a source-level review supported by existing tests and CI. It is not a fo
 
 ## 2. HTTP controller inventory
 
-The recursive source tree contains 19 WMS controller classes:
+The recursive source tree contains 20 WMS controller classes on this change branch:
 
 | Controller | Route family | Principal / boundary observation |
 |---|---|---|
