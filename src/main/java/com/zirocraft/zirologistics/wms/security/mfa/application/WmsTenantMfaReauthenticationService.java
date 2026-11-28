@@ -151,8 +151,9 @@ public final class WmsTenantMfaReauthenticationService {
 
     /**
      * Consumes a grant atomically. Call this inside the same transaction as the
-     * protected enrollment/revocation/recovery mutation; REQUIRED propagation
-     * joins that transaction so the grant consumption rolls back with the action.
+     * protected enrollment/revocation/recovery mutation; MANDATORY propagation
+     * rejects standalone consumption and joins that transaction so grant consumption
+     * rolls back with the protected action.
      */
     public void consume(
             WmsAuthenticatedPrincipal principal,
