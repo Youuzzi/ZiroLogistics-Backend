@@ -119,6 +119,22 @@ class WmsTenantMfaReauthenticationServiceTest {
     }
 
     @Test
+    void consumptionRequiresAnExistingCallerTransaction() {
+        when(grantStorage.consume(any(), eq(17L), eq(29L), eq(41L), eq(7L),
+                eq(WmsTenantMfaReauthenticationPurpose.MFA_FACTOR_ENROLLMENT), any()))
+                .thenReturn(true);
+
+        service.consume(principal, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                WmsTenantMfaReauthenticationPurpose.MFA_FACTOR_ENROLLMENT);
+
+        org.mockito.ArgumentCaptor<org.springframework.transaction.TransactionDefinition> definition =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.transaction.TransactionDefinition.class);
+        verify(transactionManager).getTransaction(definition.capture());
+        assertEquals(org.springframework.transaction.TransactionDefinition.PROPAGATION_MANDATORY,
+                definition.getValue().getPropagationBehavior());
+    }
+
+    @Test
     void rejectsMalformedGrantBeforeStorageAccess() {
         assertThrows(WmsTenantMfaReauthenticationRejectedException.class,
                 () -> service.consume(principal, "not-a-grant",
