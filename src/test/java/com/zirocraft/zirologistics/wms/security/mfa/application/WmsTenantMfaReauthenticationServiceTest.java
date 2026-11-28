@@ -119,19 +119,18 @@ class WmsTenantMfaReauthenticationServiceTest {
     }
 
     @Test
-    void consumptionRequiresAnExistingCallerTransaction() {
-        when(grantStorage.consume(any(), eq(17L), eq(29L), eq(41L), eq(7L),
-                eq(WmsTenantMfaReauthenticationPurpose.MFA_FACTOR_ENROLLMENT), any()))
-                .thenReturn(true);
+    void rejectsConsumptionWithoutAnExistingCallerTransaction() {
+        when(transactionManager.getTransaction(argThat(definition ->
+                definition.getPropagationBehavior()
+                        == org.springframework.transaction.TransactionDefinition.PROPAGATION_MANDATORY)))
+                .thenThrow(new org.springframework.transaction.IllegalTransactionStateException(
+                        "No existing transaction"));
 
-        service.consume(principal, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-                WmsTenantMfaReauthenticationPurpose.MFA_FACTOR_ENROLLMENT);
+        assertThrows(org.springframework.transaction.IllegalTransactionStateException.class,
+                () -> service.consume(principal, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                        WmsTenantMfaReauthenticationPurpose.MFA_FACTOR_ENROLLMENT));
 
-        org.mockito.ArgumentCaptor<org.springframework.transaction.TransactionDefinition> definition =
-                org.mockito.ArgumentCaptor.forClass(org.springframework.transaction.TransactionDefinition.class);
-        verify(transactionManager).getTransaction(definition.capture());
-        assertEquals(org.springframework.transaction.TransactionDefinition.PROPAGATION_MANDATORY,
-                definition.getValue().getPropagationBehavior());
+        verifyNoInteractions(userRepository, membershipAccessService, grantStorage);
     }
 
     @Test
