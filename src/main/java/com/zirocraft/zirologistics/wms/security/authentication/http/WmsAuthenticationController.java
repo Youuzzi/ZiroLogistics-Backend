@@ -6,7 +6,6 @@ import com.zirocraft.zirologistics.wms.identity.application.WmsEmailOutboxEncryp
 import com.zirocraft.zirologistics.wms.identity.application.WmsEmailVerificationService;
 import com.zirocraft.zirologistics.wms.identity.application.WmsPasswordManagementService;
 import com.zirocraft.zirologistics.wms.identity.application.PasswordResetRequestResult;
-import com.zirocraft.zirologistics.wms.security.application.WmsAuthenticatedPrincipal;
 import com.zirocraft.zirologistics.wms.security.application.WmsJwtTokenService;
 import com.zirocraft.zirologistics.wms.security.application.WmsCredentialVersionClaim;
 import com.zirocraft.zirologistics.wms.security.authentication.application.WmsCredentialAuthenticationException;
@@ -22,7 +21,6 @@ import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.web.bind.annotation.*;
@@ -107,19 +105,6 @@ public class WmsAuthenticationController {
         emailVerification.completeEmailVerification(request.actionToken());
     }
 
-    @PostMapping("/password-changes")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void changePassword(
-            Authentication authentication,
-            @Valid @RequestBody PasswordChangeRequest request) {
-        Object principal = authentication == null ? null : authentication.getPrincipal();
-        if (!(principal instanceof WmsAuthenticatedPrincipal wmsPrincipal)) {
-            throw new IllegalStateException("Authenticated WMS principal is unavailable");
-        }
-        passwordManagement.changePassword(
-                wmsPrincipal.userPublicId(), request.currentPassword(), request.newPassword());
-    }
-
     public record CredentialLoginRequest(
             @NotBlank @Email @Size(max = 254) String email,
             @NotBlank @Size(max = 128) String password) {}
@@ -135,10 +120,6 @@ public class WmsAuthenticationController {
             @NotBlank @Size(max = 128) String newPassword) {}
 
     public record ActionTokenRequest(@NotBlank @Size(max = 512) String actionToken) {}
-
-    public record PasswordChangeRequest(
-            @NotBlank @Size(max = 128) String currentPassword,
-            @NotBlank @Size(max = 128) String newPassword) {}
 
     public record CredentialLoginResponse(
             String tenantSelectionToken,

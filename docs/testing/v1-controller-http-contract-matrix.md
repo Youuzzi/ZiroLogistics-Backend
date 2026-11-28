@@ -15,6 +15,7 @@ The baseline contained six HTTP/security test classes:
 |---|---|
 | `WmsApiErrorContractTest` | Error mapping, redaction, malformed JSON and conflict categories |
 | `WmsAuthenticationControllerHttpTest` | Credential login, tenant selection, password-reset generic response |
+| `WmsPasswordChangeControllerHttpTest` | Protected password-change route remains registered and rejects anonymous requests when public auth endpoints are disabled |
 | `WmsHttpSecurityAuthEndpointsDisabledTest` | Protected routes stay registered when anonymous auth endpoints are disabled |
 | `WmsHttpSecurityDisabledTest` | JWT-disabled mode denies all requests |
 | `WmsHttpSecurityEnabledTest` | Exact anonymous allowlist and bearer authentication |
@@ -35,7 +36,7 @@ These tests mock application services deliberately: they prove HTTP routing, aut
 ## 3. Required invariants
 
 - Every operational route requires a WMS authenticated principal.
-- Public auth endpoint toggle controls only the exact anonymous allowlist; disabling it does not remove protected operational controllers.
+- Public auth endpoint toggle controls only the exact anonymous allowlist; disabling it does not remove protected operational controllers or the authenticated password-change route.
 - Request DTO validation occurs before application-service invocation.
 - Nested list elements are validated through `@Valid`.
 - Pagination query parameters are forwarded without coercion; application services enforce the hard bounds.
