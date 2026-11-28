@@ -176,7 +176,8 @@ public final class WmsTenantMfaReauthenticationService {
         if (userId < 1) {
             throw new IllegalArgumentException("userId must be positive");
         }
-        return grantStorage.revokeOutstandingForUser(userId, clock.instant());
+        return transactionTemplate.execute(status ->
+                grantStorage.revokeOutstandingForUser(userId, clock.instant()));
     }
 
     private WmsMembershipAccess resolveCurrentMembership(WmsAuthenticatedPrincipal principal) {
