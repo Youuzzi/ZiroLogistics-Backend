@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class WmsTenantMfaReauthenticationConfigurationTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+            .withInitializer(context -> context.getEnvironment().setActiveProfiles("wms"))
             .withUserConfiguration(WmsTenantMfaReauthenticationConfiguration.class);
 
     @Test
