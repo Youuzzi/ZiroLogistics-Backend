@@ -36,14 +36,15 @@ The recursive source tree contains 19 WMS controller classes:
 | `WmsReplenishmentPlanningController` | `/tenants/current/replenishment-rules` | Passes principal to planning service |
 | `WmsReplenishmentTaskController` | `/tenants/current/replenishment-tasks` and confirmations | Passes principal to task service |
 | `WmsOperationalReportingController` | `/tenants/current/reports` | Passes principal to reporting service |
-| `WmsAuthenticationController` | `/auth` | Explicit public authentication/action-token endpoints; password change requires authenticated WMS principal |
+| `WmsAuthenticationController` | `/auth` | Explicit public authentication/action-token endpoints; anonymous access is controlled by the exact security allowlist |
+| `WmsPasswordChangeController` | `/auth/password-changes` | Separate protected adapter; registered with the JWT API and always requires an authenticated WMS principal |
 | `WmsShippingManagementController` | `/tenants/current/shipping` | Passes principal to shipping service |
 | `WmsStockCountManagementController` | `/tenants/current/stock-counts` | Passes principal to stock-count service |
 | `WmsTenantProfileController` | `/tenants/current/profile` | Passes principal to tenant-profile service |
 | `WmsInterWarehouseTransferController` | `/tenants/current/stock-transfers` | Passes principal to transfer service |
 | `WmsWarehouseController` | `/tenants/current/warehouses` and nested locations | Passes principal to warehouse service |
 
-The tenant-scoped controllers use the WMS profile and the `WmsHttpApiEnabledCondition`; the public authentication controller uses the separate `WmsPublicAuthEndpointsEnabledCondition`. The HTTP security configuration has an authenticated-by-default JWT chain and a deny-all chain when JWT HTTP security is disabled. Public auth routes are explicit, not a blanket permit for all API paths.
+The tenant-scoped controllers and protected password-change adapter use the WMS profile and the `WmsHttpApiEnabledCondition`; public authentication routes use the separate `WmsPublicAuthEndpointsEnabledCondition`. The HTTP security configuration has an authenticated-by-default JWT chain and a deny-all chain when JWT HTTP security is disabled. Public auth routes are explicit, not a blanket permit for all API paths.
 
 ## 3. Application service boundary observations
 
@@ -105,6 +106,7 @@ These names are examples from source, not an exhaustive permission catalogue.
 Controller-level HTTP test classes found in the repository include:
 
 - `WmsAuthenticationControllerHttpTest`
+- `WmsPasswordChangeControllerHttpTest`
 - `WmsRoleManagementControllerHttpTest`
 - `WmsTenantProfileControllerHttpTest`
 - `WmsInterWarehouseTransferControllerHttpTest`
