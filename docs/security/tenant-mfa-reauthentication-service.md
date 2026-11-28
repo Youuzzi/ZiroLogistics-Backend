@@ -6,7 +6,7 @@
 
 This service verifies the current global WMS account password and issues a short-lived, single-use grant for one explicit tenant MFA lifecycle purpose. It does not enroll a TOTP factor, verify a TOTP code, issue a step-up proof, or enable tenant MFA.
 
-The runtime composition is disabled unless `wms.security.tenant-mfa.reauthentication.enabled=true`. No HTTP controller consumes or exposes the service in this slice.
+The runtime composition is disabled unless both `wms.security.tenant-mfa.enabled=true` and `wms.security.tenant-mfa.reauthentication.enabled=true`. No HTTP controller consumes or exposes the service in this slice.
 
 ## Issuance
 
