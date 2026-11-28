@@ -40,6 +40,7 @@ public final class WmsTenantMfaReauthenticationService {
     private final PasswordEncoder passwordEncoder;
     private final WmsTenantMfaReauthenticationGrantStoragePort grantStorage;
     private final TransactionTemplate transactionTemplate;
+    private final TransactionTemplate consumeTransactionTemplate;
     private final Clock clock;
     private final SecureRandom secureRandom;
 
@@ -52,7 +53,8 @@ public final class WmsTenantMfaReauthenticationService {
             Clock clock,
             SecureRandom secureRandom) {
         this(userRepository, membershipAccessService, passwordEncoder, grantStorage,
-                new TransactionTemplate(Objects.requireNonNull(transactionManager)), clock, secureRandom);
+                requiredTransactionTemplate(transactionManager), mandatoryTransactionTemplate(transactionManager),
+                clock, secureRandom);
     }
 
     WmsTenantMfaReauthenticationService(
@@ -63,11 +65,25 @@ public final class WmsTenantMfaReauthenticationService {
             TransactionTemplate transactionTemplate,
             Clock clock,
             SecureRandom secureRandom) {
+        this(userRepository, membershipAccessService, passwordEncoder, grantStorage,
+                transactionTemplate, transactionTemplate, clock, secureRandom);
+    }
+
+    WmsTenantMfaReauthenticationService(
+            UserRepository userRepository,
+            WmsMembershipAccessService membershipAccessService,
+            PasswordEncoder passwordEncoder,
+            WmsTenantMfaReauthenticationGrantStoragePort grantStorage,
+            TransactionTemplate transactionTemplate,
+            TransactionTemplate consumeTransactionTemplate,
+            Clock clock,
+            SecureRandom secureRandom) {
         this.userRepository = Objects.requireNonNull(userRepository);
         this.membershipAccessService = Objects.requireNonNull(membershipAccessService);
         this.passwordEncoder = Objects.requireNonNull(passwordEncoder);
         this.grantStorage = Objects.requireNonNull(grantStorage);
         this.transactionTemplate = Objects.requireNonNull(transactionTemplate);
+        this.consumeTransactionTemplate = Objects.requireNonNull(consumeTransactionTemplate);
         this.clock = Objects.requireNonNull(clock);
         this.secureRandom = Objects.requireNonNull(secureRandom);
     }
@@ -145,7 +161,7 @@ public final class WmsTenantMfaReauthenticationService {
         validateRequest(principal, purpose);
         byte[] digest = digestPresentedGrant(rawGrant);
         try {
-            transactionTemplate.executeWithoutResult(status -> {
+            consumeTransactionTemplate.executeWithoutResult(status -> {
                 UserEntity user = userRepository.findByPublicId(principal.userPublicId())
                         .orElseThrow(WmsTenantMfaReauthenticationRejectedException::new);
                 UserEntity locked = userRepository.findByIdForUpdate(user.getId())
@@ -178,6 +194,16 @@ public final class WmsTenantMfaReauthenticationService {
         }
         return transactionTemplate.execute(status ->
                 grantStorage.revokeOutstandingForUser(userId, clock.instant()));
+    }
+
+    private static TransactionTemplate requiredTransactionTemplate(PlatformTransactionManager manager) {
+        return new TransactionTemplate(Objects.requireNonNull(manager));
+    }
+
+    private static TransactionTemplate mandatoryTransactionTemplate(PlatformTransactionManager manager) {
+        TransactionTemplate template = new TransactionTemplate(Objects.requireNonNull(manager));
+        template.setPropagationBehavior(TransactionTemplate.PROPAGATION_MANDATORY);
+        return template;
     }
 
     private WmsMembershipAccess resolveCurrentMembership(WmsAuthenticatedPrincipal principal) {
